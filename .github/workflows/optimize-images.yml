@@ -80,8 +80,6 @@ jobs:
                   kernel: sharp.kernel.lanczos3,
                 });
               }
-              // metadata.width <= maxWidth නම් — කිසිම resize එකක් නෑ,
-              // දැනටමත් කුඩා පින්තූරයක් නම් stretch කරන්නේ නෑ (quality preserved)
 
               await pipeline
                 .webp({ quality: 85, smartSubsample: true, effort: 6 })
@@ -90,6 +88,42 @@ jobs:
               console.log(`[${type.toUpperCase()}] ${file} (${metadata.width}x${metadata.height}) -> ${outFile}`);
 
               convertedMap[file] = outFile;
+            }
+          }
+
+          // ==========================================================
+          // 🖼️ ROOT IMAGES SYSTEM — public/images/ ඇතුළේ කෙලින්ම තියෙන 
+          //    විශේෂ පින්තූර (Copyright & Credit Policy.png, Auhor.png ආදී) 
+          //    ස්මාර්ට් විදිහට convert කිරීම. Crop නොවේ, Ratio ආරක්ෂා වේ.
+          // ==========================================================
+          const rootImages = ['Copyright & Credit Policy.png', 'Auhor.png'];
+          const rootDir = 'public/images';
+
+          for (const file of rootImages) {
+            const input = join(rootDir, file);
+            if (existsSync(input)) {
+              const outFile = file.replace(/\.[^.]+$/, '.webp');
+              const out = join(rootDir, outFile);
+
+              const image = sharp(input);
+              const metadata = await image.metadata();
+
+              let pipeline = image;
+              // උපරිම පළල 850px කට සීමා කරයි (Crop නොවේ)
+              if (metadata.width && metadata.width > 850) {
+                pipeline = pipeline.resize({
+                  width: 850,
+                  withoutEnlargement: true,
+                  kernel: sharp.kernel.lanczos3
+                });
+              }
+
+              await pipeline
+                .webp({ quality: 85, smartSubsample: true, effort: 6 })
+                .toFile(out);
+
+              convertedMap[file] = outFile;
+              console.log(`[ROOT IMAGE] ${file} (${metadata.width}x${metadata.height}) -> ${outFile}`);
             }
           }
 
@@ -140,8 +174,6 @@ jobs:
               let changed = false;
 
               for (const [oldName, newName] of Object.entries(convertedMap)) {
-                // frontmatter value එකේ exact filename match කරයි
-                // (folder path එකේ ඕන තැනක image: "/images/posts/X.jpg" ආකෘතියට ගැලපේ)
                 const regex = new RegExp(oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
                 if (regex.test(content)) {
                   content = content.replace(regex, newName);
@@ -190,6 +222,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+          git add public/images/*.webp || true
           git add public/images/authors/*.webp || true
           git add public/images/slider/*.webp || true
           git add public/images/posts/*.webp || true
@@ -202,5 +235,5 @@ jobs:
           git add src/content/contact/*.md || true
           git add src/content/pages/*.md || true
           git add src/config/config.json || true
-          git diff --staged --quiet || git commit -m "Auto: Smart crop-free WebP optimization + frontmatter path update"
+          git diff --staged --quiet || git commit -m "Auto: Smart crop-free WebP optimization including root images + frontmatter update"
           git push
