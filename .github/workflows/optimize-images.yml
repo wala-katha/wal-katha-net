@@ -1,4 +1,4 @@
-name: Optimize All Images
+name: Smart Optimize Images (JPG/PNG to WebP + Frontmatter Auto-Update)
 
 on:
   push:
@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -22,88 +24,169 @@ jobs:
           npm init -y
           npm install sharp
 
-      - name: Optimize all images
+      - name: Smart Optimize + Auto-Update Frontmatter
         run: |
           node --input-type=module << 'EOF'
           import { createRequire } from 'module';
           const require = createRequire('/tmp/sharp-tool/package.json');
           const sharp = require('sharp');
-          import { readdirSync, existsSync } from 'fs';
+          import { readdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
+          import { join } from 'path';
 
+          // ==========================================================
+          // 🎯 SMART CONFIG — site එකේ display කරන අවශ්‍යතාවයට ගැලපෙන
+          //    maximum widths. Height දෙන්නේ නෑ — aspect ratio ස්වභාවිකව
+          //    පවතී, crop/distort කිසිවක් සිදු නොවේ (proportional resize).
+          // ==========================================================
           const folders = [
-            { dir: 'public/images/authors', width: 50, height: 50 },
-            { dir: 'public/images/slider', width: 900, height: 338 },
-            { dir: 'public/images/posts', width: 750, height: 500 },
+            { dir: 'public/images/posts',   maxWidth: 750,  type: 'post'   },
+            { dir: 'public/images/slider',  maxWidth: 1200, type: 'slider' },
+            { dir: 'public/images/authors', maxWidth: 150,  type: 'author', square: true },
           ];
 
-          for (const { dir, width, height } of folders) {
+          const convertedMap = {}; // { "Gedara-driver-wal-katha.jpg": "Gedara-driver-wal-katha.webp" }
+
+          for (const { dir, maxWidth, type, square } of folders) {
             if (!existsSync(dir)) continue;
+
             for (const file of readdirSync(dir)) {
-              if (/\.(jpg|jpeg|png)$/i.test(file)) {
-                const input = dir + '/' + file;
-                const out = dir + '/' + file.replace(/\.[^.]+$/, '.webp');
-                await sharp(input)
-                  .resize(width, height, {
-                    fit: 'cover',
-                    kernel: sharp.kernel.lanczos3,
-                    withoutEnlargement: true,
-                  })
-                  .sharpen({
-                    sigma: 1.2,
-                    m1: 1.5,
-                    m2: 0.7,
-                    x1: 2.0,
-                    y2: 10.0,
-                    y3: 20.0,
-                  })
-                  .webp({ quality: 100, lossless: true, effort: 6 })
-                  .toFile(out);
-                console.log('Done:', input, '->', out);
+              if (!/\.(jpg|jpeg|png)$/i.test(file)) continue;
+
+              const input = join(dir, file);
+              const outFile = file.replace(/\.[^.]+$/, '.webp');
+              const out = join(dir, outFile);
+
+              const image = sharp(input);
+              const metadata = await image.metadata();
+
+              let pipeline = image;
+
+              if (square) {
+                // Author avatars — රවුම් UI එකකට ගැලපෙන්න 1:1 අවශ්‍යයි (cover, center crop)
+                pipeline = pipeline.resize({
+                  width: maxWidth,
+                  height: maxWidth,
+                  fit: 'cover',
+                  position: 'attention',
+                  withoutEnlargement: true,
+                  kernel: sharp.kernel.lanczos3,
+                });
+              } else if (metadata.width && metadata.width > maxWidth) {
+                // ලොකු පින්තූර — පළල පමණක් අඩු කරයි, height ස්වයංක්‍රීයව
+                // ratio එකට අනුව calculate වේ (crop/stretch කිසිවක් නෑ)
+                pipeline = pipeline.resize({
+                  width: maxWidth,
+                  withoutEnlargement: true,
+                  kernel: sharp.kernel.lanczos3,
+                });
+              }
+              // metadata.width <= maxWidth නම් — කිසිම resize එකක් නෑ,
+              // දැනටමත් කුඩා පින්තූරයක් නම් stretch කරන්නේ නෑ (quality preserved)
+
+              await pipeline
+                .webp({ quality: 85, smartSubsample: true, effort: 6 })
+                .toFile(out);
+
+              console.log(`[${type.toUpperCase()}] ${file} (${metadata.width}x${metadata.height}) -> ${outFile}`);
+
+              convertedMap[file] = outFile;
+            }
+          }
+
+          // ==========================================================
+          // 🔗 LOGO / FAVICON / OG-IMAGE — Base.astro / config.json
+          //    දිගටම .png/.jpg paths use කරන නිසා මේවත් convert කරලා
+          //    frontmatter replace step එකේදී auto update කරයි
+          // ==========================================================
+          if (existsSync('public/images/logo.png')) {
+            await sharp('public/images/logo.png')
+              .resize({ width: 300, withoutEnlargement: true, kernel: sharp.kernel.lanczos3 })
+              .webp({ quality: 95, effort: 6 })
+              .toFile('public/images/logo.webp');
+            convertedMap['logo.png'] = 'logo.webp';
+            console.log('Done: logo.png -> logo.webp');
+          }
+
+          if (existsSync('public/images/favicon.png')) {
+            await sharp('public/images/favicon.png')
+              .resize({ width: 32, height: 32, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+              .webp({ quality: 100, effort: 6 })
+              .toFile('public/images/favicon.webp');
+            convertedMap['favicon.png'] = 'favicon.webp';
+            console.log('Done: favicon.png -> favicon.webp');
+          }
+
+          if (existsSync('public/images/og-image.jpg')) {
+            await sharp('public/images/og-image.jpg')
+              .resize({ width: 1200, withoutEnlargement: true, kernel: sharp.kernel.lanczos3 })
+              .webp({ quality: 85, effort: 6 })
+              .toFile('public/images/og-image.webp');
+            convertedMap['og-image.jpg'] = 'og-image.webp';
+            console.log('Done: og-image.jpg -> og-image.webp');
+          }
+
+          // ==========================================================
+          // 📝 AUTO-UPDATE FRONTMATTER — content/posts/*.md, authors/*.md
+          //    සහ config/config.json ඇතුළේ image path string එක
+          //    .jpg/.png -> .webp බවට replace කරයි (extension change විතරයි,
+          //    filename එකම නොවෙනස්ව තියෙනවා නිසා slug/link කිසිවක් break වෙන්නේ නෑ)
+          // ==========================================================
+          function updateFrontmatterInDir(dir) {
+            if (!existsSync(dir)) return;
+            for (const file of readdirSync(dir)) {
+              if (!/\.(md|mdx)$/i.test(file)) continue;
+              const filePath = join(dir, file);
+              let content = readFileSync(filePath, 'utf-8');
+              let changed = false;
+
+              for (const [oldName, newName] of Object.entries(convertedMap)) {
+                // frontmatter value එකේ exact filename match කරයි
+                // (folder path එකේ ඕන තැනක image: "/images/posts/X.jpg" ආකෘතියට ගැලපේ)
+                const regex = new RegExp(oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                if (regex.test(content)) {
+                  content = content.replace(regex, newName);
+                  changed = true;
+                }
+              }
+
+              if (changed) {
+                writeFileSync(filePath, content, 'utf-8');
+                console.log(`Frontmatter updated: ${filePath}`);
               }
             }
           }
 
-          if (existsSync('public/images/logo.png')) {
-            await sharp('public/images/logo.png')
-              .resize(300, 50, {
-                fit: 'contain',
-                background: { r: 0, g: 0, b: 0, alpha: 0 },
-                kernel: sharp.kernel.lanczos3,
-              })
-              .sharpen({ sigma: 0.8 })
-              .webp({ quality: 100, lossless: true, effort: 6 })
-              .toFile('public/images/logo.webp');
-            console.log('Done: logo.png -> logo.webp');
+          updateFrontmatterInDir('src/content/posts');
+          updateFrontmatterInDir('src/content/authors');
+          updateFrontmatterInDir('src/content/about');
+          updateFrontmatterInDir('src/content/contact');
+          updateFrontmatterInDir('src/content/pages');
+
+          // config.json ඇතුළේ logo/favicon paths update කිරීම
+          const configPath = 'src/config/config.json';
+          if (existsSync(configPath)) {
+            let configContent = readFileSync(configPath, 'utf-8');
+            let configChanged = false;
+
+            for (const [oldName, newName] of Object.entries(convertedMap)) {
+              const regex = new RegExp(oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+              if (regex.test(configContent)) {
+                configContent = configContent.replace(regex, newName);
+                configChanged = true;
+              }
+            }
+
+            if (configChanged) {
+              writeFileSync(configPath, configContent, 'utf-8');
+              console.log('Frontmatter updated: src/config/config.json');
+            }
           }
 
-          // 1. Favicon.png ඔප්ටිමයිස් කිරීම (සම්මත Size එක 32x32)
-          if (existsSync('public/images/favicon.png')) {
-            await sharp('public/images/favicon.png')
-              .resize(32, 32, {
-                fit: 'contain',
-                background: { r: 0, g: 0, b: 0, alpha: 0 },
-                kernel: sharp.kernel.lanczos3,
-              })
-              .webp({ quality: 100, lossless: true, effort: 6 })
-              .toFile('public/images/favicon.webp');
-            console.log('Done: favicon.png -> favicon.webp');
-          }
-
-          // 2. og-image.jpg ඔප්ටිමයිස් කිරීම (සම්මත Social Media Preview Size එක 1200x630)
-          if (existsSync('public/images/og-image.jpg')) {
-            await sharp('public/images/og-image.jpg')
-              .resize(1200, 630, {
-                fit: 'cover',
-                kernel: sharp.kernel.lanczos3,
-              })
-              .sharpen({ sigma: 1.0 })
-              .webp({ quality: 90, effort: 6 }) // OG Image එකට Lossless අවශ්‍ය නැත, Quality 90 සාමාන්‍යයෙන් උපරිමයි
-              .toFile('public/images/og-image.webp');
-            console.log('Done: og-image.jpg -> og-image.webp');
-          }
+          console.log('--- Conversion Summary ---');
+          console.log(JSON.stringify(convertedMap, null, 2));
           EOF
 
-      - name: Commit optimized images
+      - name: Commit optimized images + updated frontmatter
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
@@ -113,5 +196,11 @@ jobs:
           git add public/images/logo.webp || true
           git add public/images/favicon.webp || true
           git add public/images/og-image.webp || true
-          git diff --staged --quiet || git commit -m "Auto: optimize images including favicon and og-image"
+          git add src/content/posts/*.md || true
+          git add src/content/authors/*.md || true
+          git add src/content/about/*.md || true
+          git add src/content/contact/*.md || true
+          git add src/content/pages/*.md || true
+          git add src/config/config.json || true
+          git diff --staged --quiet || git commit -m "Auto: Smart crop-free WebP optimization + frontmatter path update"
           git push
