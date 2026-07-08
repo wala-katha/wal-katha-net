@@ -43,7 +43,7 @@ const fontsConfig = Object.entries(theme.fonts.font_family)
 export default defineConfig({
   site: config.site.base_url
     ? config.site.base_url
-    : "https://walkatha.pages.dev",
+    : "https://walakatha.net",
   base: config.site.base_path ? config.site.base_path : "/",
   trailingSlash:
     config.site.trailing_slash === true ||
