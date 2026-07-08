@@ -3,7 +3,7 @@ title: "පකයා to make toys from old Olarpaper"
 meta_title: ""
 description: "meta description"
 date: 2025-04-01T05:00:00Z
-image: "/images/posts/walakatha.jpg"
+image: "/images/posts/walakatha.webp"
 categories: ["wal katha"]
 authors: ["walkatha"]
 tags: ["walkatha", "wala katha"]

@@ -3,7 +3,7 @@ title: "Thaththa Duwa wal katha - තාත්තයි දුවයි වල�
 meta_title: "තාත්තයි දුවයි වල් කතා | Sinhala Wal Katha"
 description: "මට අවුරුදු 28 යි. මගේ තාත්තට වයස අවුරුදු 50 යි. මගේ තාත්තා ආමි එකේ වැඩ කරලා දැන් පැන්ශන් ගිහින් ඉන්නේ.."
 date: 2026-06-17
-image: "/images/posts/Thaththa-Duwa-wal-katha.jpg"
+image: "/images/posts/Thaththa-Duwa-wal-katha.webp"
 draft: false
 authors: ["WalaKatha"]
 tags: ["thaththa-katha", "duwakatha", "famly-katha"]

@@ -3,7 +3,7 @@ title: "ගෙදර ඩ්‍රයිවර් - Gedara driver වල් ක�
 meta_title: "ගෙදර ඩ්‍රයිවර් මට හුකපු හැටි | 2026 Sinhala Wal Katha"
 description: "මම බැදල ඉන්නෙ මට බබාල දෙන්නෙක් ඉන්නව මගේ මහත්තය රට..."
 date: 2026-06-18
-image: "/images/posts/Gedara-driver-wal-katha.jpg"
+image: "/images/posts/Gedara-driver-wal-katha.webp"
 draft: false
 authors: ["WalKatha"]
 tags: ["akka-katha", "aluth-katha", "hot-katha"]

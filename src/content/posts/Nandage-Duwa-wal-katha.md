@@ -3,7 +3,7 @@ title: "Nandage Duwa - නැන්දගෙ දුව වල් කතා"
 meta_title: "Nandage Duwa wala katha | Sinhala Wal Katha"
 description: "මේක අහම්බෙන් සිදුවන සිද්ධියක්.. මේක උනේ මායි මගෙ cousin නංගී අතරෙ. මේක සත්‍ය සිද්ධියක්..."
 date: 2026-06-18
-image: "/images/posts/Nandage-duwa-wal-katha.jpg"
+image: "/images/posts/Nandage-duwa-wal-katha.webp"
 draft: false
 authors: ["WalKatha"]
 tags: ["akka-katha", "aluth-katha", "famlly-katha"]

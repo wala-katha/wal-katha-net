@@ -3,7 +3,7 @@ title: Why a balloon is a flexible bag
 meta_title: ""
 description: "meta description"
 date: 2025-04-02T05:00:00Z
-image: "/images/posts/walakatha.jpg"
+image: "/images/posts/walakatha.webp"
 categories: ["development"]
 authors: ["John Doe"]
 tags: ["diy", "toy"]

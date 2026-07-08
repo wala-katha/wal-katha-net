@@ -3,7 +3,7 @@ title: "සිතුවම් අතරින් උපන් ආදරය - ස
 meta_title: "සිතුවම් අතරින් උපන් ආදරය | Sinhala Wal Katha Art"
 description: "Wala Katha Art වෙතින් ගෙන එන නිල ලේඛිකා අනූ විසින් රචිත නවතම සිංහල කෙටිකතාව කියවන්න. ආදරය සහ ජීවිතය ගැන කියවන්න අදම පිවිසෙන්න."
 date: 2026-05-30
-image: "/images/posts/walakatha.jpg"
+image: "/images/posts/walakatha.webp"
 draft: false
 authors: ["WalaKatha"]
 tags: ["sinhala-katha", "wala-katha", "wal-katha"]
