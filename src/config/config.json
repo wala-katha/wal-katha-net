@@ -1,7 +1,7 @@
 {
   "site": {
     "title": "sinhala Wal Katha - සිංහල වල් කතා | Wala Katha & Wela Katha",
-    "base_url": "https://walkatha.pages.dev",
+    "base_url": "https://walakatha.net",
     "base_path": "/",
     "trailing_slash": false,
     "favicon": "/images/favicon.png",
@@ -28,7 +28,7 @@
 
   "params": {
     "contact_form_action": "#",
-    "copyright": "Copyright © 2026 [Wal Katha](https://walkatha.pages.dev)"
+    "copyright": "Copyright © 2026 [Wal Katha](https://walakatha.net)"
   },
 
   "contactinfo": {
