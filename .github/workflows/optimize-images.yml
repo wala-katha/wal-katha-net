@@ -93,10 +93,10 @@ jobs:
 
           // ==========================================================
           // 🖼️ ROOT IMAGES SYSTEM — public/images/ ඇතුළේ කෙලින්ම තියෙන 
-          //    විශේෂ පින්තූර (Copyright & Credit Policy.png, Auhor.png ආදී) 
+          //    විශේෂ පින්තූර (Copyright & Credit Policy.png, Auhor.png, author.png ආදී) 
           //    ස්මාර්ට් විදිහට convert කිරීම. Crop නොවේ, Ratio ආරක්ෂා වේ.
           // ==========================================================
-          const rootImages = ['Copyright & Credit Policy.png', 'Auhor.png'];
+          const rootImages = ['Copyright & Credit Policy.png', 'Auhor.png', 'author.png'];
           const rootDir = 'public/images';
 
           for (const file of rootImages) {
