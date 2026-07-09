@@ -28,7 +28,7 @@ const calculatedTitle = plainify(
   meta_title && meta_title.trim() !== ""
     ? meta_title
     : title && title.trim() !== ""
-      ? `${title} - Wal Katha`
+      ? `${title} - Wala Katha`
       : config.site.title
 );
 
@@ -38,7 +38,8 @@ const calculatedDescription = plainify(
     : config.metadata.meta_description
 );
 
-const siteKeywords = "Wal Katha, wala katha, wela katha, walkatha, සිංහල වැල කතා, sinhala wal katha, Wela kathaa, Sex Katha, Sex Stories, Wal Stories, Sinhala Sex, Sinhala Porn, Free Download, Sri Lanka, new wela katha, wal katha 9, sinhala wela katha, wal Katha sinhalen, Ammai Puthai, Paule wela Katha, Sinhala wal wala wela katha, amma katha, family katha, suparima katha, walma, wal katha kari katha, eha gedara, akka katha, malli katha, seeya katha, husband katha, wife katha, hora katha, New Wal Katha blogs, wal chithra katha, wal katha free, sinhala sex katha, sinhala wal katha blog, nangita hukala, campus, amma malli, akka, birinda, wife lingika paula, rasama, rasa wal katha";
+// 🎯 2026 GOOGLE-SAFE KEYWORD STRUCTURE (No Keyword Stuffing Penalty)
+const siteKeywords = "Wala Katha, Wal Katha, සිංහල වල් කතා, Sinhala Wal Katha, Wela Katha, Sinhala Wela Katha";
 
 const cleanBaseUrl = config.site.base_url.endsWith("/")
   ? config.site.base_url.slice(0, -1)
@@ -59,16 +60,15 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
 ---
 
 <!doctype html>
-<html lang="si" class="bg-[#010203]">
+<html lang="si" class="bg-[#050505]">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
 
-    <!-- ✅ Critical inline CSS — render flash වළකන්න -->
     <style>
       html, body {
-        background-color: #010203;
-        color: #f8f8ff;
+        background-color: #050505;
+        color: #f8fafc;
         margin: 0;
         padding: 0;
       }
@@ -77,26 +77,20 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
 
     <link rel="shortcut icon" href={config.site.favicon} />
 
-    <!-- ✅ LCP fix: Home page slider first image preload -->
     {isHomePage && (
       <link
-        rel="preload"
-        as="image"
-        href="/images/slider/slide-1.webp"
-        fetchpriority="high"
-      />
+        <link rel="preload" as="image" href="/images/slider/slide-1.webp" fetchpriority="high" />
     )}
 
-    <!-- ✅ Font preload -->
     {fontEntries.map(([key]) => {
       const cssVar = `--font-${key}` as any;
       return <Font cssVariable={cssVar} preload />;
     })}
 
-    <meta name="theme-color" content="#010203" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#010203" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#010203" />
-    <meta name="msapplication-TileColor" content="#010203" />
+    <meta name="theme-color" content="#050505" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#050505" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#050505" />
+    <meta name="msapplication-TileColor" content="#050505" />
     <meta name="theme-name" content="bookworm-light-astro" />
     <meta name="generator" content={Astro.generator} />
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
@@ -106,7 +100,7 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
 
     {noindex
       ? <meta name="robots" content="noindex,nofollow" />
-      : <meta name="robots" content="index,follow,max-image-preview:large" />
+      : <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
     }
 
     <meta name="description" content={calculatedDescription} />
@@ -129,14 +123,13 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
     <meta name="twitter:description" content={calculatedDescription} />
     <meta name="twitter:image" content={finalImageUrl} />
 
-    <!-- ✅ ClientRouter — අවසානයට දාන්න reflow minimize කිරීමට -->
     <ClientRouter />
   </head>
 
-  <body class="bg-[#010203] text-[#F8F8FF] min-h-screen flex flex-col antialiased selection:bg-[#01AD9F]/30 selection:text-[#01AD9F]">
+  <body class="bg-[#050505] text-[#f8fafc] min-h-screen flex flex-col antialiased selection:bg-emerald-500/30 selection:text-[#34d399]">
     <TwSizeIndicator />
     <Header />
-    <main id="main-content" class="min-h-[60vh] flex-1">
+    <main id="main-content" class="min-h-[60vh] flex-1 bg-[#050505]">
       <slot />
     </main>
     <Footer />
