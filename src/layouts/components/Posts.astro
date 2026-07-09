@@ -33,12 +33,26 @@ const uniqueTags = [...new Set(allTags)].filter(Boolean);
               class="rounded-lg block hover:text-primary overflow-hidden group relative border border-white/10"
               style="aspect-ratio: 2 / 3;"
             >
+              {/* 🎯 RESPONSIVE IMAGE FIX (PageSpeed "larger than needed" fix):
+                  width/height දෙන්නේ 2x (retina) source size එකට — workflow
+                  script එකෙන් generate වෙන post images 408px max width
+                  (aspect ratio 2:3 නිසා height ≈ 612px). densities={[1, 2]}
+                  දීමෙන් Astro දෙකම srcset එකට දානවා:
+                    1x → ~204x306 (actual displayed grid card size)
+                    2x → 408x612 (retina/high-DPI screens)
+                  Browser එකට context එකට ගැලපෙන size එක තෝරගන්න ඉඩ ලැබෙනවා,
+                  PageSpeed 1x check එකේදී "larger than needed" warning එක
+                  නැති වෙනවා මොකද දැන් 1x-ට ගැලපෙන කුඩා version එකක්ම
+                  ලැබෙනවා. sizes attribute එකෙන් grid card එකේ actual
+                  rendered width එක browser එකට කියනවා. */}
               <Image
                 class="group-hover:scale-[1.04] transition duration-300 w-full h-full object-contain"
                 src={post.data.image}
                 alt={post.data.title}
-                width={500}
-                height={750}
+                width={408}
+                height={612}
+                densities={[1, 2]}
+                sizes="(max-width: 640px) 33vw, 204px"
                 loading={i < 3 ? "eager" : "lazy"}
                 decoding="async"
               />
