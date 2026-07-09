@@ -4,24 +4,22 @@ import config from "@/config/config.json";
 import Base from "@/layouts/Base.astro";
 import Pagination from "@/layouts/components/Pagination.astro";
 import { getSinglePage } from "@/lib/contentParser.astro";
-import { sortByDate } from "@/lib/utils/sortFunctions";
-import { markdownify } from "@/lib/utils/textConverter";
 
 const authors = await getSinglePage("authors");
 
-// 1. ස්වයංක්‍රීය නිවැරදි කිරීම (Auto-Fix): authors දත්ත හිස් හෝ වැරදි නම් බිඳ වැටෙන්නේ නැතිව ආරක්ෂා කරයි
+// 1. ස්වයංක්‍රීය නිවැරදි කිරීම (Auto-Fix): authors දත්ත හිස් හෝ වැරදි නම් බිඳ වැටීම වළක්වයි
 const safeAuthors = Array.isArray(authors) ? authors : [];
-const sortedPosts = sortByDate(safeAuthors);
 
 // Safe Pagination Calculation
 const paginationLimit = config?.settings?.pagination || 8;
 const totalPages = Math.ceil((safeAuthors.length || 0) / paginationLimit);
 
-const currentPosts = sortedPosts && sortedPosts.length > 0 ? sortedPosts.slice(0, paginationLimit) : [];
+// 🎯 FIXED: sortByDate බග් එක ඉවත් කර කතෘවරුන් නිවැරදිව ලබා ගැනීම
+const currentAuthors = safeAuthors.length > 0 ? safeAuthors.slice(0, paginationLimit) : [];
 
 // 📈 2. SEO ප්‍රශස්තකරණය: සෙවුම් යන්ත්‍ර සඳහා නිවැරදි විස්තර සහ පිරිසිදු ලින්ක්ස්
-const metaTitle = "අපේ ලේඛකයින් - Our Authors";
-const metaDescription = "අපේ වෙබ් අඩවියේ ලිපි සහ නවතම කතා ලියන සියලුම දක්ෂ කතෘවරුන් සහ ලේඛකයින් මෙතැනින් එකම තැනකින් සොයා ගන්න.";
+const metaTitle = `Our Authors - අපේ ලේඛකයින් | ${config?.site?.title || "Wala Katha"}`;
+const metaDescription = "Wala Katha වෙබ් අඩවියේ ලිපි සහ නවතම රසවත් කතා ලියන සියලුම දක්ෂ කතෘවරුන් සහ ලේඛකයින් මෙතැනින් එකම තැනකින් සොයා ගන්න.";
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
 const canonicalUrl = `${base_url}/authors`;
@@ -29,7 +27,7 @@ const canonicalUrl = `${base_url}/authors`;
 // ඊළඟ පිටුව තීරණය කිරීම (Google Bot Fix)
 const nextUrl = totalPages > 1 ? `${base_url}/authors/page/2` : null;
 
-// 🚀 GOOGLE SEO BREADCRUMB SCHEMA: සෙවුම් යන්ත්‍ර වලට සයිට් එකේ ව්‍යුහය වටහා දීමට (JSON-LD)
+// 🚀 GOOGLE SEO BREADCRUMB SCHEMA (JSON-LD)
 const breadcrumbSchema = {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
@@ -52,6 +50,7 @@ const breadcrumbSchema = {
 
 <Base 
   title={metaTitle} 
+  meta_title={metaTitle}
   description={metaDescription} 
   canonical={canonicalUrl}
   next={nextUrl}
@@ -59,26 +58,34 @@ const breadcrumbSchema = {
   {/* Google Rich Snippet එක ඇතුළත් කිරීම */}
   <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
 
-  {/* 100% Original Section Layout structure & Styles */}
-  <section class="section">
-    <div class="container text-center">
+  {/* ⚡ PREMIUM ULTRA-DARK AUTHORS SECTION */}
+  <section class="section bg-[#050505] py-12 min-h-screen text-slate-200 antialiased selection:bg-emerald-500/30 selection:text-emerald-400">
+    <div class="container mx-auto px-4 text-center">
       
-      {/* 100% Original Heading */}
-      <h1 set:html={markdownify("Authors")} class="page-heading h2" />
+      {/* 🎯 PREMIUM NEON TYPOGRAPHY HEADING */}
+      <div class="max-w-xl mx-auto mb-12">
+        <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-3">
+          Our <span class="text-emerald-400 drop-shadow-[0_2px_8px_rgba(16,185,129,0.3)]">Authors</span>
+        </h1>
+        <p class="text-sm text-slate-400 font-medium">
+          අපගේ වෙබ් අඩවිය හැඩකරන, ඔබ වඩාත්ම ප්‍රිය කරන සියලුම කතෘවරුන් සහ ලේඛකයින්ගේ එකතුව.
+        </p>
+      </div>
       
       {/* Authors List Component */}
-      {currentPosts && currentPosts.length > 0 ? (
-        <Authors authors={currentPosts} />
+      {currentAuthors.length > 0 ? (
+        <Authors authors={currentAuthors} />
       ) : (
-        // Original Style එක වෙනස් නොකර දත්ත නොමැති විට පෙන්වන කොටස
-        <div class="py-8 text-center opacity-60">
-          <p>කතෘවරුන් කිසිවෙකු හමුනොවීය.</p>
+        <div class="py-12 bg-[#0d0d0d] border border-[#1a1a1a] rounded-2xl max-w-md mx-auto mt-8">
+          <p class="text-slate-400 font-medium">කතෘවරුන් කිසිවෙකු හමුනොවීය.</p>
         </div>
       )}
       
-      {/* 100% Original Pagination bar - සැබෑ ලෙසම පිටු 1කට වඩා තිබේ නම් පමණක් පෙන්වයි */}
+      {/* Pagination bar - සැබෑ ලෙසම පිටු 1කට වඩා තිබේ නම් පමණක් පෙන්වයි */}
       {totalPages > 1 && (
-        <Pagination section={"authors"} currentPage={1} totalPages={totalPages} />
+        <div class="mt-12 flex justify-center">
+          <Pagination section={"authors"} currentPage={1} totalPages={totalPages} />
+        </div>
       )}
       
     </div>
