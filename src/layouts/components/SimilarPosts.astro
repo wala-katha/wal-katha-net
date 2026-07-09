@@ -3,7 +3,7 @@ import dateFormat from "@/lib/utils/dateFormat";
 import { humanize, slugify } from "@/lib/utils/textConverter";
 import { Image } from "astro:assets";
 import type { CollectionEntry } from "astro:content";
-import { BiCalendarEdit, BiCategoryAlt } from "react-icons/bi";
+import { BiCalendarEdit, BiCategoryAlt, BiChevronDown, BiChevronUp } from "react-icons/bi";
 
 type Props = {
   posts: CollectionEntry<"posts">[];
@@ -11,23 +11,26 @@ type Props = {
 const { posts } = Astro.props;
 ---
 
-{/* 👑 CLEAN RICH BLACK INNER WRAPPER */}
-<div class="w-full py-6 transition-all duration-300 bg-[#050505]">
+{/* 👑 PREMIUM ULTRA-DARK INNER WRAPPER */}
+<div class="w-full py-6 transition-all duration-300 bg-[#050505]" id="similar-posts-wrapper">
   
-  {/* 🎯 FIXED: Responsive Bootstrap Row එකක් ලෙස සකස් කිරීම */}
-  <div class="row gy-4 gx-2 sm:gx-4 justify-center">
+  {/* 🎯 RESPONSIVE GRID GRID SYSTEM */}
+  <div class="row gy-4 gx-2 sm:gx-4 justify-center" id="similar-posts-grid">
     {
-      posts.map((post) => (
-        /* 🎯 FIXED GRID: මොබයිල් වලට col-6 (පේළියට 2යි), ටැබ්/ඩෙස්ක්ටොප් වලට md:col-4 (පේළියට 3යි) */
-        <div class="col-6 md:col-4 flex flex-col justify-between group mb-2 text-center bg-[#0d0d0d] p-2 sm:p-3 rounded-xl border border-[#1a1a1a]">
+      posts.map((post, index) => (
+        /* 🎯 DYNAMIC SIMILAR CARD WITH INITIAL DATA ATTRIBUTE */
+        <div 
+          class="col-6 md:col-4 flex flex-col justify-between group mb-2 text-center bg-[#0d0d0d] p-2 sm:p-3 rounded-xl border border-[#1a1a1a] similar-post-card transition-all duration-300 hidden"
+          data-index={index}
+        >
           {post.data.image && (
             <a
               href={`/blog/${post.id}/`}
               class="rounded-lg block overflow-hidden group relative bg-[#161616] mx-auto w-full aspect-[3/4]"
             >
-              {/* 👑 CLEAN & STATIC FRAME WITH EMERALD HOVER */}
+              {/* 👑 FIXED: object-contain දමා Crop වීම සම්පූර්ණයෙන්ම වැළැක්වීම */}
               <Image
-                class="w-full h-full object-cover rounded-lg border border-white/5 group-hover:border-emerald-500/40 transition-all duration-300 relative z-0"
+                class="w-full h-full object-contain rounded-lg border border-white/5 group-hover:border-emerald-500/40 transition-all duration-300 relative z-0"
                 src={post.data.image}
                 alt={post.data.title}
                 width={500}
@@ -75,4 +78,119 @@ const { posts } = Astro.props;
     }
   </div>
 
+  {/* 🔘 DYNAMIC BUTTONS CONTROLLER CONTAINER */}
+  {posts.length > 2 && (
+    <div class="mt-8 flex flex-wrap justify-center items-center gap-4 w-full">
+      
+      {/* 🔙 SHOW LESS / BACK BUTTON */}
+      <button
+        id="btn-similar-less"
+        type="button"
+        class="text-[11px] sm:text-xs bg-[#111111] border border-white/5 text-slate-400 font-bold px-5 py-2.5 rounded-full shadow-md hover:bg-red-500/10 hover:text-red-400 transition-all flex items-center gap-1 cursor-pointer hidden"
+      >
+        <BiChevronUp className="h-4 w-4" />
+        <span>Back (මුලට)</span>
+      </button>
+
+      {/* 🔽 LOAD MORE BUTTON */}
+      <button
+        id="btn-similar-more"
+        type="button"
+        class="text-[11px] sm:text-xs bg-emerald-500 text-neutral-950 font-black px-6 py-2.5 rounded-full shadow-md hover:bg-emerald-400 transition-all flex items-center gap-1 cursor-pointer"
+      >
+        <span>Load More კතා</span>
+        <BiChevronDown className="h-4 w-4 font-black" />
+      </button>
+
+    </div>
+  )}
 </div>
+
+{/* 🚀 CLIENT-SIDE DYNAMIC PAGINATION SCRIPT */}
+<script>
+  function initSimilarPostsPagination() {
+    const cards = document.querySelectorAll('.similar-post-card');
+    const btnMore = document.getElementById('btn-similar-more');
+    const btnLess = document.getElementById('btn-similar-less');
+    
+    if (cards.length === 0) return;
+
+    // උපාංගය අනුව පියවරවල් තීරණය කිරීම (Mobile: 2, Desktop: 3)
+    const isMobile = window.innerWidth < 768;
+    const initialItems = isMobile ? 2 : 3;
+    const stepItems = isMobile ? 2 : 3;
+    
+    let currentVisibleCount = initialItems;
+
+    // මුල්ම පෝස්ට් ටික පෙන්වීමේ ශ්‍රිතය
+    function updateVisibility() {
+      cards.forEach((card, index) => {
+        const htmlCard = card as HTMLElement;
+        if (index < currentVisibleCount) {
+          htmlCard.classList.remove('hidden');
+          // Smooth Fade-in Effect
+          htmlCard.style.opacity = '1';
+          htmlCard.style.transform = 'translateY(0)';
+        } else {
+          htmlCard.classList.add('hidden');
+        }
+      });
+
+      // Load More බොත්තම පාලනය
+      if (btnMore) {
+        if (currentVisibleCount >= cards.length) {
+          btnMore.classList.add('hidden');
+        } else {
+          btnMore.classList.remove('hidden');
+        }
+      }
+
+      // Back බොත්තම පාලනය (මුල් සීමාවට වඩා වැඩි නම් පමණක් පෙන්වයි)
+      if (btnLess) {
+        if (currentVisibleCount > initialItems) {
+          btnLess.classList.remove('hidden');
+        } else {
+          btnLess.classList.add('hidden');
+        }
+      }
+    }
+
+    // Load More ක්ලික් කිරීම
+    if (btnMore) {
+      btnMore.addEventListener('click', () => {
+        currentVisibleCount += stepItems;
+        updateVisibility();
+      });
+    }
+
+    // Back / Show Less ක්ලික් කිරීම
+    if (btnLess) {
+      btnLess.addEventListener('click', () => {
+        currentVisibleCount = initialItems; // කෙලින්ම නැවත මුලටම රැගෙන යාම
+        updateVisibility();
+        
+        // පේජ් එක උඩට Smooth Scroll කිරීම
+        const wrapper = document.getElementById('similar-posts-wrapper');
+        if (wrapper) {
+          wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    }
+
+    // Initial Execute
+    updateVisibility();
+  }
+
+  // Astro View Transitions සහ Normal Load දෙකටම වැඩ කරන සේ සකස් කිරීම
+  document.addEventListener('astro:page-load', initSimilarPostsPagination);
+  initSimilarPostsPagination();
+</script>
+
+<style>
+  /* සුමටව කාඩ්ස් මතුවීම සඳහා සරල CSS එකක් */
+  .similar-post-card {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+  }
+</style>
