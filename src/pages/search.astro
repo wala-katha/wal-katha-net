@@ -103,7 +103,7 @@ const searchPageSchema = {
   </Fragment>
 
   {/* ── STYLES ── */}
-  <style>
+  <style is:global>
     .search-hero-container {
       background: linear-gradient(135deg, #0d0d0d 0%, #080808 100%);
       border: 1px solid #1a1a1a;
@@ -137,6 +137,48 @@ const searchPageSchema = {
       white-space: nowrap;
       border: 0;
     }
+
+    /* 👑 SMART SEARCH RESULTS OVERRIDES (React Components CSS Injection)
+       උඹේ නිල CSS ෆයිල් වලට කිසිම හානියක් නොකර සර්ච් කාඩ් ටික මෙතනින් හැඩගස්වයි */
+    
+    /* 1. සෙවුම් ප්‍රතිඵලවල ඇති පෝස්ට් කාඩ් එක */
+    .search-hero-container + div, 
+    main .container > div:last-child,
+    [class*="search-result"], 
+    .search-results-grid {
+      display: grid !important;
+      grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+      gap: 1.5rem !important;
+    }
+    @media (min-width: 768px) {
+      .search-hero-container + div, main .container > div:last-child {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      }
+    }
+
+    /* 2. පින්තූරය Crop වීම සම්පූර්ණයෙන්ම වළක්වන කොටස */
+    main img {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: contain !important; /* FIXED: පින්තූරය බ්ලැක් බෝඩර්ස් මැද Crop නොවී ලස්සනට තැබීම */
+      background-color: #111111 !important;
+      border-radius: 12px !important;
+      transition: all 0.3s ease !important;
+    }
+
+    /* 3. පින්තූරය වටා ඇති Anchor/Div කන්ටේනරය */
+    main .container a:has(img) {
+      display: block !important;
+      aspect-ratio: 16 / 10 !important; /* Premium Landscape Ratio */
+      background-color: #111111 !important;
+      overflow: hidden !important;
+      border-radius: 12px !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    }
+
+    main .container a:has(img):hover img {
+      transform: scale(1.02) !important;
+    }
   </style>
 
   {/* ── MAIN ── */}
@@ -146,7 +188,7 @@ const searchPageSchema = {
       {/* SEO H1 — bots only */}
       <div class="seo-visually-hidden">
         <h1>සිංහල වල් කතා සෙවුම් | Search Sinhala Wal Katha Stories</h1>
-        <p>WalaKatha වෙබ් අඩවියේ ඇති සියලුම වැල කතා සහ කෙටි කතා මෙතැනින් සොයා ගන්න.</p>
+        <p>WalaKatha稳බ් අඩවියේ ඇති සියලුම වැල කතා සහ කෙටි කතා මෙතැනින් සොයා ගන්න.</p>
       </div>
 
       {/* HERO SEARCH BOX */}
