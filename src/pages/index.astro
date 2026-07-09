@@ -25,28 +25,28 @@ const homePageSchema = {
       "@type": "WebSite",
       "@id": `${base_url}/#website`,
       "url": base_url,
-      "name": config?.site?.title || "Wala Katha",
+      "name": "Wala Katha",
       "alternateName": [
+        "Wala Katha Stories",
+        "Wal Katha", 
         "සිංහල වල් කතා", 
         "Sinhala Wal Katha", 
         "Wela Katha", 
-        "Wal Katha", 
-        "Wala Katha Stories", 
         "Sinhala Wela Katha",
         "අලුත්ම වල් කතා",
-        "WalaKatha App"
+        "WalKatha"
       ],
-      "description": "අලුත්ම සහ රසවත්මසිංහල වල් කතා සහ වැල කතා කියවන්න. Daily updated high quality Sinhala wal katha stories, wela katha and digital updates.",
+      "description": "Wala Katha - අලුත්ම සහ රසවත්ම සිංහල වල් කතා (Sinhala Wal Katha) සහ වැල කතා (Wela Katha) දිනපතා කියවන්න ඇති එකම නිල වෙබ් අඩවිය.",
       "publisher": {
         "@type": "Organization",
         "@id": `${base_url}/#organization`,
-        "name": config?.site?.title || "Wala Katha",
+        "name": "Wala Katha",
         "url": base_url,
         "logo": {
           "@type": "ImageObject",
           "@id": `${base_url}/#logo`,
           "url": siteLogo,
-          "caption": config?.site?.title || "Wala Katha Logo"
+          "caption": "Wala Katha Logo"
         }
       },
       "potentialAction": {
@@ -62,12 +62,12 @@ const homePageSchema = {
       "@type": "CollectionPage",
       "@id": `${canonicalUrl}/#collection`,
       "url": canonicalUrl,
-      "name": "සිංහල වල් කතා එකතුව | Latest Stories",
-      "description": "Daily updated Sinhala wal katha and wela stories collection.",
+      "name": "Wala Katha - සිංහල වල් කතා එකතුව | Latest Sinhala Wal Katha Stories",
+      "description": "Daily updated premium Sinhala wal katha, wala katha and wela stories collection.",
       "isPartOf": { "@id": `${base_url}/#website` },
       "about": {
         "@type": "Thing",
-        "name": "Sinhala Literature & Stories"
+        "name": "Sinhala Wal Katha Literature"
       }
     }
   ]
@@ -75,9 +75,9 @@ const homePageSchema = {
 ---
 
 <Base 
-  title="සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories"
-  meta_title="සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories - WalaKatha"
-  description="නවතම සිංහල වල් කතා, වැල කතා, අලුත්ම කෙටි කතා සහ රසවත් කතා එකතුවක් එකම තැනකින් කියවන්න. Daily updated Sinhala wal katha and wela stories collection."
+  title="Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories"
+  meta_title="Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories"
+  description="Wala Katha: නවතම සිංහල වල් කතා, වැල කතා, අලුත්ම කෙටි කතා සහ රසවත් සිංහල wal katha stories එකතුවක් දිනපතා කියවන්න. Best daily updated Sinhala wela katha collection."
   canonical={canonicalUrl}
   image={siteLogo}
 >
@@ -87,12 +87,12 @@ const homePageSchema = {
   {/* CORE SOCIAL META INJECTOR (Fallback ආරක්ෂාව සඳහා සෘජුවම හිසට සම්බන්ධ කිරීම) */}
   <Fragment slot="head">
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories" />
-    <meta property="og:description" content="නවතම සිංහල වල් කතා, වැල කතා, අලුත්ම කෙටි කතා එකතුවක් එකම තැනකින් කියවන්න." />
+    <meta property="og:title" content="Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories" />
+    <meta property="og:description" content="Wala Katha: නවතම සිංහල වල් කතා, වැල කතා සහ රසවත් සිංහල wal katha stories එකතුවක් දිනපතා කියවන්න." />
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:image" content={siteLogo} />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="සිංහල වල් කතා | Sinhala Wal Katha" />
+    <meta name="twitter:title" content="Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha" />
     <meta name="twitter:description" content="Daily updated Sinhala wal katha and wela stories collection." />
     <meta name="twitter:image" content={siteLogo} />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
@@ -194,8 +194,8 @@ const homePageSchema = {
       {/* 🎯 2026 ABSOLUTE SECURE H1 BLOCK 
           මිනිස් ඇසට 100% ක් නොපෙනෙන නමුත් Google රොබෝවරුන් පීනල්ටි නොදී කියවන නිවැරදිම CSS හැඩතලය */}
       <div class="invisible-seo-h1">
-        <h1>සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories</h1>
-        <p>නවතම සිංහල වල් කතා, වැල කතා, අලුත්ම කෙටි කතා සහ රසවත් කතා එකතුවක් එකම තැනකින් කියවන්න.</p>
+        <h1>Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories</h1>
+        <p>Wala Katha වෙබ් අඩවියෙන් නවතම සිංහල වල් කතා, වැල කතා, රසවත් කෙටි කතා සහ සිංහල wal katha stories දිනපතා කියවන්න.</p>
       </div>
 
       {/* Slider එක ඉහළින්ම මනාව දර්ශනය වේ */}
