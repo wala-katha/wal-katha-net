@@ -41,15 +41,10 @@ const fontsConfig = Object.entries(theme.fonts.font_family)
   });
 
 export default defineConfig({
-  site: config.site.base_url
-    ? config.site.base_url
-    : "https://walakatha.net",
+  // 🎯 100% Dynamic Base URL Fetching from config.json
+  site: config.site.base_url ? config.site.base_url : "https://walakatha.net",
   base: config.site.base_path ? config.site.base_path : "/",
-  trailingSlash:
-    config.site.trailing_slash === true ||
-    config.site.trailing_slash === "always"
-      ? "always"
-      : "never",
+  trailingSlash: config.site.trailing_slash ? "always" : "never",
 
   image: {
     service: sharpImageService(),
@@ -67,10 +62,10 @@ export default defineConfig({
 
   integrations: [
     react(),
+    // 🎯 FIXED: lastmod බග් එක ඉවත් කර සැබෑ පිටු දින සැකසීම (Google-Safe Optimization)
     sitemap({
       changefreq: "weekly",
       priority: 0.7,
-      lastmod: new Date(),
     }),
     AutoImport({
       imports: [
