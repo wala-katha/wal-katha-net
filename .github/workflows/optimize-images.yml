@@ -30,21 +30,36 @@ jobs:
           import { createRequire } from 'module';
           const require = createRequire('/tmp/sharp-tool/package.json');
           const sharp = require('sharp');
-          import { readdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
+          import { readdirSync, existsSync, readFileSync, writeFileSync, statSync } from 'fs';
           import { join } from 'path';
 
           // ==========================================================
-          // 🎯 SMART CONFIG — site එකේ display කරන අවශ්‍යතාවයට ගැලපෙන
-          //    maximum widths. Height දෙන්නේ නෑ — aspect ratio ස්වභාවිකව
-          //    පවතී, crop/distort කිසිවක් සිදු නොවේ (proportional resize).
+          // 🎯 SMART CONFIG — site එකේ ඇත්තටම display කරන actual pixel
+          //    sizes එකට ගැලපෙන (2x retina සඳහා ටිකක් වැඩිය) maximum
+          //    widths. Height දෙන්නේ නෑ — aspect ratio ස්වභාවිකව පවතී,
+          //    crop/distort කිසිවක් සිදු නොවේ (proportional resize only).
+          //
+          //    Posts.astro grid card එක display කරන්නේ 204x290px
+          //    (PageSpeed confirmed), ඒ නිසා maxWidth 420px = ~2x retina
+          //    safety margin. පරණ 750px setting එක 2.6x වැඩිපුර
+          //    pixels download කරවපු නිසා මෙතන අඩු කර ඇත.
           // ==========================================================
           const folders = [
-            { dir: 'public/images/posts',   maxWidth: 750,  type: 'post'   },
+            { dir: 'public/images/posts',   maxWidth: 420,  type: 'post'   },
             { dir: 'public/images/slider',  maxWidth: 1200, type: 'slider' },
             { dir: 'public/images/authors', maxWidth: 150,  type: 'author', square: true },
           ];
 
           const convertedMap = {}; // { "Gedara-driver-wal-katha.jpg": "Gedara-driver-wal-katha.webp" }
+          let skippedCount = 0;
+          let processedCount = 0;
+
+          function isUpToDate(input, out) {
+            if (!existsSync(out)) return false;
+            const srcTime = statSync(input).mtimeMs;
+            const outTime = statSync(out).mtimeMs;
+            return outTime >= srcTime;
+          }
 
           for (const { dir, maxWidth, type, square } of folders) {
             if (!existsSync(dir)) continue;
@@ -55,6 +70,13 @@ jobs:
               const input = join(dir, file);
               const outFile = file.replace(/\.[^.]+$/, '.webp');
               const out = join(dir, outFile);
+
+              // ⚡ IDEMPOTENCY GUARD — .webp file එක .jpg/.png එකට වඩා
+              //    අලුත් නම් ආයෙත් process කරන්නේ නෑ (CI time + commits save කරයි)
+              if (isUpToDate(input, out)) {
+                skippedCount++;
+                continue;
+              }
 
               const image = sharp(input);
               const metadata = await image.metadata();
@@ -80,6 +102,8 @@ jobs:
                   kernel: sharp.kernel.lanczos3,
                 });
               }
+              // metadata.width <= maxWidth නම් — කිසිම resize එකක් නෑ,
+              // දැනටමත් කුඩා පින්තූරයක් නම් stretch කරන්නේ නෑ (quality preserved)
 
               await pipeline
                 .webp({ quality: 85, smartSubsample: true, effort: 6 })
@@ -88,43 +112,51 @@ jobs:
               console.log(`[${type.toUpperCase()}] ${file} (${metadata.width}x${metadata.height}) -> ${outFile}`);
 
               convertedMap[file] = outFile;
+              processedCount++;
             }
           }
 
           // ==========================================================
-          // 🖼️ ROOT IMAGES SYSTEM — public/images/ ඇතුළේ කෙලින්ම තියෙන 
-          //    විශේෂ පින්තූර (Copyright & Credit Policy.png, Auhor.png, author.png ආදී) 
-          //    ස්මාර්ට් විදිහට convert කිරීම. Crop නොවේ, Ratio ආරක්ෂා වේ.
+          // 🖼️ ROOT IMAGES SYSTEM — public/images/ ඇතුළේ කෙලින්ම තියෙන
+          //    විශේෂ පින්තූර (Copyright & Credit Policy.png, Auhor.png,
+          //    author.png ආදී) ස්මාර්ට් විදිහට convert කිරීම.
+          //    Crop නොවේ, Ratio ආරක්ෂා වේ. Idempotency guard එකම apply වේ.
           // ==========================================================
           const rootImages = ['Copyright & Credit Policy.png', 'Auhor.png', 'author.png'];
           const rootDir = 'public/images';
 
           for (const file of rootImages) {
             const input = join(rootDir, file);
-            if (existsSync(input)) {
-              const outFile = file.replace(/\.[^.]+$/, '.webp');
-              const out = join(rootDir, outFile);
+            if (!existsSync(input)) continue;
 
-              const image = sharp(input);
-              const metadata = await image.metadata();
+            const outFile = file.replace(/\.[^.]+$/, '.webp');
+            const out = join(rootDir, outFile);
 
-              let pipeline = image;
-              // උපරිම පළල 850px කට සීමා කරයි (Crop නොවේ)
-              if (metadata.width && metadata.width > 850) {
-                pipeline = pipeline.resize({
-                  width: 850,
-                  withoutEnlargement: true,
-                  kernel: sharp.kernel.lanczos3
-                });
-              }
-
-              await pipeline
-                .webp({ quality: 85, smartSubsample: true, effort: 6 })
-                .toFile(out);
-
-              convertedMap[file] = outFile;
-              console.log(`[ROOT IMAGE] ${file} (${metadata.width}x${metadata.height}) -> ${outFile}`);
+            if (isUpToDate(input, out)) {
+              skippedCount++;
+              continue;
             }
+
+            const image = sharp(input);
+            const metadata = await image.metadata();
+
+            let pipeline = image;
+            // උපරිම පළල 850px කට සීමා කරයි (Crop නොවේ)
+            if (metadata.width && metadata.width > 850) {
+              pipeline = pipeline.resize({
+                width: 850,
+                withoutEnlargement: true,
+                kernel: sharp.kernel.lanczos3
+              });
+            }
+
+            await pipeline
+              .webp({ quality: 85, smartSubsample: true, effort: 6 })
+              .toFile(out);
+
+            convertedMap[file] = outFile;
+            processedCount++;
+            console.log(`[ROOT IMAGE] ${file} (${metadata.width}x${metadata.height}) -> ${outFile}`);
           }
 
           // ==========================================================
@@ -132,32 +164,46 @@ jobs:
           //    දිගටම .png/.jpg paths use කරන නිසා මේවත් convert කරලා
           //    frontmatter replace step එකේදී auto update කරයි
           // ==========================================================
-          if (existsSync('public/images/logo.png')) {
-            await sharp('public/images/logo.png')
-              .resize({ width: 300, withoutEnlargement: true, kernel: sharp.kernel.lanczos3 })
-              .webp({ quality: 95, effort: 6 })
-              .toFile('public/images/logo.webp');
-            convertedMap['logo.png'] = 'logo.webp';
-            console.log('Done: logo.png -> logo.webp');
+          async function convertSingle(inputPath, outputPath, resizeOpts, webpOpts, mapKey) {
+            if (!existsSync(inputPath)) return;
+
+            if (isUpToDate(inputPath, outputPath)) {
+              skippedCount++;
+              return;
+            }
+
+            let pipeline = sharp(inputPath);
+            if (resizeOpts) pipeline = pipeline.resize(resizeOpts);
+            await pipeline.webp(webpOpts).toFile(outputPath);
+
+            convertedMap[mapKey] = outputPath.split('/').pop();
+            processedCount++;
+            console.log(`Done: ${mapKey} -> ${convertedMap[mapKey]}`);
           }
 
-          if (existsSync('public/images/favicon.png')) {
-            await sharp('public/images/favicon.png')
-              .resize({ width: 32, height: 32, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-              .webp({ quality: 100, effort: 6 })
-              .toFile('public/images/favicon.webp');
-            convertedMap['favicon.png'] = 'favicon.webp';
-            console.log('Done: favicon.png -> favicon.webp');
-          }
+          await convertSingle(
+            'public/images/logo.png',
+            'public/images/logo.webp',
+            { width: 300, withoutEnlargement: true, kernel: sharp.kernel.lanczos3 },
+            { quality: 95, effort: 6 },
+            'logo.png'
+          );
 
-          if (existsSync('public/images/og-image.jpg')) {
-            await sharp('public/images/og-image.jpg')
-              .resize({ width: 1200, withoutEnlargement: true, kernel: sharp.kernel.lanczos3 })
-              .webp({ quality: 85, effort: 6 })
-              .toFile('public/images/og-image.webp');
-            convertedMap['og-image.jpg'] = 'og-image.webp';
-            console.log('Done: og-image.jpg -> og-image.webp');
-          }
+          await convertSingle(
+            'public/images/favicon.png',
+            'public/images/favicon.webp',
+            { width: 32, height: 32, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } },
+            { quality: 100, effort: 6 },
+            'favicon.png'
+          );
+
+          await convertSingle(
+            'public/images/og-image.jpg',
+            'public/images/og-image.webp',
+            { width: 1200, withoutEnlargement: true, kernel: sharp.kernel.lanczos3 },
+            { quality: 85, effort: 6 },
+            'og-image.jpg'
+          );
 
           // ==========================================================
           // 📝 AUTO-UPDATE FRONTMATTER — content/posts/*.md, authors/*.md
@@ -174,6 +220,8 @@ jobs:
               let changed = false;
 
               for (const [oldName, newName] of Object.entries(convertedMap)) {
+                // frontmatter value එකේ exact filename match කරයි
+                // (folder path එකේ ඕන තැනක image: "/images/posts/X.jpg" ආකෘතියට ගැලපේ)
                 const regex = new RegExp(oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
                 if (regex.test(content)) {
                   content = content.replace(regex, newName);
@@ -215,6 +263,7 @@ jobs:
           }
 
           console.log('--- Conversion Summary ---');
+          console.log(`Processed: ${processedCount}, Skipped (already up-to-date): ${skippedCount}`);
           console.log(JSON.stringify(convertedMap, null, 2));
           EOF
 
@@ -235,5 +284,5 @@ jobs:
           git add src/content/contact/*.md || true
           git add src/content/pages/*.md || true
           git add src/config/config.json || true
-          git diff --staged --quiet || git commit -m "Auto: Smart crop-free WebP optimization including root images + frontmatter update"
+          git diff --staged --quiet || git commit -m "Auto: Smart crop-free WebP optimization (right-sized) + root images + frontmatter update"
           git push
