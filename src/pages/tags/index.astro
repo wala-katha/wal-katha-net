@@ -2,9 +2,9 @@
 import Base from "@/layouts/Base.astro";
 import config from "@/config/config.json";
 import { getTaxonomyWithCount } from "@/lib/taxonomyParser.astro";
-import { BiHash } from "react-icons/bi"; // ⚡ UI Consistent එකක් සඳහා වෙනත් පිටුවල ඇති පරිදි Bi ශ්‍රිතයේ අයිකනයක් භාවිතය
+import { BiHash } from "react-icons/bi";
 
-// ⚡ අලුතින් හදපු getTaxonomyWithCount ශ්‍රිතය හරහා ටැග් සමඟ ලිපි ගණන සහ පිරිසිදු නම් එකවර ලබා ගනී
+// ⚡ ටැග් සමඟ ලිපි ගණන සහ පිරිසිදු නම් එකවර ලබා ගනී
 const tagsWithCount = await getTaxonomyWithCount("posts", "tags");
 
 // 1. ස්වයංක්‍රීය නිවැරදි කිරීම (Auto-Fix): Tags ලැයිස්තුව හිස් නම් බිඳ වැටීම වළක්වයි
@@ -12,12 +12,12 @@ const safeTags = Array.isArray(tagsWithCount) ? tagsWithCount : [];
 
 // 📈 2. SEO ප්‍රශස්තකරණය: සෙවුම් යන්ත්‍ර සඳහා නිවැරදි විස්තර සහ පිරිසිදු ලින්ක්ස්
 const metaTitle = `සියලුම ටැග්ස් - Tags | ${config?.site?.title || "Wala Katha"}`;
-const metaDescription = "අපේ වෙබ් අඩවියේ ඇති සියලුම බ්ලොග් ලිපි සහ රසවත් කතා ටැග්ස් (Tags) අනුව මෙතැනින් පහසුවෙන් සොයා ගන්න.";
+const metaDescription = "Wala Katha වෙබ් අඩවියේ ඇති සියලුම බ්ලොග් ලිපි සහ රසවත් කතා ටැග්ස් (Tags) අනුව මෙතැනින් පහසුවෙන් සොයා ගන්න.";
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
 const canonicalUrl = `${base_url}/tags`;
 
-// 🚀 GOOGLE SEO BREADCRUMB SCHEMA: සෙවුම් යන්ත්‍ර වලට ව්‍යුහය වටහා දීමට (JSON-LD)
+// 🚀 GOOGLE SEO BREADCRUMB SCHEMA (JSON-LD)
 const breadcrumbSchema = {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
@@ -40,33 +40,41 @@ const breadcrumbSchema = {
 
 <Base 
   title={metaTitle} 
+  meta_title={metaTitle}
   description={metaDescription} 
   canonical={canonicalUrl}
 >
-  {/* Google Structured Data / Rich Snippet එක ඇතුළත් කිරීම */}
+  {/* Google Structured Data */}
   <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
 
-  {/* 100% Original Section Layout structure */}
-  <section class="section">
-    <div class="container text-center">
+  {/* ⚡ PREMIUM ULTRA-DARK TAGS SECTION */}
+  <section class="section bg-[#050505] py-12 min-h-screen text-slate-200 antialiased selection:bg-emerald-500/30 selection:text-emerald-400">
+    <div class="container mx-auto px-4 text-center">
       
-      {/* Original Heading */}
-      <h1 class="h2 page-heading">Tags</h1>
+      {/* 🎯 PREMIUM NEON TYPOGRAPHY HEADING */}
+      <div class="max-w-xl mx-auto mb-12">
+        <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-3">
+          All <span class="text-emerald-400 drop-shadow-[0_2px_8px_rgba(16,185,129,0.3)]">Tags</span>
+        </h1>
+        <p class="text-sm text-slate-400 font-medium">
+          කතා සහ ලිපි පහසුවෙන් වර්ගීකරණය අනුව සොයා ගැනීමට පහත ඕනෑම මාතෘකාවක් තෝරන්න.
+        </p>
+      </div>
       
-      {/* Original List Structure - කළු පසුබිමට ගැළපෙන පරිදි 100% ප්‍රශස්ත කර ඇත */}
-      <ul class="space-x-4 flex flex-wrap justify-center gap-y-4 mt-8">
+      {/* 🎯 100% MATCHED DARK THEME TAG CLOUD */}
+      <ul class="flex flex-wrap justify-center gap-3 md:gap-4 max-w-4xl mx-auto">
         {
           safeTags.map((tag) => (
             <li class="inline-block">
               <a
                 href={`/tags/${tag.slug}`}
-                class="rounded-lg bg-theme-light dark:bg-slate-800/60 border border-border dark:border-slate-800 px-4 py-2 text-text dark:text-slate-200 transition hover:bg-primary dark:hover:bg-primary hover:text-white dark:hover:text-white flex items-center group font-medium"
+                class="rounded-xl bg-[#0d0d0d] border border-[#1a1a1a] px-4 py-2.5 text-slate-300 transition-all duration-300 hover:border-emerald-500/40 hover:bg-emerald-500/[0.04] hover:text-emerald-400 flex items-center group font-semibold text-sm md:text-base shadow-[0_2px_10px_rgba(0,0,0,0.3)] hover:-translate-y-0.5"
               >
-                <BiHash className="mr-1 text-primary group-hover:text-white transition h-5 w-5" />
+                <BiHash className="mr-1 text-emerald-500/70 group-hover:text-emerald-400 transition-colors duration-300 h-5 w-5" />
                 <span>{tag.name}</span>
 
-                {/* ⚡ ඉස්මතු කිරීම (UI Booster): ලිපි ගණන කළු පසුබිමේ ලස්සන කුඩා Badge එකක් ලෙස පෙන්වීම */}
-                <span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 group-hover:bg-white/20 group-hover:text-white transition font-semibold">
+                {/* ⚡ PREMIUM COUNTER BADGE */}
+                <span class="ml-2.5 text-xs px-2 py-0.5 rounded-full bg-[#161616] border border-white/[0.03] text-slate-400 group-hover:bg-emerald-500/20 group-hover:text-emerald-300 transition-all duration-300 font-bold">
                   {tag.count}
                 </span>
               </a>
@@ -76,8 +84,8 @@ const breadcrumbSchema = {
       </ul>
       
       {safeTags.length === 0 && (
-        <div class="py-8 text-center opacity-60">
-          <p>ටැග් කිසිවෙකු හමුනොවීය.</p>
+        <div class="py-12 bg-[#0d0d0d] border border-[#1a1a1a] rounded-2xl max-w-md mx-auto mt-8">
+          <p class="text-slate-400 font-medium">ටැග් කිසිවෙකු හමුනොවීය.</p>
         </div>
       )}
       
