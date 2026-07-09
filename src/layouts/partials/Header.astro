@@ -18,22 +18,34 @@ export interface NavigationLink {
 const { main }: { main: NavigationLink[] } = menu;
 ---
 
-{/* 👑 PREMIUM GLOSSY GLASSMORPHISM HEADER */}
-<header id="site-header" class="header sticky top-0 z-50 py-4 transition-all duration-300 border-b border-white/[0.06] bg-[#010203]/80 backdrop-blur-md shadow-[0_4px_30px_rgba(0,0,0,0.8)]">
-  <nav class="navbar container flex items-center justify-between">
+{/* 👑 PREMIUM GLOSSY GLASSMORPHISM HEADER (100% Matched Dark Theme) */}
+<header id="site-header" class="header sticky top-0 z-50 py-4 transition-all duration-300 border-b border-white/[0.04] bg-[#050505]/90 backdrop-blur-md shadow-[0_4px_30px_rgba(0,0,0,0.7)]">
+  <nav class="navbar container flex flex-wrap items-center justify-between">
     {/* LOGO */}
-    <div class="order-0">
+    <div class="flex items-center">
       <Logo />
     </div>
 
+    {/* SEARCH ICON BUTTON (Desktop & Mobile Unified Position) */}
+    <div class="flex items-center order-1 lg:order-3 ml-auto mr-4 lg:mr-0 lg:ml-0">
+      <a
+        class="inline-block cursor-pointer p-2.5 text-xl text-slate-300 transition-all duration-300 hover:text-emerald-400 hover:scale-110 rounded-xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05]"
+        href="/search"
+        title="search"
+        aria-label="search"
+      >
+        <IoSearch />
+      </a>
+    </div>
+
     {/* MOBILE MENU TOGGLE CHECKBOX */}
-    <input id="nav-toggle" type="checkbox" class="hidden" />
+    <input id="nav-toggle" type="checkbox" class="hidden peer" />
 
     {/* MOBILE MENU BUTTONS */}
     <label
       id="show-button"
       for="nav-toggle"
-      class="order-2 flex cursor-pointer items-center text-white/90 hover:text-[#01AD9F] transition-colors duration-200 p-2"
+      class="order-2 flex lg:hidden cursor-pointer items-center text-slate-300 hover:text-emerald-400 transition-colors duration-200 p-2"
     >
       <svg class="h-6 w-6 fill-current" viewBox="0 0 20 20">
         <title>Menu Open</title>
@@ -44,7 +56,7 @@ const { main }: { main: NavigationLink[] } = menu;
     <label
       id="hide-button"
       for="nav-toggle"
-      class="order-2 hidden cursor-pointer items-center text-white/90 hover:text-[#01AD9F] transition-colors duration-200 p-2"
+      class="order-2 hidden cursor-pointer items-center text-slate-300 hover:text-emerald-400 transition-colors duration-200 p-2"
     >
       <svg class="h-6 w-6 fill-current" viewBox="0 0 20 20">
         <title>Menu Close</title>
@@ -54,18 +66,18 @@ const { main }: { main: NavigationLink[] } = menu;
       </svg>
     </label>
 
-    {/* NAVIGATION MENU */}
+    {/* NAVIGATION MENU (Tailwind Responsive Structure) */}
     <ul
       id="nav-menu"
-      class="navbar-nav order-3 hidden w-full text-center gap-1"
+      class="navbar-nav order-3 lg:order-2 hidden w-full lg:flex lg:w-auto text-center gap-1 lg:gap-2 flex-col lg:flex-row items-center mt-4 lg:mt-0"
     >
       {
         main.map((menu, index) => (
           <>
             {menu.hasChildren ? (
-              <li class="nav-item nav-dropdown relative cursor-pointer flex flex-col items-center group">
+              <li class="nav-item nav-dropdown relative cursor-pointer flex flex-col lg:block items-center group w-full lg:w-auto">
                 <button 
-                  class="nav-dropdown-btn nav-link flex items-center justify-center gap-1 w-auto bg-transparent border-none outline-none cursor-pointer mx-auto text-white/80 hover:text-[#01AD9F] font-semibold py-2 px-4 transition duration-200"
+                  class="nav-dropdown-btn nav-link flex items-center justify-center gap-1 w-full lg:w-auto bg-transparent border-none outline-none cursor-pointer mx-auto text-slate-300 hover:text-emerald-400 font-semibold py-2 px-4 transition duration-200"
                   aria-expanded="false"
                   data-dropdown-target={`dropdown-${index}`}
                 >
@@ -75,17 +87,17 @@ const { main }: { main: NavigationLink[] } = menu;
                   </svg>
                 </button>
                 
-                {/* 👑 SILVER ANIMATED BORDER DROPDOWN BOX */}
+                {/* 👑 DROPDOWN BOX WITH PREMIUM SILVER LAVA FLOW */}
                 <div 
                   id={`dropdown-${index}`} 
-                  class="nav-dropdown-list silver-animated-border hidden min-w-[220px] rounded-xl z-50 text-center mx-auto my-2"
+                  class="nav-dropdown-list silver-animated-border hidden lg:absolute lg:left-1/2 lg:-translate-x-1/2 min-w-[220px] rounded-xl z-50 text-center mx-auto my-2"
                 >
-                  <ul class="inner-dropdown bg-[#0c0d10] rounded-xl p-2 w-full h-full relative z-10">
+                  <ul class="inner-dropdown bg-[#0a0a0a] border border-white/[0.03] rounded-xl p-2 w-full h-full relative z-10">
                     {menu.children?.map((child) => (
                       <li class="py-1.5">
                         <a 
                           href={child.url} 
-                          class="block px-4 py-2 text-sm text-white/70 hover:text-[#01AD9F] hover:bg-white/[0.03] rounded-lg transition duration-200 text-center w-full font-medium"
+                          class="block px-4 py-2 text-sm text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/[0.04] rounded-lg transition duration-200 text-center w-full font-medium"
                         >
                           {child.name}
                         </a>
@@ -95,10 +107,10 @@ const { main }: { main: NavigationLink[] } = menu;
                 </div>
               </li>
             ) : (
-              <li class="nav-item flex justify-center">
+              <li class="nav-item flex justify-center w-full lg:w-auto">
                 <a 
                   href={menu.url} 
-                  class="nav-link block text-center w-full text-white/80 hover:text-[#01AD9F] font-semibold py-2 px-4 transition duration-200"
+                  class="nav-link block text-center w-full text-slate-300 hover:text-emerald-400 font-semibold py-2 px-4 transition duration-200"
                 >
                   {menu.name}
                 </a>
@@ -108,18 +120,6 @@ const { main }: { main: NavigationLink[] } = menu;
         ))
       }
     </ul>
-
-    {/* SEARCH ICON BUTTON */}
-    <div class="order-1 ml-auto flex md:ml-0">
-      <a
-        class="inline-block cursor-pointer p-2.5 text-xl text-white/80 transition-all duration-300 hover:text-[#01AD9F] hover:scale-110 rounded-xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05]"
-        href="/search"
-        title="search"
-        aria-label="search"
-      >
-        <IoSearch />
-      </a>
-    </div>
   </nav>
 </header>
 
@@ -128,32 +128,37 @@ const { main }: { main: NavigationLink[] } = menu;
     font-family: inherit;
   }
 
-  .navbar-nav {
-    background-color: #060709 !important;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 1rem;
-    padding: 1rem;
-    margin-top: 1rem;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-  }
-  
-  .nav-dropdown-list {
-    position: relative !important;
-    left: 0 !important;
-    transform: none !important;
-    width: 100% !important;
-    margin-top: 0.5rem !important;
+  /* Peer Toggle CSS via Pure CSS Fallback for Mobile View */
+  #nav-toggle:checked ~ #nav-menu {
+    display: flex !important;
   }
 
-  /* ==========================================================
-     ✨ PREMIUM TWO-WAY SILVER LAVA FLOW BORDER ANIMATION
-     ========================================================== */
+  /* Responsive Navbar Style */
+  @media (max-width: 1023px) {
+    .navbar-nav {
+      background-color: #0d0d0d !important;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 1rem;
+      padding: 1rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+    }
+    
+    .nav-dropdown-list {
+      position: relative !important;
+      left: 0 !important;
+      transform: none !important;
+      width: 100% !important;
+      margin-top: 0.5rem !important;
+    }
+  }
+  
+  /* 👑 PREMIUM TWO-WAY SILVER LAVA FLOW BORDER ANIMATION */
   .silver-animated-border {
     position: absolute;
     padding: 1.5px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.04);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 15px rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.03);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 15px rgba(255, 255, 255, 0.02);
   }
 
   .silver-animated-border::before {
@@ -167,25 +172,19 @@ const { main }: { main: NavigationLink[] } = menu;
       45deg, 
       transparent 0%, 
       rgba(255, 255, 255, 0.02) 25%, 
-      rgba(255, 255, 255, 0.2) 40%, 
+      rgba(255, 255, 255, 0.15) 40%, 
       #ffffff 50%, 
-      rgba(255, 255, 255, 0.2) 60%, 
+      rgba(255, 255, 255, 0.15) 60%, 
       rgba(255, 255, 255, 0.02) 75%, 
       transparent 100%
     );
-    animation: silverLavaFlow 2.5s cubic-bezier(0.445, 0.05, 0.55, 0.95) infinite;
+    animation: silverLavaFlow 3s cubic-bezier(0.445, 0.05, 0.55, 0.95) infinite;
   }
 
   @keyframes silverLavaFlow {
-    0% {
-      transform: rotate(0deg) scale(1);
-    }
-    50% {
-      transform: rotate(180deg) scale(1.05);
-    }
-    100% {
-      transform: rotate(360deg) scale(1);
-    }
+    0% { transform: rotate(0deg) scale(1); }
+    50% { transform: rotate(180deg) scale(1.03); }
+    100% { transform: rotate(360deg) scale(1); }
   }
 
   #nav-toggle:checked ~ #show-button {
@@ -197,11 +196,6 @@ const { main }: { main: NavigationLink[] } = menu;
 </style>
 
 <script>
-  // ✅ ROOT FIX: Global click listener එක module-scope variable එකක ගබඩා කර,
-  // initHeaderLogic() සෑම astro:page-load වලදීත් run වෙද්දී පැරණි listener එක
-  // පළමුව ඉවත් කරයි. නැතිනම් listeners accumulate වී, search input එක click/focus
-  // කරද්දී "outside click" handler එක ක්‍රියාත්මක වී navToggle change event
-  // dispatch කරයි → cascade re-render → persisted React island reset වෙනවා.
   let outsideClickHandler: ((e: MouseEvent) => void) | null = null;
 
   function initHeaderLogic() {
@@ -210,7 +204,6 @@ const { main }: { main: NavigationLink[] } = menu;
     const headerElement = document.getElementById("site-header");
 
     dropdownButtons.forEach((btn) => {
-      // ✅ cloneNode pattern දිගටම පවතී — duplicate listeners on the button itself avoid කරයි
       const newBtn = btn.cloneNode(true) as HTMLButtonElement;
       btn.parentNode?.replaceChild(newBtn, btn);
 
@@ -244,7 +237,6 @@ const { main }: { main: NavigationLink[] } = menu;
       }
     });
 
-    // ✅ FIX: පැරණි document-level listener එක තිබේ නම් පළමුව remove කරන්න
     if (outsideClickHandler) {
       document.removeEventListener("click", outsideClickHandler);
       outsideClickHandler = null;
@@ -261,8 +253,6 @@ const { main }: { main: NavigationLink[] } = menu;
           parent?.querySelector(".nav-dropdown-btn")?.setAttribute("aria-expanded", "false");
         });
 
-        // ✅ FIX: navToggle already unchecked නම් event dispatch නොකරන්න —
-        // අනවශ්‍ය "change" events ඇතිවීම නවතී (cascade re-render root cause)
         if (navToggle && navToggle.checked) {
           navToggle.checked = false;
           navToggle.dispatchEvent(new Event("change"));
@@ -273,13 +263,9 @@ const { main }: { main: NavigationLink[] } = menu;
     document.addEventListener("click", outsideClickHandler);
   }
 
-  // ✅ Astro Lifecycle — DOMContentLoaded සහ astro:page-load දෙකේදීම
-  // නමුත් දැන් cleanup logic එක නිසා listener accumulation නෑ
   document.addEventListener("DOMContentLoaded", initHeaderLogic);
   document.addEventListener("astro:page-load", initHeaderLogic);
 
-  // ✅ EXTRA SAFETY: astro:before-swap වෙද්දී listener cleanup —
-  // page transition අතරතුර stale handler trigger වීම සම්පූර්ණයෙන් වළක්වයි
   document.addEventListener("astro:before-swap", () => {
     if (outsideClickHandler) {
       document.removeEventListener("click", outsideClickHandler);
