@@ -11,23 +11,23 @@ type Props = {
 const { posts } = Astro.props;
 ---
 
-{/* 👑 CLEAN INNER WRAPPER: මවු සෙක්ෂන් එකට බාධා නොවන පරිදි පසුබිම් වර්ණ (Backgrounds) කිසිවක් මෙයට දමා නැත */}
-<div class="w-full p-4 sm:p-6 transition-all duration-300">
+{/* 👑 CLEAN RICH BLACK INNER WRAPPER */}
+<div class="w-full py-6 transition-all duration-300 bg-[#050505]">
   
-  {/* 🎯 ORIGINAL LAYOUT STRUCT: එක පේළියට 3 බැගින් පෙන්වන මුල් බූට්ස්ට්‍රැප් එක ඒ විදිහටම රැකගත්තා */}
+  {/* 🎯 FIXED: Responsive Bootstrap Row එකක් ලෙස සකස් කිරීම */}
   <div class="row gy-4 gx-2 sm:gx-4 justify-center">
     {
       posts.map((post) => (
-        <div class="col-4 flex flex-col justify-between group mb-4 text-center">
+        /* 🎯 FIXED GRID: මොබයිල් වලට col-6 (පේළියට 2යි), ටැබ්/ඩෙස්ක්ටොප් වලට md:col-4 (පේළියට 3යි) */
+        <div class="col-6 md:col-4 flex flex-col justify-between group mb-2 text-center bg-[#0d0d0d] p-2 sm:p-3 rounded-xl border border-[#1a1a1a]">
           {post.data.image && (
             <a
               href={`/blog/${post.id}/`}
-              class="rounded-lg block overflow-hidden group relative bg-[#010203] mx-auto w-full border border-white/10 hover:border-emerald-500/30 transition-all duration-300"
-              style="aspect-ratio: 3 / 4;"
+              class="rounded-lg block overflow-hidden group relative bg-[#161616] mx-auto w-full aspect-[3/4]"
             >
-              {/* 👑 NO CROP IMAGE FIX: උඹේ මුල් කේතයේ තිබූ object-contain එකමයි, පින්තූර කිසිවක් කැපෙන්නේ නැත */}
+              {/* 👑 CLEAN & STATIC FRAME WITH EMERALD HOVER */}
               <Image
-                class="w-full h-full object-contain rounded-lg border border-white/20 group-hover:border-emerald-400 transition-all duration-300 relative z-0"
+                class="w-full h-full object-cover rounded-lg border border-white/5 group-hover:border-emerald-500/40 transition-all duration-300 relative z-0"
                 src={post.data.image}
                 alt={post.data.title}
                 width={500}
@@ -38,16 +38,16 @@ const { posts } = Astro.props;
             </a>
           )}
           
-          {/* INFO ROW: අයිකන වලට මුල් වර්ණය වන [#01AD9F] සහ අකුරු වලට පිරිසිදු සුදු පැහැය යෙදුවා */}
-          <ul class="mt-2 mb-1 flex flex-wrap items-center text-white/90 text-[10px] sm:text-xs justify-center gap-x-2">
+          {/* INFO ROW */}
+          <ul class="mt-2 mb-1 flex flex-wrap items-center text-slate-300 text-[10px] sm:text-xs justify-center gap-x-2 gap-y-1">
             <li class="flex items-center flex-wrap">
-              <BiCategoryAlt className="mr-0.5 h-3 w-3 sm:h-[14px] sm:w-[14px] text-[#01AD9F]" />
+              <BiCategoryAlt className="mr-0.5 h-3 w-3 sm:h-[14px] sm:w-[14px] text-emerald-400" />
               <ul>
                 {post.data.categories.slice(0, 1).map((category: string) => (
                   <li class="inline-block">
                     <a
                       href={`/categories/${slugify(category)}/`}
-                      class="hover:text-emerald-400 font-black text-[9px] sm:text-xs bg-white/10 px-1 sm:px-2 py-0.5 rounded text-white"
+                      class="hover:text-emerald-400 font-bold text-[9px] sm:text-xs bg-white/5 px-1.5 py-0.5 rounded text-slate-200"
                     >
                       {humanize(category)}
                     </a>
@@ -55,17 +55,17 @@ const { posts } = Astro.props;
                 ))}
               </ul>
             </li>
-            <li class="hidden xs:flex items-center flex-wrap font-bold text-[9px] sm:text-xs text-white/80">
-              <BiCalendarEdit className="mr-0.5 h-3 w-3 sm:h-4 sm:w-4 text-[#01AD9F]" />
+            <li class="flex items-center flex-wrap font-medium text-[9px] sm:text-xs text-slate-400">
+              <BiCalendarEdit className="mr-0.5 h-3 w-3 sm:h-4 sm:w-4 text-emerald-400/80" />
               {dateFormat(post.data.date!)}
             </li>
           </ul>
 
-          {/* POST TITLE: මුල් ටයිටල් ස්ටයිල් එකමයි */}
+          {/* POST TITLE */}
           <h3 class="mb-1 line-clamp-2 leading-tight text-center mx-auto w-full">
             <a
               href={`/blog/${post.id}/`}
-              class="block hover:text-emerald-400 transition duration-300 text-[11px] sm:text-base font-black text-white text-center drop-shadow-sm"
+              class="block hover:text-emerald-400 transition duration-200 text-xs sm:text-base font-extrabold text-white text-center"
             >
               {post.data.title}
             </a>
