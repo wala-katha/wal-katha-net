@@ -41,8 +41,7 @@ jobs:
           //
           //    Posts.astro grid card එක display කරන්නේ 204x290px
           //    (PageSpeed confirmed), ඒ නිසා maxWidth 420px = ~2x retina
-          //    safety margin. පරණ 750px setting එක 2.6x වැඩිපුර
-          //    pixels download කරවපු නිසා මෙතන අඩු කර ඇත.
+          //    safety margin.
           // ==========================================================
           const folders = [
             { dir: 'public/images/posts',   maxWidth: 420,  type: 'post'   },
@@ -54,11 +53,56 @@ jobs:
           let skippedCount = 0;
           let processedCount = 0;
 
-          function isUpToDate(input, out) {
+          // ==========================================================
+          // ⚡ SMART STALENESS CHECK (upgraded) — දැන් "up to date" කියලා
+          //    සලකන්නේ timestamp එක අලුත් වීම විතරක් නොවේ:
+          //
+          //    1. Timestamp check — .webp .jpg/.png එකට වඩා අලුත්ද?
+          //    2. Dimension check — existing .webp file එකේ actual width
+          //       (සහ square නම් height එකත්) දැන් config එකේ තියෙන
+          //       targetWidth එකට ගැලපෙනවද?
+          //
+          //    දෙකම true නම් විතරයි "up to date" — timestamp අලුත් උනත්
+          //    dimension mismatch නම් (උදා: maxWidth 750→420 වගේ config
+          //    change එකකින් පස්සේ), stale කියලා සලකලා force re-process
+          //    කරයි. මේකෙන් maxWidth අගය future එකේදී වෙනස් කළොත්,
+          //    manual .webp deletion කිසිවක් නැතුවම auto-heal වේ.
+          // ==========================================================
+          async function isUpToDate(input, out, targetWidth, isSquare = false) {
             if (!existsSync(out)) return false;
+
             const srcTime = statSync(input).mtimeMs;
             const outTime = statSync(out).mtimeMs;
-            return outTime >= srcTime;
+            if (outTime < srcTime) return false; // source නවතම නම් stale
+
+            try {
+              const outMeta = await sharp(out).metadata();
+              const srcMeta = await sharp(input).metadata();
+
+              // Source එක දැනටමත් targetWidth එකට වඩා කුඩා නම්
+              // (withoutEnlargement නිසා ඒ සයිස් එකෙන්ම තියෙන්න ඕන)
+              const expectedWidth = Math.min(srcMeta.width || targetWidth, targetWidth);
+
+              // Width mismatch (± 2px tolerance rounding errors වලට)
+              if (Math.abs((outMeta.width || 0) - expectedWidth) > 2) return false;
+
+              // Square (authors) folder සඳහා height එකත් check කරයි
+              if (isSquare) {
+                const expectedHeight = Math.min(srcMeta.height || targetWidth, targetWidth);
+                // square crop නිසා height එක targetWidth එකටම match වෙන්න ඕන
+                // (source කුඩා නම් මිස)
+                const expectedSquareHeight = srcMeta.width && srcMeta.height &&
+                  Math.min(srcMeta.width, srcMeta.height) >= targetWidth
+                  ? targetWidth
+                  : expectedHeight;
+                if (Math.abs((outMeta.height || 0) - expectedSquareHeight) > 2) return false;
+              }
+
+              return true;
+            } catch {
+              // metadata කියවීමේ දෝෂයක් ආවොත් ආරක්ෂිතව re-process කරයි
+              return false;
+            }
           }
 
           for (const { dir, maxWidth, type, square } of folders) {
@@ -71,9 +115,9 @@ jobs:
               const outFile = file.replace(/\.[^.]+$/, '.webp');
               const out = join(dir, outFile);
 
-              // ⚡ IDEMPOTENCY GUARD — .webp file එක .jpg/.png එකට වඩා
-              //    අලුත් නම් ආයෙත් process කරන්නේ නෑ (CI time + commits save කරයි)
-              if (isUpToDate(input, out)) {
+              // ⚡ IDEMPOTENCY + DIMENSION GUARD — timestamp AND dimension
+              //    දෙකම match වෙනකොට විතරක් skip කරයි
+              if (await isUpToDate(input, out, maxWidth, square)) {
                 skippedCount++;
                 continue;
               }
@@ -120,10 +164,11 @@ jobs:
           // 🖼️ ROOT IMAGES SYSTEM — public/images/ ඇතුළේ කෙලින්ම තියෙන
           //    විශේෂ පින්තූර (Copyright & Credit Policy.png, Auhor.png,
           //    author.png ආදී) ස්මාර්ට් විදිහට convert කිරීම.
-          //    Crop නොවේ, Ratio ආරක්ෂා වේ. Idempotency guard එකම apply වේ.
+          //    Crop නොවේ, Ratio ආරක්ෂා වේ. Dimension guard එකම apply වේ.
           // ==========================================================
           const rootImages = ['Copyright & Credit Policy.png', 'Auhor.png', 'author.png'];
           const rootDir = 'public/images';
+          const rootMaxWidth = 850;
 
           for (const file of rootImages) {
             const input = join(rootDir, file);
@@ -132,7 +177,7 @@ jobs:
             const outFile = file.replace(/\.[^.]+$/, '.webp');
             const out = join(rootDir, outFile);
 
-            if (isUpToDate(input, out)) {
+            if (await isUpToDate(input, out, rootMaxWidth, false)) {
               skippedCount++;
               continue;
             }
@@ -141,10 +186,9 @@ jobs:
             const metadata = await image.metadata();
 
             let pipeline = image;
-            // උපරිම පළල 850px කට සීමා කරයි (Crop නොවේ)
-            if (metadata.width && metadata.width > 850) {
+            if (metadata.width && metadata.width > rootMaxWidth) {
               pipeline = pipeline.resize({
-                width: 850,
+                width: rootMaxWidth,
                 withoutEnlargement: true,
                 kernel: sharp.kernel.lanczos3
               });
@@ -162,12 +206,13 @@ jobs:
           // ==========================================================
           // 🔗 LOGO / FAVICON / OG-IMAGE — Base.astro / config.json
           //    දිගටම .png/.jpg paths use කරන නිසා මේවත් convert කරලා
-          //    frontmatter replace step එකේදී auto update කරයි
+          //    frontmatter replace step එකේදී auto update කරයි.
+          //    දැන් dimension guard එකම apply වේ.
           // ==========================================================
-          async function convertSingle(inputPath, outputPath, resizeOpts, webpOpts, mapKey) {
+          async function convertSingle(inputPath, outputPath, targetWidth, isSquare, resizeOpts, webpOpts, mapKey) {
             if (!existsSync(inputPath)) return;
 
-            if (isUpToDate(inputPath, outputPath)) {
+            if (await isUpToDate(inputPath, outputPath, targetWidth, isSquare)) {
               skippedCount++;
               return;
             }
@@ -184,6 +229,7 @@ jobs:
           await convertSingle(
             'public/images/logo.png',
             'public/images/logo.webp',
+            300, false,
             { width: 300, withoutEnlargement: true, kernel: sharp.kernel.lanczos3 },
             { quality: 95, effort: 6 },
             'logo.png'
@@ -192,6 +238,7 @@ jobs:
           await convertSingle(
             'public/images/favicon.png',
             'public/images/favicon.webp',
+            32, true,
             { width: 32, height: 32, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } },
             { quality: 100, effort: 6 },
             'favicon.png'
@@ -200,6 +247,7 @@ jobs:
           await convertSingle(
             'public/images/og-image.jpg',
             'public/images/og-image.webp',
+            1200, false,
             { width: 1200, withoutEnlargement: true, kernel: sharp.kernel.lanczos3 },
             { quality: 85, effort: 6 },
             'og-image.jpg'
@@ -284,5 +332,5 @@ jobs:
           git add src/content/contact/*.md || true
           git add src/content/pages/*.md || true
           git add src/config/config.json || true
-          git diff --staged --quiet || git commit -m "Auto: Smart crop-free WebP optimization (right-sized) + root images + frontmatter update"
+          git diff --staged --quiet || git commit -m "Auto: Self-healing WebP optimization (dimension-aware staleness detection) + root images + frontmatter update"
           git push
