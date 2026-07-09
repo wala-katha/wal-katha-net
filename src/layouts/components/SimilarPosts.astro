@@ -11,23 +11,23 @@ type Props = {
 const { posts } = Astro.props;
 ---
 
-{/* 👑 CLEAN RICH BLACK INNER WRAPPER */}
+{/* 👑 CLEAN INNER WRAPPER: මවු සෙක්ෂන් එකට බාධා නොවන පරිදි පසුබිම් වර්ණ (Backgrounds) කිසිවක් මෙයට දමා නැත */}
 <div class="w-full p-4 sm:p-6 transition-all duration-300">
   
+  {/* 🎯 ORIGINAL LAYOUT STRUCT: එක පේළියට 3 බැගින් පෙන්වන මුල් බූට්ස්ට්‍රැප් එක ඒ විදිහටම රැකගත්තා */}
   <div class="row gy-4 gx-2 sm:gx-4 justify-center">
     {
       posts.map((post) => (
-        /* 🎯 100% ORIGINAL BOOTSTRAP STRUCTURE PRESERVED - මෙනු එක බිඳ වැටීම වළක්වා ඇත */
         <div class="col-4 flex flex-col justify-between group mb-4 text-center">
           {post.data.image && (
             <a
               href={`/blog/${post.id}/`}
-              class="rounded-lg block overflow-hidden group relative bg-[#010203] mx-auto w-full"
-              style={{ aspectRatio: "3 / 4" }} /* ⚡ FIXED: Astro Build Error එක සම්පූර්ණයෙන්ම ඉවත් කළ නිවැරදි Syntax එක */
+              class="rounded-lg block overflow-hidden group relative bg-[#010203] mx-auto w-full border border-white/10 hover:border-emerald-500/30 transition-all duration-300"
+              style="aspect-ratio: 3 / 4;"
             >
-              {/* 👑 CLEAN & STATIC FRAME */}
+              {/* 👑 NO CROP IMAGE FIX: උඹේ මුල් කේතයේ තිබූ object-contain එකමයි, පින්තූර කිසිවක් කැපෙන්නේ නැත */}
               <Image
-                class="w-full h-full object-cover rounded-lg border border-white/20 group-hover:border-white transition-all duration-300 relative z-0"
+                class="w-full h-full object-contain rounded-lg border border-white/20 group-hover:border-emerald-400 transition-all duration-300 relative z-0"
                 src={post.data.image}
                 alt={post.data.title}
                 width={500}
@@ -38,7 +38,7 @@ const { posts } = Astro.props;
             </a>
           )}
           
-          {/* INFO ROW */}
+          {/* INFO ROW: අයිකන වලට මුල් වර්ණය වන [#01AD9F] සහ අකුරු වලට පිරිසිදු සුදු පැහැය යෙදුවා */}
           <ul class="mt-2 mb-1 flex flex-wrap items-center text-white/90 text-[10px] sm:text-xs justify-center gap-x-2">
             <li class="flex items-center flex-wrap">
               <BiCategoryAlt className="mr-0.5 h-3 w-3 sm:h-[14px] sm:w-[14px] text-[#01AD9F]" />
@@ -47,7 +47,7 @@ const { posts } = Astro.props;
                   <li class="inline-block">
                     <a
                       href={`/categories/${slugify(category)}/`}
-                      class="hover:text-primary font-black text-[9px] sm:text-xs bg-white/10 px-1 sm:px-2 py-0.5 rounded text-white"
+                      class="hover:text-emerald-400 font-black text-[9px] sm:text-xs bg-white/10 px-1 sm:px-2 py-0.5 rounded text-white"
                     >
                       {humanize(category)}
                     </a>
@@ -61,11 +61,11 @@ const { posts } = Astro.props;
             </li>
           </ul>
 
-          {/* POST TITLE */}
+          {/* POST TITLE: මුල් ටයිටල් ස්ටයිල් එකමයි */}
           <h3 class="mb-1 line-clamp-2 leading-tight text-center mx-auto w-full">
             <a
               href={`/blog/${post.id}/`}
-              class="block hover:text-primary transition duration-300 text-[11px] sm:text-base font-black text-white text-center drop-shadow-sm"
+              class="block hover:text-emerald-400 transition duration-300 text-[11px] sm:text-base font-black text-white text-center drop-shadow-sm"
             >
               {post.data.title}
             </a>
