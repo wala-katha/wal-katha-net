@@ -1,18 +1,16 @@
+/* 👑 CORE TAILWIND & PLUGINS SETUP */
 @import "tailwindcss";
+
+/* 📦 ALL CUSTOM & EXTERNAL STYLES (Must be at the top) */
+@import "./safe.css";
+@import "./utilities.css";
+@import "./base.css";
+@import "./components.css";
+@import "./navigation.css";
+@import "./buttons.css";
+
+/* 🔌 TAILWIND PLUGINS (2026 Recommended Order) */
 @plugin "../tailwind-plugin/tw-theme.mjs";
 @plugin "../tailwind-plugin/tw-bs-grid.mjs";
 @plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/typography";
-
-@import "./safe.css";
-@import "./utilities.css";
-
-@layer base {
-  @import "./base.css";
-}
-
-@layer components {
-  @import "./components.css";
-  @import "./navigation.css";
-  @import "./buttons.css";
-}
