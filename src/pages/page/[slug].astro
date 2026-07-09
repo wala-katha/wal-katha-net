@@ -8,16 +8,16 @@ import { sortByDate } from "@/lib/utils/sortFunctions";
 
 export async function getStaticPaths() {
   const posts = await getSinglePage("posts");
-  // ස්වයංක්‍රීය නිවැරදි කිරීම: posts හිස් වුවහොත් ව්‍යුහය බිඳ වැටීම වළක්වයි
   const safePosts = Array.isArray(posts) ? posts : [];
   const paginationLimit = config?.settings?.pagination || 8;
   const totalPages = Math.ceil(safePosts.length / paginationLimit);
   const paths = [];
 
-  for (let i = 1; i < totalPages; i++) {
+  // 🎯 FIXED: <= පාවිච්චි කිරීමෙන් සියලුම පිටු (Pages) නිවැරදිව ජෙනරේට් වේ
+  for (let i = 1; i <= totalPages; i++) {
     paths.push({
       params: {
-        slug: (i + 1).toString(),
+        slug: i.toString(),
       },
     });
   }
@@ -32,7 +32,6 @@ const sortedPosts = sortByDate(safePosts);
 const paginationLimit = config?.settings?.pagination || 8;
 const totalPages = Math.ceil(safePosts.length / paginationLimit);
 
-// 🛠️ CRITICAL LOGIC FIX: පිටු අංකය පරාසයෙන් බැහැර නම් ස්වයංක්‍රීයව පාලනය කිරීම
 let currentPage = slug && !isNaN(Number(slug)) ? Number(slug) : 1;
 if (currentPage < 1) currentPage = 1;
 if (currentPage > totalPages && totalPages > 0) currentPage = totalPages;
@@ -41,36 +40,36 @@ const indexOfLastPost = currentPage * paginationLimit;
 const indexOfFirstPost = indexOfLastPost - paginationLimit;
 const currentPosts = sortedPosts && sortedPosts.length > 0 ? sortedPosts.slice(indexOfFirstPost, indexOfLastPost) : [];
 
-// 📈 SEO ප්‍රශස්තකරණය: එක් එක් Pagination පිටුව සඳහා වෙන වෙනම Meta Data සකස් කිරීම
-const metaTitle = `${config?.site?.title || "Wala Katha"} - Page ${currentPage}`;
-const metaDescription = `අපේ වෙබ් අඩවියේ ඇති නවතම බ්ලොග් ලිපි සහ කතා සියල්ල මෙතැනින් එකම තැනකින් කියවන්න. (පිටුව ${currentPage})`;
+// 📈 2026 ADVANCED SEO FOR PAGINATION PAGES
+const metaTitle = `සිංහල වල් කතා එකතුව - Wala Katha Stories (පිටුව ${currentPage})`;
+const metaDescription = `Wala Katha: නවතම සිංහල වල් කතා සහ වැල කතා එකතුවේ ${currentPage} වන පිටුව. දිනපතා අලුත් වන රසවත් walkatha කියවන්න.`;
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
 const canonicalUrl = `${base_url}/page/${currentPage}`;
 
-// SEO Pagination Links (Google Bot එක පිටු අතර නිවැරදිව හුවමාරු වීමට)
-const prevUrl = currentPage === 2 ? `${base_url}/` : `${base_url}/page/${currentPage - 1}`;
+// Google Bot එක පිටු අතර අතරමං නොවී යාමට අවශ්‍ය Link Tags
+const prevUrl = currentPage === 2 ? `${base_url}/` : currentPage > 2 ? `${base_url}/page/${currentPage - 1}` : null;
 const nextUrl = currentPage < totalPages ? `${base_url}/page/${currentPage + 1}` : null;
-
-// ⚡ SEO BEST PRACTICE: සෙවුම් යන්ත්‍ර වලට Pagination පිටු 2, 3 නිවැරදිව ලැයිස්තුගත කිරීමට අවසර දීම
-const robotsMeta = "index, follow";
 ---
 
 <Base
   title={metaTitle}
+  meta_title={metaTitle}
   description={metaDescription}
   canonical={canonicalUrl}
-  prev={prevUrl}
-  next={nextUrl}
-  robots={robotsMeta}
 >
-  {/* 100% Original Section Layout structure */}
-  <section class="section">
+  {/* ⚡ GOOGLE BOT DIRECT CONNECTION (Head Injection) */}
+  <Fragment slot="head">
+    {prevUrl && <link rel="prev" href={prevUrl} />}
+    {nextUrl && <link rel="next" href={nextUrl} />}
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+  </Fragment>
+
+  <section class="section pt-4 pb-12">
     <div class="container">
       {currentPosts && currentPosts.length > 0 ? (
         <Posts className="mb-16" posts={currentPosts} />
       ) : (
-        // Original Style එක වෙනස් නොකර දත්ත නොමැති විට පෙන්වන කොටස
         <div class="py-12 text-center opacity-60">
           <p>ලිපි කිසිවෙකු හමුනොවීය.</p>
         </div>
