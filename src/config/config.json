@@ -1,6 +1,6 @@
 {
   "site": {
-    "title": "sinhala Wal Katha - සිංහල වල් කතා | Wala Katha & Wela Katha",
+    "title": "Wala Katha",
     "base_url": "https://walakatha.net",
     "base_path": "/",
     "trailing_slash": false,
@@ -8,7 +8,7 @@
     "logo": "/images/logo.webp",
     "logo_width": "300",
     "logo_height": "50",
-    "logo_text": "Wal Katha"
+    "logo_text": "Wala Katha"
   },
 
   "settings": {
@@ -16,9 +16,9 @@
   },
 
   "metadata": {
-    "meta_author": "Wal Katha Team",
+    "meta_author": "Wala Katha Team",
     "meta_image": "/images/og-image.webp",
-    "meta_description": "Sinhala Wal Katha, සිංහල වල් කතා, Wela Katha, Welakathaa, Sex Katha, SriLanka, walkatha, sinhala wal katha 2026 new, Ammai Puthai, Paule wela Katha, lokaya, amma katha, family katha, suparima, walma wal katha, eha gedara akka katha, New Wal Katha blogs 2026, සිංහල වැල කතා, free sinhala sex stories download and read."
+    "meta_description": "Wala Katha - නවතම සිංහල වල් කතා (Sinhala Wal Katha), වැල කතා (Wela Katha) සහ රසවත් කෙටි කතා දිනපතා කියවන්න. Read new Sinhala wal katha stories online."
   },
 
   "google_tag_manager": {
@@ -28,12 +28,12 @@
 
   "params": {
     "contact_form_action": "#",
-    "copyright": "Copyright © 2026 [Wal Katha](https://walakatha.net)"
+    "copyright": "Copyright © 2026 [Wala Katha](https://walakatha.net) | All Rights Reserved."
   },
 
   "contactinfo": {
     "address": "Colombo, Sri Lanka",
-    "email": "walkatha.com@gmail.com",
+    "email": "walakatha.net@gmail.com",
     "phone": ""
   }
 }
