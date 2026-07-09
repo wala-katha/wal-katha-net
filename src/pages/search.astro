@@ -81,28 +81,20 @@ const searchPageSchema = {
   {/* ── JSON-LD ── */}
   <script type="application/ld+json" set:html={JSON.stringify(searchPageSchema)} />
 
-  {/* ── HEAD SLOT — OG / Twitter / Robots ── */}
+  {/* ── HEAD SLOT — Extra Meta ONLY (No duplicate canonical/og tags) ── */}
   <Fragment slot="head">
-    <link rel="canonical" href={canonicalUrl} />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
 
-    {/* Open Graph */}
+    {/* Extra Open Graph Details */}
     <meta property="og:type"        content="website" />
     <meta property="og:locale"      content="si_LK" />
     <meta property="og:site_name"   content={siteTitle} />
-    <meta property="og:title"       content={`කතා සෙවීම | Search Sinhala Wal Katha - ${siteTitle}`} />
-    <meta property="og:description" content="ඔබට අවශ්‍ය ඕනෑම සිංහල වල් කතාවක් නම භාවිත කරමින් ක්ෂණිකව සොයා ගන්න." />
-    <meta property="og:url"         content={canonicalUrl} />
-    <meta property="og:image"       content={siteLogo} />
     <meta property="og:image:width"  content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt"    content={`${siteTitle} Search`} />
 
-    {/* Twitter / X */}
+    {/* Twitter / X Extra */}
     <meta name="twitter:card"        content="summary_large_image" />
-    <meta name="twitter:title"       content={`කතා සෙවීම | Search Sinhala Wal Katha - ${siteTitle}`} />
-    <meta name="twitter:description" content="ඔබට අවශ්‍ය ඕනෑම සිංහල වල් කතාවක් නම භාවිත කරමින් ක්ෂණිකව සොයා ගන්න." />
-    <meta name="twitter:image"       content={siteLogo} />
 
     {/* Sinhala / language */}
     <meta http-equiv="content-language" content="si" />
@@ -110,10 +102,7 @@ const searchPageSchema = {
     <link rel="alternate" hreflang="x-default" href={canonicalUrl} />
   </Fragment>
 
-  {/* ── STYLES ──
-      ✅ FIX: !important හෝ :global() input overrides නෑ
-      Container / hero styles පමණක් — React controlled input touch නොකෙරේ
-  ── */}
+  {/* ── STYLES ── */}
   <style>
     .search-hero-container {
       background: linear-gradient(135deg, #0d0d0d 0%, #080808 100%);
@@ -137,7 +126,6 @@ const searchPageSchema = {
       pointer-events: none;
     }
 
-    /* ✅ SEO-safe visually hidden H1 — Google safe pattern */
     .seo-visually-hidden {
       position: absolute;
       width: 1px;
@@ -177,17 +165,12 @@ const searchPageSchema = {
           කතාවේ නම, ලේඛකයා හෝ ඔබට මතක ඕනෑම වචනයක් පහත පෙට්ටියේ Type කරන්න.
         </p>
 
-        {/* ✅ SearchBar — client:load, no wrapper CSS that touches input */}
+        {/* ✅ SearchBar — client:load with state preservation */}
         <div class="text-left relative">
-          {/* ✅ ROOT FIX: transition:persist — ClientRouter (View Transitions)
-               navigation/morph event වලදී React island unmount/remount වීම
-               නවතී. නැතිනම් state (inputVal) reset වී input "disappear" වෙනවා
-               type කරද්දී (3rd char → re-render → astro:page-load → reset). */}
           <SearchBar client:load searchList={searchList} transition:persist="search-bar" />
         </div>
       </div>
 
     </div>
   </main>
-
 </Base>
