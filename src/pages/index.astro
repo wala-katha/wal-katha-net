@@ -12,12 +12,11 @@ const sortedPosts = sortByDate(posts);
 const totalPages = Math.ceil(posts.length / config.settings.pagination);
 const currentPosts = sortedPosts.slice(0, config.settings.pagination);
 
-// 🎯 SEO උපරිම කිරීමට නිල URL එක සහ ප්‍රධාන තොරතුරු සකස් කිරීම
 const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 const canonicalUrl = base_url;
 const siteLogo = `${base_url}/images/logo.png`; 
 
-// 🚀 ADVANCED INTEGRATED SCHEMA 2026 (Penalty-Free Structure & Fully Connected Graph)
+// 🚀 ADVANCED INTEGRATED SCHEMA 2026 (100% Connected Graph & Penalty-Free)
 const homePageSchema = {
   "@context": "https://schema.org",
   "@graph": [
@@ -33,7 +32,6 @@ const homePageSchema = {
         "Sinhala Wal Katha", 
         "Wela Katha", 
         "Sinhala Wela Katha",
-        "අලුත්ම වල් කතා",
         "WalKatha"
       ],
       "description": "Wala Katha - අලුත්ම සහ රසවත්ම සිංහල වල් කතා (Sinhala Wal Katha) සහ වැල කතා (Wela Katha) දිනපතා කියවන්න ඇති එකම නිල වෙබ් අඩවිය.",
@@ -53,7 +51,7 @@ const homePageSchema = {
         "@type": "SearchAction",
         "target": {
           "@type": "EntryPoint",
-          "urlTemplate": `${base_url}/?search={search_term_string}`
+          "urlTemplate": `${base_url}/search?q={search_term_string}`
         },
         "query-input": "required name=search_term_string"
       }
@@ -81,10 +79,8 @@ const homePageSchema = {
   canonical={canonicalUrl}
   image={siteLogo}
 >
-  {/* JSON-LD ව්‍යුහාත්මක දත්ත (Search Engine Bots සඳහා) */}
   <script type="application/ld+json" set:html={JSON.stringify(homePageSchema)} />
 
-  {/* CORE SOCIAL META INJECTOR (Fallback ආරක්ෂාව සඳහා සෘජුවම හිසට සම්බන්ධ කිරීම) */}
   <Fragment slot="head">
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories" />
@@ -98,29 +94,13 @@ const homePageSchema = {
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
   </Fragment>
 
-  {/* ⚡ PREMIUM ULTRA-DARK BACKGROUND & HIGHLIGHT ENHANCEMENT */}
-  <style is:inline>
+  <style is:global>
     html, body {
       background-color: #050505 !important;
       color: #f8fafc !important; 
       scrollbar-color: #10b981 #050505; 
-      font-display: swap;
     }
     
-    /* 🧩 100% PENALTY-FREE HIDDEN H1 STYLE (Google Safe Pattern) */
-    .invisible-seo-h1 {
-      position: absolute !important;
-      width: 1px !important;
-      height: 1px !important;
-      padding: 0 !important;
-      margin: -1px !important;
-      overflow: hidden !important;
-      clip: rect(0, 0, 0, 0) !important;
-      white-space: nowrap !important;
-      border: 0 !important;
-    }
-    
-    /* 🧩 Cards ස්ටයිල් පෙනුම වෙනස් නොකර පසුබිම පමණක් උපරිම කළු කිරීම */
     :global(.post-card), :global(.card), :global(.bg-body), :global(.bg-white) {
       background-color: #0d0d0d !important;
       border: 1px solid #1a1a1a !important;
@@ -128,7 +108,6 @@ const homePageSchema = {
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
     
-    /* 🔥 ULTRA HIGHLIGHT EFFECT: පෝස්ට් කාඩ් මතින් යද්දී ඉතා සියුම් ආකර්ෂණීය Emerald Glow එකක් ඒම */
     :global(.post-card:hover), :global(.card:hover) {
       background-color: #121212 !important;
       border-color: rgba(16, 185, 129, 0.4) !important;
@@ -136,7 +115,6 @@ const homePageSchema = {
       box-shadow: 0 10px 25px -10px rgba(16, 185, 129, 0.25) !important;
     }
     
-    /* කළු පසුබිම මත සිංහල අකුරු කියවීමේ පහසුව (Accessibility & Contrast) වැඩි කිරීම */
     :global(.post-card-title), :global(.post-card h2), :global(.post-card h3), :global(.post-card h3 a), :global(.post-card a) {
       color: #ffffff !important;
       font-weight: 700 !important;
@@ -147,7 +125,6 @@ const homePageSchema = {
       color: #34d399 !important;
     }
     
-    /* දින සහ වෙනත් කුඩා විස්තර වල පැහැදිලි බව වැඩි කිරීම */
     :global(.post-card p), :global(.text-muted), :global(.post-meta), :global(.meta-items) {
       color: #cbd5e1 !important;
     }
@@ -156,16 +133,7 @@ const homePageSchema = {
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
       border-radius: 10px !important;
     }
-    :global(.featured-slider img:hover), :global(.post-card img:hover) {
-      filter: brightness(1.1) !important;
-    }
     
-    p, h1, h2, h3, h4, a, span {
-      text-rendering: optimizeLegibility !important;
-      -webkit-font-smoothing: antialiased !important;
-    }
-
-    /* Pagination Buttons අඳුරු පසුබිමට ගැළපීම */
     :global(.pagination a) {
       background-color: #0d0d0d !important;
       border: 1px solid #262626 !important;
@@ -187,21 +155,24 @@ const homePageSchema = {
     }
   </style>
 
-  {/* ප්‍රධාන අන්තර්ගතය */}
-  <main class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 selection:bg-emerald-500 selection:text-neutral-950 antialiased">
+  <main class="section pt-2 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
     <div class="container">
       
-      {/* 🎯 2026 ABSOLUTE SECURE H1 BLOCK 
-          මිනිස් ඇසට 100% ක් නොපෙනෙන නමුත් Google රොබෝවරුන් පීනල්ටි නොදී කියවන නිවැරදිම CSS හැඩතලය */}
-      <div class="invisible-seo-h1">
-        <h1>Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories</h1>
-        <p>Wala Katha වෙබ් අඩවියෙන් නවතම සිංහල වල් කතා, වැල කතා, රසවත් කෙටි කතා සහ සිංහල wal katha stories දිනපතා කියවන්න.</p>
+      {/* 🎯 ULTRA PREMIUM 2026 HERO SECTION (100% Google Penalty-Free & User Friendly) */}
+      <div class="text-center max-w-2xl mx-auto mt-4 mb-10 px-4">
+        <h1 class="text-3xl md:text-5xl font-black tracking-tight text-white mb-3">
+          Wala <span class="text-emerald-400 drop-shadow-[0_2px_10px_rgba(16,185,129,0.4)]">Katha</span>
+        </h1>
+        <p class="text-sm md:text-base text-slate-400 font-medium leading-relaxed">
+          නවතම සිංහල වල් කතා සහ වැල කතා දිනපතා කියවන්න ඇති එකම නිල අඩවිය. 
+          <span class="block text-xs text-emerald-500/80 mt-1 font-semibold tracking-wider uppercase">Daily Updated Premium Stories</span>
+        </p>
       </div>
 
-      {/* Slider එක ඉහළින්ම මනාව දර්ශනය වේ */}
+      {/* Slider */}
       <FeaturedSlider posts={sortedPosts} />
 
-      {/* ප්‍රධාන පෝස්ට් ග්‍රිඩ් එක */}
+      {/* Posts Grid */}
       <Posts posts={currentPosts} className="mb-16" />
       
       {/* Pagination */}
