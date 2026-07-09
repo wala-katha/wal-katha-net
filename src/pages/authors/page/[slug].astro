@@ -10,20 +10,16 @@ export async function getStaticPaths() {
   const authors = await getSinglePage("authors");
   const paginationLimit = config?.settings?.pagination || 8;
   const totalPages = Math.ceil((authors?.length || 0) / paginationLimit);
-  const safeTotalPages = totalPages < 1 ? 1 : totalPages;
   
   const paths = [];
 
-  // 🛠️ CRITICAL BUILD FIX: පිටු 2 සිටම ආරම්භ වන විට paths Array එක හිස් වුවහොත් Astro Build එක Fail වේ!
-  if (safeTotalPages >= 2) {
-    for (let i = 2; i <= safeTotalPages; i++) {
+  // 🎯 FIXED: බොරු Fallback පිටු හදන්නේ නැතිව සැබෑ පිටු පමණක් ජෙනරේට් කිරීම
+  if (totalPages >= 2) {
+    for (let i = 2; i <= totalPages; i++) {
       paths.push({
         params: { slug: i.toString() },
       });
     }
-  } else {
-    // සයිට් එකේ ලේඛකයින් 8කට වඩා අඩු නම්, Astro බිල්ඩ් එක Fail නොවී බේරීමට "2" සඳහා හිස් Fallback එකක් සාදයි
-    paths.push({ params: { slug: "2" } });
   }
   return paths;
 }
@@ -34,72 +30,63 @@ const sortedPosts = sortByDate(authors || []);
 
 const paginationLimit = config?.settings?.pagination || 8;
 const totalPages = Math.ceil((authors?.length || 0) / paginationLimit);
-const safeTotalPages = totalPages < 1 ? 1 : totalPages;
-const finalTotalPages = safeTotalPages < 2 ? 2 : safeTotalPages;
 
-// 1. Logic Fix: Dynamic Slug එක ආරක්ෂිතව ලබා ගැනීම සහ වැරදි නිවැරදි කිරීම (Auto-Fix)
 let currentPage = slug ? Number(slug) : 2;
 if (isNaN(currentPage) || currentPage < 2) {
   currentPage = 2;
 }
-
-if (currentPage > finalTotalPages) {
-  currentPage = finalTotalPages;
+if (currentPage > totalPages && totalPages > 0) {
+  currentPage = totalPages;
 }
 
-// 2. INDEX BUG FIX: පළමු පිටුවේ සිටම නිවැරදිව දත්ත කපා වෙන් කර ගැනීම
 const indexOfLastPost = currentPage * paginationLimit;
 const indexOfFirstPost = indexOfLastPost - paginationLimit;
 const currentPosts = sortedPosts && sortedPosts.length > 0 ? sortedPosts.slice(indexOfFirstPost, indexOfLastPost) : [];
 
-// 3. SEO ප්‍රශස්තකරණය: සෙවුම් යන්ත්‍ර සඳහා නිවැරදි සහ පිරිසිදු මාතෘකා
-const metaTitle = `අපේ ලේඛකයින් - Our Authors | Page ${currentPage}`;
-const metaDescription = `අපේ වෙබ් අඩවියේ ලිපි ලියන දක්ෂ කතෘවරුන් සහ ලේඛකයින් මෙතැනින් එකම තැනකින් සොයා ගන්න. (පිටුව ${currentPage})`;
+// 📈 SEO OPTIMIZATION FOR AUTHORS PAGINATION
+const metaTitle = `අපේ ලේඛකයින් - Our Authors (පිටුව ${currentPage})`;
+const metaDescription = `Wala Katha වෙබ් අඩවියේ ලිපි සහ කතා ලියන දක්ෂ කතෘවරුන්ගේ ලැයිස්තුවේ ${currentPage} වන පිටුව.`;
 
-// 4. SEO Canonical URL නිවැරදි කිරීම (Trailing Slashes බග් එක ස්වයංක්‍රීයව පිරිසිදු වේ)
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
 const canonicalUrl = `${base_url}/authors/page/${currentPage}`;
 
-// 5. SEO Pagination Links (පළමු පිටුවට යන ලින්ක් එක /authors/page/1 නොවී පිරිසිදු /authors විය යුතුය)
 const prevUrl = currentPage === 2 ? `${base_url}/authors` : `${base_url}/authors/page/${currentPage - 1}`;
-// ස්වයංක්‍රීය නිවැරදි කිරීම: සැබෑ ලෙසම ඊළඟ පිටුවක් තිබේ නම් පමණක් nextUrl එක සාදයි (Google Bot එක පටලවන්නේ නැත)
 const nextUrl = currentPage < totalPages ? `${base_url}/authors/page/${currentPage + 1}` : null;
-
-// 6. Google රොබෝලාට පිටු 2, 3 ලැයිස්තුගත කිරීමට අවසර දීම (SEO Best Practice)
-const robotsMeta = "index, follow";
 ---
 
 <Base 
   title={metaTitle} 
+  meta_title={metaTitle}
   description={metaDescription} 
   canonical={canonicalUrl}
-  prev={prevUrl}
-  next={nextUrl}
-  robots={robotsMeta}
 >
-  {/* කළු පසුබිම සහ පිරිසිදු අකුරු වර්ණ රටාව (Dark UI 100% Optimized) */}
-  <section class="section bg-slate-900 py-12 min-h-screen text-slate-100 selection:bg-amber-500/30 selection:text-amber-200">
+  {/* ⚡ GOOGLE BOT DIRECT CONNECTION */}
+  <Fragment slot="head">
+    {prevUrl && <link rel="prev" href={prevUrl} />}
+    {nextUrl && <link rel="next" href={nextUrl} />}
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+  </Fragment>
+
+  {/* ⚡ 100% MATCHED ULTRA-DARK EMERALD UI THEME */}
+  <section class="section bg-[#050505] py-12 min-h-screen text-slate-200 selection:bg-emerald-500/30 selection:text-emerald-400">
     <div class="container mx-auto px-4">
       
-      {/* හෙඩිම කළු පසුබිමේ රන්වන් සහ සුදු පැහැයෙන් ඉස්මතු කිරීම */}
       <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-center mb-12 text-white">
-        Our <span class="text-amber-400 drop-shadow-[0_2px_8px_rgba(251,191,36,0.3)]">Authors</span>
+        Our <span class="text-emerald-400 drop-shadow-[0_2px_8px_rgba(16,185,129,0.3)]">Authors</span>
       </h1>
       
-      {/* ලේඛකයින්ගේ ලැයිස්තුව (Component) */}
       <div class="mb-12">
         {currentPosts && currentPosts.length > 0 ? (
           <Authors authors={currentPosts} />
         ) : (
-          <div class="text-center py-12 bg-slate-800/20 border border-slate-800/60 rounded-2xl max-w-md mx-auto backdrop-blur-sm">
+          <div class="text-center py-12 bg-[#0d0d0d] border border-[#1a1a1a] rounded-2xl max-w-md mx-auto">
             <p class="text-slate-400 font-medium">කතෘවරුන් කිසිවෙකු හමුනොවීය.</p>
           </div>
         )}
       </div>
       
-      {/* පිටු අංකනය (Pagination) - සැබෑ ලෙසම පිටු 2ක් හෝ ඊට වැඩි ගණනක් තිබේ නම් පමණක් පෙන්වයි */}
       {totalPages > 1 && (
-        <div class="flex justify-center mt-12 bg-slate-800/20 py-4 rounded-xl border border-slate-800/50 max-w-md mx-auto">
+        <div class="flex justify-center mt-12 bg-[#0d0d0d] py-4 rounded-xl border border-[#1a1a1a] max-w-md mx-auto">
           <Pagination
             section={"authors"}
             currentPage={currentPage}
