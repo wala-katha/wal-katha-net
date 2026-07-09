@@ -1,7 +1,7 @@
 ---
 title: "Welcome to Wal Katha - The Ultimate Hub for Sinhala Novels & Stories"
 meta_title: "About Us - Sinhala Wal Katha"
-image: "/images/author.png"
+image: "/images/author.webp"
 draft: false
 
 what_i_do:
