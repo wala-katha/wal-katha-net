@@ -14,56 +14,71 @@ const metaDescription = "ඔබ සොයන පිටුව දැනට අප
   description={metaDescription} 
   robots={robotsMeta}
 >
-  {/* 100% Original Section Layout structure */}
-  <section class="section">
+  <section class="section bg-[#050505] text-white">
     <div class="container">
-      {/* 100% Original Flex Box Alignment */}
-      <div class="flex h-[40vh] items-center justify-center">
-        <div class="text-center">
+      {/* 🎯 FIXED: min-h-[65vh] දමා Footer එක මැදට ඒම වැළැක්වීම */}
+      <div class="flex min-h-[65vh] items-center justify-center">
+        <div class="text-center bg-[#0d0d0d] p-8 sm:p-12 rounded-2xl border border-[#1a1a1a] max-w-lg mx-auto shadow-xl">
           
-          {/* 100% Original Error Heading - කළු පසුබිමේ රතු/තැඹිලි පැහැයෙන් ඉස්මතු කර ඇත */}
-          <h1 class="h2 md:h1 mb-4 text-red-500 dark:text-red-400 drop-shadow-[0_2px_10px_rgba(239,68,68,0.2)]">
-            Error 404
+          {/* 🎯 FIXED: රතු පාට වෙනුවට අපේ තීම් එකේ Emerald Green සහ Drop Shadow දැමීම */}
+          <h1 class="text-5xl md:text-6xl font-black mb-4 text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.15)]">
+            404
           </h1>
           
-          {/* 100% Original Content Div */}
           <div class="content">
-            {/* සිංහල සහ ඉංග්‍රීසි භාෂා දෙකෙන්ම පැහැදිලිව පෙන්වීම (UI Enhancement) */}
-            <p class="text-text font-medium text-lg">
-              පිටුව සොයාගත නොහැකි විය / Page Not Found
+            <h2 class="text-xl md:text-2xl font-extrabold text-white mb-2">
+              පිටුව සොයාගත නොහැකි විය
+            </h2>
+            <p class="text-slate-400 text-sm md:text-base font-medium mb-6">
+              Page Not Found
             </p>
             
-            {/* ⚡ ස්මාර්ට් ඉස්මතු කිරීම (Smart Countdown UI): තත්පර ගණන සජීවීව වෙනස් වන කොටස */}
-            <p class="mt-4 text-sm text-text/60 dark:text-slate-400">
-              තත්පර <span id="countdown" class="text-amber-500 dark:text-amber-400 font-bold text-base bg-amber-500/10 px-2 py-0.5 rounded mx-1">10</span> කින් ඔබව ස්වයංක්‍රීයව මුල් පිටුවට රැගෙන යනු ඇත.
+            {/* ⚡ SMART COUNTDOWN UI - තීම් එකට ගැළපෙන සේ සැකසීම */}
+            <p class="text-xs sm:text-sm text-slate-400/80 bg-white/5 py-2 px-4 rounded-lg inline-block">
+              තත්පර <span id="countdown" class="text-emerald-400 font-black text-base bg-emerald-500/10 px-2 py-0.5 rounded mx-1">10</span> කින් ඔබව ස්වයංක්‍රීයව මුල් පිටුවට රැගෙන යනු ඇත.
             </p>
           </div>
           
-          {/* 100% Original Button Link with same classes */}
-          <a href="/" class="btn btn-primary mt-8">Back to home</a>
+          {/* 🎯 FIXED: Button එක තද Emerald Green කර පට්ට ලුක් එකක් දීම */}
+          <a href="/" class="inline-block bg-emerald-500 text-neutral-950 font-black text-sm px-8 py-3 rounded-full mt-8 hover:bg-emerald-400 transition-colors shadow-md">
+            Back to Home (මුලට)
+          </a>
           
         </div>
       </div>
     </div>
   </section>
 
-  {/* ⚡ SMART REDIRECT SCRIPT: බ්‍රවුසර් එක ඇතුළත Countdown එක ක්‍රියාත්මක කරවන සැහැල්ලු ජාවාස්ක්‍රිප්ට් එක */}
+  {/* ⚡ SMART REDIRECT SCRIPT (ASTRO TRANSITIONS COMPATIBLE) */}
   <script is:inline>
-    (function() {
-      let secondsLeft = 10; // මුල් පිටුවට යාමට ගතවන කාලය
-      
+    function start404Countdown() {
+      let secondsLeft = 10;
+      const countdownElement = document.getElementById('countdown');
+      if (!countdownElement) return;
+
       const interval = setInterval(() => {
         secondsLeft--;
-        const countdownElement = document.getElementById('countdown');
         if (countdownElement) {
           countdownElement.textContent = secondsLeft;
         }
 
         if (secondsLeft <= 0) {
           clearInterval(interval);
-          window.location.href = '/'; // ස්වයංක්‍රීයව Home එකට Redirect කිරීම
+          window.location.href = '/';
         }
       }, 1000);
-    })();
+
+      // පිටුවෙන් ඉවත් වෙද්දී Interval එක ක්ලියර් කිරීම (Memory Leak වැළැක්වීමට)
+      document.addEventListener('astro:before-swap', () => clearInterval(interval), { once: true });
+    }
+
+    // සාමාන්‍ය ලෝඩ් එකට සහ Astro View Transitions දෙකටම වැඩ කරන සේ
+    document.addEventListener('astro:page-load', start404Countdown);
+    // View Transitions නැත්නම් ඩිරෙක්ට් රන් වීම සඳහා
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      start404Countdown();
+    } else {
+      document.addEventListener('DOMContentLoaded', start404Countdown);
+    }
   </script>
 </Base>
