@@ -11,36 +11,34 @@ type Props = {
 const { posts } = Astro.props;
 ---
 
-{/* 👑 CLEAN RICH BLACK INNER WRAPPER:
-    පිටත ප්‍රධාන මවු සෙක්ෂන් එකෙන් කළු ➔ කොළ ➔ කළු ග්‍රේඩියන්ට් එක පාලනය වන බැවින්, 
-    මෙම ඇතුළත කොටස කිසිදු අමතර පසුබිමකින් තොරව පිරිසිදුව නිශ්චලව තබා ඇත. */}
+{/* 👑 CLEAN RICH BLACK INNER WRAPPER */}
 <div class="w-full p-4 sm:p-6 transition-all duration-300">
   
   <div class="row gy-4 gx-2 sm:gx-4 justify-center">
     {
       posts.map((post) => (
-        /* 🎯 UI & SEO GRID FIX: මොබයිල්, ටැබ්, ඩෙස්ක්ටොප් හැම එකකදීම එක පේළියට පෝස්ට් 3 බැගින් පේළි දෙකකට පෝස්ට් 6ක් හැඩගැස්වීම */
+        /* 🎯 100% ORIGINAL BOOTSTRAP STRUCTURE PRESERVED - මෙනු එක බිඳ වැටීම වළක්වා ඇත */
         <div class="col-4 flex flex-col justify-between group mb-4 text-center">
           {post.data.image && (
             <a
-              href={`/blog/${post.id}/`} /* ⚠️ FIXED: නිවැරදි Astro Content Layer URL එක */
+              href={`/blog/${post.id}/`}
               class="rounded-lg block overflow-hidden group relative bg-[#010203] mx-auto w-full"
-              style="aspect-ratio: 3 / 4;" /* ⚡ FIX: උස දශමයක් අඩු කළ 3:4 Ratio එක */
+              style={{ aspectRatio: "3 / 4" }} /* ⚡ FIXED: Astro Build Error එක සම්පූර්ණයෙන්ම ඉවත් කළ නිවැරදි Syntax එක */
             >
-              {/* 👑 CLEAN & STATIC FRAME: කැරකෙන ඇනිමේෂන් සියල්ල ඉවත් කර, පින්තූරය වටා ස්ථාවර පිරිසිදු සුදු බෝඩර් එකක් පමණක් යෙදීම */}
+              {/* 👑 CLEAN & STATIC FRAME */}
               <Image
-                class="w-full h-full object-contain rounded-lg border border-white/20 group-hover:border-white transition-all duration-300 relative z-0"
+                class="w-full h-full object-cover rounded-lg border border-white/20 group-hover:border-white transition-all duration-300 relative z-0"
                 src={post.data.image}
                 alt={post.data.title}
                 width={500}
-                height={666} /* ⚡ Ratio එකට ගැළපෙන සේ උස ප්‍රමාණය */
+                height={666}
                 loading="lazy"
                 decoding="async"
               />
             </a>
           )}
           
-          {/* INFO ROW: කළු පසුබිමට කැපී පෙනෙන සේ මෙටා ඩේටා සහ අයිකන පිරිසිදු සුදු පැහැයට හැරවීම */}
+          {/* INFO ROW */}
           <ul class="mt-2 mb-1 flex flex-wrap items-center text-white/90 text-[10px] sm:text-xs justify-center gap-x-2">
             <li class="flex items-center flex-wrap">
               <BiCategoryAlt className="mr-0.5 h-3 w-3 sm:h-[14px] sm:w-[14px] text-[#01AD9F]" />
@@ -63,7 +61,7 @@ const { posts } = Astro.props;
             </li>
           </ul>
 
-          {/* POST TITLE: කළු පසුබිම මත උපරිමයෙන්ම පෙනීමට text-white සහ font-black යෙදීම */}
+          {/* POST TITLE */}
           <h3 class="mb-1 line-clamp-2 leading-tight text-center mx-auto w-full">
             <a
               href={`/blog/${post.id}/`}
