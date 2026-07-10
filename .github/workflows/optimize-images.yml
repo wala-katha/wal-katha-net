@@ -35,17 +35,16 @@ jobs:
 
           // ==========================================================
           // 🎯 SMART CONFIG — site එකේ ඇත්තටම display කරන actual pixel
-          //    sizes එකට ගැලපෙන (exact 2x retina) maximum widths.
-          //    Height දෙන්නේ නෑ — aspect ratio ස්වභාවිකව පවතී, crop/
-          //    distort කිසිවක් සිදු නොවේ (proportional resize only).
+          //    sizes එකට ගැලපෙන (2x retina සඳහා ටිකක් වැඩිය) maximum
+          //    widths. Height දෙන්නේ නෑ — aspect ratio ස්වභාවිකව පවතී,
+          //    crop/distort කිසිවක් සිදු නොවේ (proportional resize only).
           //
-          //    Posts.astro grid card එක display කරන්නේ 204x291px
-          //    (PageSpeed confirmed exact). 204 x 2 = 408px = exact
-          //    2x retina density — 420px (පරණ setting) වඩා 12px වැඩිය
-          //    තිබ්බ නිසා "larger than needed" flag එක තිබුනා.
+          //    Posts.astro grid card එක display කරන්නේ 204x290px
+          //    (PageSpeed confirmed), ඒ නිසා maxWidth 420px = ~2x retina
+          //    safety margin.
           // ==========================================================
           const folders = [
-            { dir: 'public/images/posts',   maxWidth: 408,  type: 'post'   },
+            { dir: 'public/images/posts',   maxWidth: 420,  type: 'post'   },
             { dir: 'public/images/slider',  maxWidth: 1200, type: 'slider' },
             { dir: 'public/images/authors', maxWidth: 150,  type: 'author', square: true },
           ];
@@ -55,8 +54,8 @@ jobs:
           let processedCount = 0;
 
           // ==========================================================
-          // ⚡ SMART STALENESS CHECK — "up to date" කියලා සලකන්නේ
-          //    timestamp එක අලුත් වීම විතරක් නොවේ:
+          // ⚡ SMART STALENESS CHECK (upgraded) — දැන් "up to date" කියලා
+          //    සලකන්නේ timestamp එක අලුත් වීම විතරක් නොවේ:
           //
           //    1. Timestamp check — .webp .jpg/.png එකට වඩා අලුත්ද?
           //    2. Dimension check — existing .webp file එකේ actual width
@@ -64,7 +63,7 @@ jobs:
           //       targetWidth එකට ගැලපෙනවද?
           //
           //    දෙකම true නම් විතරයි "up to date" — timestamp අලුත් උනත්
-          //    dimension mismatch නම් (උදා: maxWidth 420→408 වගේ config
+          //    dimension mismatch නම් (උදා: maxWidth 750→420 වගේ config
           //    change එකකින් පස්සේ), stale කියලා සලකලා force re-process
           //    කරයි. මේකෙන් maxWidth අගය future එකේදී වෙනස් කළොත්,
           //    manual .webp deletion කිසිවක් නැතුවම auto-heal වේ.
@@ -90,6 +89,8 @@ jobs:
               // Square (authors) folder සඳහා height එකත් check කරයි
               if (isSquare) {
                 const expectedHeight = Math.min(srcMeta.height || targetWidth, targetWidth);
+                // square crop නිසා height එක targetWidth එකටම match වෙන්න ඕන
+                // (source කුඩා නම් මිස)
                 const expectedSquareHeight = srcMeta.width && srcMeta.height &&
                   Math.min(srcMeta.width, srcMeta.height) >= targetWidth
                   ? targetWidth
@@ -331,5 +332,5 @@ jobs:
           git add src/content/contact/*.md || true
           git add src/content/pages/*.md || true
           git add src/config/config.json || true
-          git diff --staged --quiet || git commit -m "Auto: Self-healing WebP optimization (408px exact retina match) + root images + frontmatter update"
+          git diff --staged --quiet || git commit -m "Auto: Self-healing WebP optimization (dimension-aware staleness detection) + root images + frontmatter update"
           git push
