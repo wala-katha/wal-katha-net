@@ -1,7 +1,7 @@
 ---
 title: "රචනා අයිතිවාසිකම් හා ගෞරවය පිළිබඳ ප්‍රකාශය"
-meta_title: "රචනා අයිතිවාසිකම් හා ගෞරවය පිළිබඳ ප්‍රකාශය - walkatha.pages.dev"
-description: "අප වෙබ් අඩවියේ පළවන සියලුම අන්තර්ගතයන්හි අයිතිවාසිකම්, ප්‍රකාශන හිමිකම් (Copyright) සහ මුල් ਰචකයන්ට නිසි ගෞරවය දැක්වීම පිළිබඳ නීතිමය පැහැදිලි කිරීම."
+meta_title: "රචනා අයිතිවාසිකම් හා ගෞරවය පිළිබඳ ප්‍රකාශය - walkatha.net"
+description: "අප වෙබ් අඩවියේ පළවන සියලුම අන්තර්ගතයන්හි අයිතිවාසිකම්, ප්‍රකාශන හිමිකම් (Copyright) සහ මුල් රචකයන්ට නිසි ගෞරවය දැක්වීම පිළිබඳ නීතිමය පැහැදිලි කිරීම."
 image: "/images/Copyright & Credit Policy.webp"
 layout: "Base"
 draft: false
@@ -13,7 +13,7 @@ draft: false
   ~ බුද්ධිමය ශ්‍රමයට සහ නිර්මාණශීලීත්වයට සැමවිටම ගරු කරන්නෙමු ~
 </div>
 
-**walkatha.net**
+**www.walkatha.net**
 
 අපගේ වෙබ් අඩවියේ ප්‍රදර්ශනය වන කතා, නවකතා, ලිපි හා අනෙකුත් නිර්මාණාත්මක අන්තර්ගතයන්ගෙන් බහුතරයක්, අන්තර්ජාලයේ විවෘතව පොදු පරිහරණය සඳහා ප්‍රවේශ විය හැකි විවිධ සමාජ මාධ්‍ය ජාල, බ්ලොග් අඩවි සහ පොදු සංසද (Forums) මඟින් ලබා ගන්නා ලද ඒවා වේ. මෙවැනි බාහිර මුලාශ්‍රවලින් ලබාගන්නා සෑම නිර්මාණයකම, අප විසින් ඒවායේ මුල් ਰචකයා (Original Author) කවුදැයි hance අඳුනාගත් සැනින් ඉතා පැහැදිලිව සටහන් කිරීමට නිරන්තරයෙන් බැඳී සිටින්නෙමු.
 
@@ -28,7 +28,7 @@ draft: false
 
 ### 🛡️ ප්‍රධාන ප්‍රතිපත්තිය (Policy & Summary)
 
-* **අයිතීන්ට ගරු කිරීම:** අප වෙබ් අඩවිය කිසිදු විටෙක අනුන්ගේ බුද්ධිමය ශ්‍රමයෙන් අනීතික ලාභ ලැබීමට උත්සාහ නොකරයි. සැමවිටම මුල් ਰචකයාගේ අයිතිය අභිබවා නොයයි.
+* **අයිතීන්ට ගරු කිරීම:** අප වෙබ් අඩවිය කිසිදු විටෙක අනුන්ගේ බුද්ධිමය ශ්‍රමයෙන් අනීතික ලාභ ලැබීමට උත්සාහ නොකරයි. සැමවිටම මුල් රචකයාගේ අයිතිය අභිබවා නොයයි.
 * **නිසි කතෘභාගය (Credits):** අප සතු හෝ බාහිරින් සොයාගන්නා තොරතුරු මත පදනම්ව, මුල් කතුවරයාගේ නම හෝ ඔවුන්ගේ නිල සමාජ මාධ්‍ය ගිණුම් සබැඳියාවන් පෝස්ට් එකෙහි පැහැදිලිව ප්‍රදර්ශනය කරනු ලැබේ.
 * **ක්ෂණික ක්‍රියාමාර්ග:** නියමිත අයිතිකරු විසින් සිදුකරනු ලබන ඕනෑම නීත්‍යානුකූල ඉල්ලීමකදී, අන්තර්ගතයන් වහාම ඉවත් කිරීමට හෝ වෙනස් කිරීමට අප නීතිමය වශයෙන් බැඳී සිටිමු.
 
@@ -44,7 +44,7 @@ draft: false
 
 ---
 
-### ❓ นිතර අසන ප්‍රශ්න (FAQ)
+### ❓ නිතර අසන ප්‍රශ්න (FAQ)
 
 <details name="walkatha-faq" style="background: #0d1117; padding: 16px; border-radius: 10px; margin-bottom: 14px; border: 1px solid #1f2937; cursor: pointer; transition: all 0.3s ease;">
   <summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
@@ -52,7 +52,7 @@ draft: false
     <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
   </summary>
   <div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
-    කිසිදු කලබලයක් හෝ අපහසුතාවයක් ඇති කරගත යුතු නැත. කරුණාකර <strong style="color: #01AD9F;">walakatha.net&#64;gmail.com</strong> යන අපගේ නිල ඊමේල් ලිපිනයට අදාළ කතාවේ සබැඳිය (URL) සහ ඔබ එහි මුල් ਰචකයා බව සනාථ කළ හැකි කෙටි සාක්ෂි අප වෙත එවන්න. ඔබගේ අයිතිය තහවුරු වූ විගස අප ක්‍රියාත්මක වන්නෙමු.
+    කිසිදු කලබලයක් හෝ අපහසුතාවයක් ඇති කරගත යුතු නැත. කරුණාකර <strong style="color: #01AD9F;">walakatha.net&#64;gmail.com</strong> යන අපගේ නිල ඊමේල් ලිපිනයට අදාළ කතාවේ සබැඳිය (URL) සහ ඔබ එහි මුල් රචකයා බව සනාථ කළ හැකි කෙටි සාක්ෂි අප වෙත එවන්න. ඔබගේ අයිතිය තහවුරු වූ විගස අප ක්‍රියාත්මක වන්නෙමු.
   </div>
 </details>
 
@@ -86,7 +86,7 @@ draft: false
 
 <details name="walkatha-faq" style="background: #0d1117; padding: 16px; border-radius: 10px; margin-bottom: 14px; border: 1px solid #1f2937; cursor: pointer; transition: all 0.3s ease;">
   <summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
-    <span>🤝 අන්තර්ගතයන් ඉවත් කරන්නේ නැතුව මගේ නම සහ මගේ සයිට් එකේ ลින්ක් එක දාන්න පුළුවන්ද?</span>
+    <span>🤝 අන්තර්ගතයන් ඉවත් කරන්නේ නැතුව මගේ නම සහ මගේ සයිට් එකේ ලින්ක් එක දාන්න පුළුවන්ද?</span>
     <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
   </summary>
   <div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
