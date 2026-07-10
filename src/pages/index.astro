@@ -16,7 +16,6 @@ const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 const canonicalUrl = base_url;
 const siteLogo = `${base_url}/images/logo.png`; 
 
-// 🚀 ADVANCED INTEGRATED SCHEMA (100% Connected Graph & Penalty-Free)
 const homePageSchema = {
   "@context": "https://schema.org",
   "@graph": [
@@ -25,15 +24,7 @@ const homePageSchema = {
       "@id": `${base_url}/#website`,
       "url": base_url,
       "name": "Wala Katha",
-      "alternateName": [
-        "Wala Katha Stories",
-        "Wal Katha", 
-        "සිංහල වල් කතා", 
-        "Sinhala Wal Katha", 
-        "Wela Katha", 
-        "Sinhala Wela Katha",
-        "WalKatha"
-      ],
+      "alternateName": ["Wala Katha Stories","Wal Katha","සිංහල වල් කතා","Sinhala Wal Katha","Wela Katha","Sinhala Wela Katha","WalKatha"],
       "description": "Wala Katha - අලුත්ම සහ රසවත්ම සිංහල වල් කතා (Sinhala Wal Katha) සහ වැල කතා (Wela Katha) දිනපතා කියවන්න ඇති එකම නිල වෙබ් අඩවිය.",
       "publisher": {
         "@type": "Organization",
@@ -63,10 +54,7 @@ const homePageSchema = {
       "name": "Wala Katha - සිංහල වල් කතා එකතුව | Latest Sinhala Wal Katha Stories",
       "description": "Daily updated premium Sinhala wal katha, wala katha and wela stories collection.",
       "isPartOf": { "@id": `${base_url}/#website` },
-      "about": {
-        "@type": "Thing",
-        "name": "Sinhala Wal Katha Literature"
-      }
+      "about": { "@type": "Thing", "name": "Sinhala Wal Katha Literature" }
     }
   ]
 };
@@ -100,40 +88,33 @@ const homePageSchema = {
       color: #f8fafc !important; 
       scrollbar-color: #10b981 #050505; 
     }
-    
     :global(.post-card), :global(.card), :global(.bg-body), :global(.bg-white) {
       background-color: #0d0d0d !important;
       border: 1px solid #1a1a1a !important;
       border-radius: 14px !important;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
-    
     :global(.post-card:hover), :global(.card:hover) {
       background-color: #121212 !important;
       border-color: rgba(16, 185, 129, 0.4) !important;
       transform: translateY(-4px) !important;
       box-shadow: 0 10px 25px -10px rgba(16, 185, 129, 0.25) !important;
     }
-    
     :global(.post-card-title), :global(.post-card h2), :global(.post-card h3), :global(.post-card h3 a), :global(.post-card a) {
       color: #ffffff !important;
       font-weight: 700 !important;
       transition: color 0.2s ease !important;
     }
-    
     :global(.post-card h2 a:hover), :global(.post-card h3 a:hover), :global(.post-card a:hover) {
       color: #34d399 !important;
     }
-    
     :global(.post-card p), :global(.text-muted), :global(.post-meta), :global(.meta-items) {
       color: #cbd5e1 !important;
     }
-
     :global(.featured-slider img), :global(.post-card img) {
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
       border-radius: 10px !important;
     }
-    
     :global(.pagination a) {
       background-color: #0d0d0d !important;
       border: 1px solid #262626 !important;
@@ -144,7 +125,6 @@ const homePageSchema = {
       color: #050505 !important;
       border-color: #10b981 !important;
     }
-
     :global(.featured-slider .slider-content) {
       background: linear-gradient(to top, rgba(5,5,5,0.95) 0%, rgba(5,5,5,0.4) 70%, transparent 100%) !important;
     }
@@ -158,13 +138,11 @@ const homePageSchema = {
   <main class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
     <div class="container">
 
-      {/* Slider එක දැන් කිසිදු බාහිර Heading එකක් නොමැතිව ඉහළින්ම පෙනේ */}
-      <FeaturedSlider posts={sortedPosts} />
+      {/* ✅ FIX: posts prop ඉවත් කළා — FeaturedSlider hardcoded data use කරනවා */}
+      <FeaturedSlider />
 
-      {/* Posts Grid */}
       <Posts posts={currentPosts} className="mb-16" />
       
-      {/* Pagination */}
       <Pagination currentPage={1} totalPages={totalPages} />
       
     </div>
