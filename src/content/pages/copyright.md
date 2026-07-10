@@ -13,7 +13,7 @@ draft: false
   ~ බුද්ධිමය ශ්‍රමයට සහ නිර්මාණශීලීත්වයට සැමවිටම ගරු කරන්නෙමු ~
 </div>
 
-**walkatha.net**
+**walakatha.net**
 
 අපගේ වෙබ් අඩවියේ ප්‍රදර්ශනය වන කතා, නවකතා, ලිපි හා අනෙකුත් නිර්මාණාත්මක අන්තර්ගතයන්ගෙන් බහුතරයක්, අන්තර්ජාලයේ විවෘතව පොදු පරිහරණය සඳහා ප්‍රවේශ විය හැකි විවිධ සමාජ මාධ්‍ය ජාල, බ්ලොග් අඩවි සහ පොදු සංසද (Forums) මඟින් ලබා ගන්නා ලද ඒවා වේ. මෙවැනි බාහිර මුලාශ්‍රවලින් ලබාගන්නා සෑම නිර්මාණයකම, අප විසින් ඒවායේ මුල් රචකයා (Original Author) කවුදැයි හඳුනාගත් සැනින් ඉතා පැහැදිලිව සටහන් කිරීමට නිරන්තරයෙන් බැඳී සිටින්නෙමු.
 
@@ -38,13 +38,13 @@ draft: false
 
 ඔබ අපගේ වෙබ් අඩවියේ පළ වූ කිසියම් කතාවක හෝ ලිපියක මුල් සහ නීත්‍යානුකූල රචකයා වන්නේ නම්, එම අන්තර්ගතය වෙබ් අඩවියෙන් සම්පූර්ණයෙන්ම ඉවත් කිරීමට (Take Down) හෝ එහි ඔබගේ නම (Credit) නිවැරදිව ප්‍රදර්ශනය කිරීමට අවශ්‍ය නම්, කරුණාකර පහත සඳහන් නිල මාධ්‍ය ඔස්සේ අපගේ පරිපාලන කණ්ඩායම සම්බන්ධ කරගන්න:
 
-* **📧 නිල ඊමේල් ලිපිනය:** [walkatha.com@gmail.com](mailto:walkatha.com@gmail.com)
+* **📧 නිල ඊමේල් ලිපිනය:** <a href="mailto:walkatha.com&#64;gmail.com">walkatha.com&#64;gmail.com</a>
 * **📞 දුරකථන සහාය:** Coming Soon (ළඟදීම ලබාදේ)
 * **🌐 නිල සම්බන්ධතා පිටුව:** [Contact Us පිටුවට මෙතනින් යන්න](https://walkatha.pages.dev/contact/)
 
 ---
 
-### ❓ නිතර අසන ප්‍රශ්න (FAQ)
+### ❓ นිතර අසන ප්‍රශ්න (FAQ)
 
 <details name="walkatha-faq" style="background: #0d1117; padding: 16px; border-radius: 10px; margin-bottom: 14px; border: 1px solid #1f2937; cursor: pointer; transition: all 0.3s ease;">
   <summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
@@ -52,7 +52,7 @@ draft: false
     <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
   </summary>
   <div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
-    කිසිදු කලබලයක් හෝ අපහසුතාවයක් ඇති කරගත යුතු නැත. කරුණාකර <strong style="color: #01AD9F;">walkatha.com@gmail.com</strong> යන අපගේ නිල ඊමේල් ලිපිනයට අදාළ කතාවේ සබැඳිය (URL) සහ ඔබ එහි මුල් රචකයා බව සනාථ කළ හැකි කෙටි සාක්ෂි අප වෙත එවන්න. ඔබගේ අයිතිය තහවුරු වූ විගස අප ක්‍රියාත්මක වන්නෙමු.
+    කිසිදු කලබලයක් හෝ අපහසුතාවයක් ඇති කරගත යුතු නැත. කරුණාකර <strong style="color: #01AD9F;">walkatha.com&#64;gmail.com</strong> යන අපගේ නිල ඊමේල් ලිපිනයට අදාළ කතාවේ සබැඳිය (URL) සහ ඔබ එහි මුල් රචකයා බව සනාථ කළ හැකි කෙටි සාක්ෂි අප වෙත එවන්න. ඔබගේ අයිතිය තහවුරු වූ විගස අප ක්‍රියාත්මක වන්නෙමු.
   </div>
 </details>
 
@@ -80,7 +80,7 @@ draft: false
     <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
   </summary>
   <div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
-    ඔබගේ ඊමේල් පණිවිඩය අප වෙත ලැබුණු සැනින් ක්‍රියාත්මක වන අපගේ කණ්ඩායම, ඔබගේ ඉල්ලීමේ ස්වභාවය අනුව අදාළ කතාව සයිට් එකෙන් සම්පූර්ණයෙන්ම ඉවත් කිරීම හෝ රචකයාගේ නම නිවැරදි කිරීම <strong style="color: #fca5a5;">පැය 24ත් 48ත් අතර කාලයක් ඇතුළත</strong> (Within 48 Hours) අනිවාර්යයෙන්ම සිදු කරනු ලබයි.
+    ඔබගේ ඊමේල් පණිවිඩය අප වෙත ලැබුණු සැනින් ක්‍රියාත්මක වන අපගේ කණ්ඩායම, ඔබගේ ඉල්ලීමේ ස්වභාවය අනුව අදාළ කතාව සයිට් එකෙන් සම්පූර්ණයෙන්ම ඉවත් කිරීම හෝ რචකයාගේ නම නිවැරදි කිරීම <strong style="color: #fca5a5;">පැය 24ත් 48ත් අතර කාලයක් ඇතුළත</strong> (Within 48 Hours) අනිවාර්යයෙන්ම සිදු කරනු ලබයි.
   </div>
 </details>
 
@@ -90,7 +90,7 @@ draft: false
     <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
   </summary>
   <div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
-    ඔව්, ඉතාමත් සතුටින් එය සිදු කර දිය හැක. ඔබට ඔබගේ නිර්මාණය අපගේ සයිට් එක හරහා තවත් දහස් ගණනක් පාඨකයන් වෙත ළඟා වීමට අවශ්‍ය නම්, මුල් රචකයා ලෙස ඔබගේ නම, Facebook Profile එක හෝ ඔබගේ වෙබ් අඩවි සබැඳියාව (Backlink) ඉතා කැපී පෙනෙන ලෙස ඇතුළත් කර දීමට අප කටයුතු සූදානම් කර දෙන්නෙමු.
+    ඔව්, ඉතාමත් සතුටින් එය සිදු කර දිය හැක. ඔබට ඔබගේ නිර්මාණය අපගේ සයිට් එක හරහා තවත් දහස් ගණනක් පාඨකයන් වෙත ළඟා වීමට අවශ්‍ය නම්, මුල් რචකයා ලෙස ඔබගේ නම, Facebook Profile එක හෝ ඔබගේ වෙබ් අඩවි සබැඳියාව (Backlink) ඉතා කැපී පෙනෙන ලෙස ඇතුළත් කර දීමට අප කටයුතු සූදානම් කර දෙන්නෙමු.
   </div>
 </details>
 
