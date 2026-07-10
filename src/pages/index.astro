@@ -16,7 +16,7 @@ const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 const canonicalUrl = base_url;
 const siteLogo = `${base_url}/images/logo.png`; 
 
-// 🚀 ADVANCED INTEGRATED SCHEMA 2026 (100% Connected Graph & Penalty-Free)
+// 🚀 ADVANCED INTEGRATED SCHEMA (100% Connected Graph & Penalty-Free)
 const homePageSchema = {
   "@context": "https://schema.org",
   "@graph": [
@@ -34,7 +34,7 @@ const homePageSchema = {
         "Sinhala Wela Katha",
         "WalKatha"
       ],
-      "description": "Wala Katha - අලුත්ම සහ රසවත්මසිංහල වල් කතා (Sinhala Wal Katha) සහ වැල කතා (Wela Katha) දිනපතා කියවන්න ඇති එකම නිල වෙබ් අඩවිය.",
+      "description": "Wala Katha - අලුත්ම සහ රසවත්ම සිංහල වල් කතා (Sinhala Wal Katha) සහ වැල කතා (Wela Katha) දිනපතා කියවන්න ඇති එකම නිල වෙබ් අඩවිය.",
       "publisher": {
         "@type": "Organization",
         "@id": `${base_url}/#organization`,
@@ -79,6 +79,7 @@ const homePageSchema = {
   canonical={canonicalUrl}
   image={siteLogo}
 >
+  <!-- Schema Injected Cleanly -->
   <script type="application/ld+json" set:html={JSON.stringify(homePageSchema)} />
 
   <Fragment slot="head">
@@ -158,13 +159,17 @@ const homePageSchema = {
   <main class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
     <div class="container">
       
-      {/* 🎯 APPROVED ACCESSIBILITY PATTERN (100% Invisible to Users, 100% Tracked by Google Bot) */}
-      <div class="sr-only">
-        <h1>Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories</h1>
-        <p>නවතම සිංහල වල් කතා සහ වැල කතා දිනපතා කියවන්න ඇති එකම නිල අඩවිය. Daily Updated Premium Stories</p>
-      </div>
+      {/* 🎯 100% WHITE-HAT SEO PATTERN (Visible heading for Users & fully compliant with Google Bot) */}
+      <header class="mb-6 border-b border-neutral-900 pb-4">
+        <h1 class="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-500 tracking-tight">
+          Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories
+        </h1>
+        <p class="text-sm text-slate-400 mt-1">
+          නවතම සිංහල වල් කතා සහ වැල කතා දිනපතා කියවන්න ඇති එකම නිල අඩවිය. Daily Updated Premium Stories.
+        </p>
+      </header>
 
-      {/* Slider එක දැන් කිසිම බාධාවක් නැතිව ඉහළින්ම පෙනේ */}
+      {/* Slider */}
       <FeaturedSlider posts={sortedPosts} />
 
       {/* Posts Grid */}
