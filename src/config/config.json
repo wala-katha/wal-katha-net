@@ -1,7 +1,7 @@
 {
   "site": {
     "title": "Wala Katha",
-    "base_url": "https://walakatha.net",
+    "base_url": "https://www.walakatha.net",
     "base_path": "/",
     "trailing_slash": false,
     "favicon": "/images/favicon.webp",
@@ -28,7 +28,7 @@
 
   "params": {
     "contact_form_action": "#",
-    "copyright": "Copyright © 2026 [Wala Katha](https://walakatha.net) | All Rights Reserved."
+    "copyright": "Copyright © 2026 [Wala Katha](https://www.walakatha.net) | All Rights Reserved."
   },
 
   "contactinfo": {
