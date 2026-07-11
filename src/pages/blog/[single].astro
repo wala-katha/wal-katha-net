@@ -9,14 +9,9 @@ import { slugify as globalSlugify } from "@/lib/utils/textConverter";
 export async function getStaticPaths() {
   const BLOG_FOLDER = "posts";
   const posts = await getSinglePage(BLOG_FOLDER);
-
-  // ස්වයංක්‍රීය නිවැරදි කිරීම (Auto-Fix): posts ලැයිස්තුව හිස් නම් බිල්ඩ් එක බිඳ වැටීම වළක්වයි
   if (!posts || posts.length === 0) return [];
-
   const paths = posts.map((post) => ({
-    params: {
-      single: post.id,
-    },
+    params: { single: post.id },
     props: { post },
   }));
   return paths;
@@ -24,28 +19,21 @@ export async function getStaticPaths() {
 
 const { post } = Astro.props;
 
-// 1. දත්ත හිස් නම්සිදුවන සයිට් ක්‍රෑෂ් (Crash) වැළැක්වීම (Auto-Fix)
 if (!post || !post.data) {
   return Astro.redirect("/404");
 }
 
 const { title, meta_title, image, description, date, authors } = post.data;
 
-// 🛠️ CRITICAL DATE FIX (Auto-Fix): දිනයක් නොමැති නම් හෝ වැරදි ආකෘතියක් තිබේ නම් JSON-LD එක ක්‍රෑෂ් වීම වළක්වයි
 const parsedDate = date ? new Date(date) : null;
 const safeDateISO = parsedDate && isValid(parsedDate) ? parsedDate.toISOString() : new Date().toISOString();
 
-// 📈 2. SEO ප්‍රශස්තකරණය: Canonical URL එක Trailing Slashes බග් එක නැතිව පිරිසිදුව සැකසීම
-const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
+const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 const canonicalUrl = `${base_url}/blog/${post.id}`;
 
-// කතෘගේ නිවැරදි Slug එක සෑදීම (සිංහල යුනිකෝඩ් දත්ත සඳහාද 100% ගැළපේ)
 const authorName = Array.isArray(authors) && authors.length > 0 ? authors[0] : config?.metadata?.meta_author || "Admin";
-
-// 🛠️ AUTHOR LINK FIX: Astro Content Collections වල ID එක කෙලින්ම සෙවිය හැකි නිසා කතෘ ලින්ක් එක 100% ක් නිවැරදි වේ
 const authorSlug = globalSlugify(authorName || "");
 
-// 🚀 3. GOOGLE SEO ARTICLE SCHEMA: සෙවුම් යන්ත්‍ර වලට බ්ලොග් ලිපියේ සියලුම දත්ත නිවැරදිව දීමට (JSON-LD)
 const articleSchema = {
   "@context": "https://schema.org",
   "@type": "Article",
@@ -53,7 +41,7 @@ const articleSchema = {
   "description": description || "",
   "image": image ? (image.startsWith("http") ? image : `${base_url}${image}`) : undefined,
   "datePublished": safeDateISO,
-  "dateModified": safeDateISO, // Google Rich Snippets සඳහා අත්‍යවශ්‍ය දත්තයකි (SEO Booster)
+  "dateModified": safeDateISO,
   "author": {
     "@type": "Person",
     "name": authorName,
@@ -80,10 +68,9 @@ const articleSchema = {
   description={description}
   image={image}
   canonical={canonicalUrl}
+  isArticle={true}
 >
-  {/* Google Structured Data / Rich Snippets ඇතුළත් කිරීම */}
+  {/* ✅ isArticle={true} — Base.astro duplicate OG/Twitter/robots tags render නොකරයි */}
   <script type="application/ld+json" set:html={JSON.stringify(articleSchema)} />
-
-  {/* බ්ලොග් ලිපියේ ප්‍රධාන පෙනුම (100% Original Component එක එලෙසමයි) */}
   <PostSingle post={post} />
 </Base>
