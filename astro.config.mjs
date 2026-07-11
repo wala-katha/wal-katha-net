@@ -42,7 +42,7 @@ const fontsConfig = Object.entries(theme.fonts.font_family)
 
 export default defineConfig({
   // 🎯 100% Dynamic Base URL Fetching from config.json
-  site: config.site.base_url ? config.site.base_url : "https://walakatha.net",
+  site: config.site.base_url ? config.site.base_url : "https://www.walakatha.net",
   base: config.site.base_path ? config.site.base_path : "/",
   trailingSlash: config.site.trailing_slash ? "always" : "never",
 
