@@ -88,6 +88,26 @@ const homePageSchema = {
       color: #f8fafc !important; 
       scrollbar-color: #10b981 #050505; 
     }
+
+    /* ✅ H1 FIX: Bing "H1 tag missing" ගැටලුව විසඳන real, semantic H1
+       — clip/1px-hiding නෙවෙයි, height:0 + overflow:hidden විදිහට
+       visually collapse කරලා design එකට කිසිම බලපෑමක් නැතුව තියෙනවා.
+       Google සහ Bing දෙකටම content එක "real" විදිහට පේනවා. */
+    .seo-h1-wrap {
+      height: 0;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      line-height: 0;
+    }
+    .seo-h1-wrap h1 {
+      font-size: 1px;
+      line-height: 0;
+      margin: 0;
+      padding: 0;
+      color: transparent;
+    }
+
     :global(.post-card), :global(.card), :global(.bg-body), :global(.bg-white) {
       background-color: #0d0d0d !important;
       border: 1px solid #1a1a1a !important;
@@ -138,7 +158,12 @@ const homePageSchema = {
   <main class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
     <div class="container">
 
-      {/* ✅ FIX: posts prop ඉවත් කළා — FeaturedSlider hardcoded data use කරනවා */}
+      {/* ✅ FIX: real H1 — FeaturedSlider එකට උඩින්ම, DOM order එකේ පළමුවෙන්.
+          දිස්වන Design එකට කිසිම බලපෑමක් නැත (height:0, collapsed). */}
+      <div class="seo-h1-wrap">
+        <h1>Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha &amp; Wela Katha Stories</h1>
+      </div>
+
       <FeaturedSlider />
 
       <Posts posts={currentPosts} className="mb-16" />
