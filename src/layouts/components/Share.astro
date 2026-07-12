@@ -11,6 +11,19 @@ import { FaTelegram } from "react-icons/fa6";
 
 const { base_url } = config.site;
 const { title, description, slug, className } = Astro.props;
+
+// ✅ Defensive HTTPS upgrade: if base_url was ever accidentally set to
+// http:// (misconfiguration, future edit mistake, etc.), force it to
+// https:// here so every generated share link stays secure. This does
+// NOT touch third-party URLs or user content — only our own base_url.
+const httpsBase = base_url.replace(/^http:\/\//i, "https://");
+
+// ✅ Trailing-slash-safe URL builder — regardless of whether base_url
+// ends with "/" or slug starts with "/", this always produces exactly
+// one slash between them.
+const cleanBase = httpsBase.endsWith("/") ? httpsBase.slice(0, -1) : httpsBase;
+const cleanSlug = slug?.startsWith("/") ? slug.slice(1) : slug;
+const postUrl = `${cleanBase}/${cleanSlug}`;
 ---
 
 {/* 👑 PREMIUM LARGE SOCIAL SHARE LIST: 
@@ -21,7 +34,7 @@ const { title, description, slug, className } = Astro.props;
   <li class="inline-block">
     <a
       aria-label="facebook share button"
-      href={`https://facebook.com/sharer/sharer.php?u=${base_url}/${slug}`}
+      href={`https://facebook.com/sharer/sharer.php?u=${postUrl}`}
       target="_blank"
       rel="noreferrer noopener nofollow"
       /* 🎯 UI HIGHLIGHT FIX: බොත්තම් h-11 w-11 (මොබයිල්) සහ sm:h-12 sm:w-12 (ඩෙස්ක්ටොප්) දක්වා විශාල කර, 
@@ -36,7 +49,7 @@ const { title, description, slug, className } = Astro.props;
   <li class="inline-block">
     <a
       aria-label="twitter share button"
-      href={`https://twitter.com/intent/tweet/?text=${encodeURIComponent(title)}&url=${base_url}/${slug}`}
+      href={`https://twitter.com/intent/tweet/?text=${encodeURIComponent(title)}&url=${postUrl}`}
       target="_blank"
       rel="noreferrer noopener nofollow"
       class="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-white/5 border border-white/10 text-[#F8F8FF] transition duration-300 hover:bg-[#F8F8FF] hover:text-[#010203] hover:border-white text-xl sm:text-2xl"
@@ -49,7 +62,7 @@ const { title, description, slug, className } = Astro.props;
   <li class="inline-block">
     <a
       aria-label="whatsapp share button"
-      href={`https://api.whatsapp.com/send?text=${encodeURIComponent(title)}%20-%20${base_url}/${slug}`}
+      href={`https://api.whatsapp.com/send?text=${encodeURIComponent(title)}%20-%20${postUrl}`}
       target="_blank"
       rel="noreferrer noopener nofollow"
       class="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-white/5 border border-white/10 text-[#25D366] transition duration-300 hover:bg-[#25D366] hover:text-white hover:border-[#25D366] hover:shadow-[0_0_15px_rgba(37,211,102,0.6)] text-xl sm:text-2xl"
@@ -62,7 +75,7 @@ const { title, description, slug, className } = Astro.props;
   <li class="inline-block">
     <a
       aria-label="telegram share button"
-      href={`https://t.me/share/url?url=${base_url}/${slug}&text=${encodeURIComponent(title)}`}
+      href={`https://t.me/share/url?url=${postUrl}&text=${encodeURIComponent(title)}`}
       target="_blank"
       rel="noreferrer noopener nofollow"
       class="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-white/5 border border-white/10 text-[#26A5E4] transition duration-300 hover:bg-[#26A5E4] hover:text-white hover:border-[#26A5E4] hover:shadow-[0_0_15px_rgba(38,165,228,0.6)] text-xl sm:text-2xl"
@@ -75,7 +88,7 @@ const { title, description, slug, className } = Astro.props;
   <li class="inline-block">
     <a
       aria-label="linkedin share button"
-      href={`https://www.linkedin.com/shareArticle?mini=true&url=${base_url}/${slug}&title=${encodeURIComponent(title)}&summary=${encodeURIComponent(description)}&source=${base_url}`}
+      href={`https://www.linkedin.com/shareArticle?mini=true&url=${postUrl}&title=${encodeURIComponent(title)}&summary=${encodeURIComponent(description)}&source=${cleanBase}`}
       target="_blank"
       rel="noreferrer noopener nofollow"
       class="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-white/5 border border-white/10 text-[#0077B5] transition duration-300 hover:bg-[#0077B5] hover:text-white hover:border-[#0077B5] hover:shadow-[0_0_15px_rgba(0,119,181,0.6)] text-xl sm:text-2xl"
@@ -88,7 +101,7 @@ const { title, description, slug, className } = Astro.props;
   <li class="inline-block">
     <a
       aria-label="pinterest share button"
-      href={`https://pinterest.com/pin/create/button/?url=${base_url}/${slug}&media=&description=${encodeURIComponent(description)}`}
+      href={`https://pinterest.com/pin/create/button/?url=${postUrl}&media=&description=${encodeURIComponent(description)}`}
       target="_blank"
       rel="noreferrer noopener nofollow"
       class="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-white/5 border border-white/10 text-[#BD081C] transition duration-300 hover:bg-[#BD081C] hover:text-white hover:border-[#BD081C] hover:shadow-[0_0_15px_rgba(189,8,28,0.6)] text-xl sm:text-2xl"
