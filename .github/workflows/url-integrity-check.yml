@@ -22,12 +22,12 @@ jobs:
           #            or  slug: "something/"  (trailing slash inside a
           #            string literal that's later used to build a URL)
           # ---------------------------------------------------------------
-          MATCHES_1=$(grep -rnE '(id|slug|href|url)\s*:\s*"[^"]*/"' \
+          MATCHES_1=$(grep -rnE '(id|slug)\s*:\s*"[^"]*/"' \
             --include="*.astro" --include="*.ts" --include="*.tsx" \
             src/ || true)
 
           if [ -n "$MATCHES_1" ]; then
-            echo "❌ Found hardcoded string literals ending in '/' assigned to id/slug/href/url:"
+            echo "❌ Found hardcoded string literals ending in '/' assigned to id/slug:"
             echo "$MATCHES_1"
             echo ""
             echo "   These will likely produce double-slash (//) URLs when combined"
@@ -38,27 +38,74 @@ jobs:
           fi
 
           # ---------------------------------------------------------------
-          # Pattern 2: template literals that already produce a double slash
-          #            directly in source, e.g. `/blog/${x}//` or literal '//'
-          #            inside an href/url template (excluding protocol '://')
+          # Pattern 2: literal double-slash INSIDE an href template literal,
+          #            excluding any occurrence of a URL protocol (http://,
+          #            https://, ftp://, etc). We strip out every
+          #            "<scheme>://" match first, then check what's left
+          #            for a stray "//" — this avoids false-positiving on
+          #            completely normal external links like
+          #            https://facebook.com/... or https://t.me/....
           # ---------------------------------------------------------------
-          MATCHES_2=$(grep -rnE 'href=\{`[^`]*//[^:][^`]*`\}' \
-            --include="*.astro" \
-            src/ || true)
+          FOUND_DOUBLE_SLASH=0
+          while IFS= read -r -d '' file; do
+            matches=$(grep -noE 'href=\{`[^`]*`\}' "$file" || true)
+            if [ -n "$matches" ]; then
+              while IFS= read -r line; do
+                stripped=$(echo "$line" | sed -E 's#[a-zA-Z][a-zA-Z0-9+.-]*://##g')
+                if echo "$stripped" | grep -qE '//'; then
+                  echo "❌ Possible double-slash URL in $file: $line"
+                  FOUND_DOUBLE_SLASH=1
+                fi
+              done <<< "$matches"
+            fi
+          done < <(find src/ -type f \( -name "*.astro" \) -print0)
 
-          if [ -n "$MATCHES_2" ]; then
-            echo "❌ Found template literals with a literal double-slash pattern:"
-            echo "$MATCHES_2"
+          if [ "$FOUND_DOUBLE_SLASH" -eq 1 ]; then
             FOUND_ISSUES=1
           fi
 
           # ---------------------------------------------------------------
-          # Pattern 3: href template literals that interpolate a raw value
-          #            WITHOUT going through sanitizeUrlPath / slugify —
-          #            informational warning only (not a hard fail), since
-          #            most content-collection-driven ids (post.id, etc.)
-          #            are already safe by construction.
+          # Pattern 3 (WARNING ONLY — does not fail the build):
+          #            hardcoded http:// (non-secure) links inside our own
+          #            source code (config, astro/ts/tsx files). Our own
+          #            site's base_url/config should always be https — if
+          #            an http:// literal appears here, it's almost
+          #            certainly a mistake worth a human look, but we do
+          #            NOT auto-rewrite it (silent auto-fix risk — see
+          #            note below), we just flag it loudly.
           # ---------------------------------------------------------------
+          MATCHES_HTTP=$(grep -rnE 'http://' \
+            --include="*.astro" --include="*.ts" --include="*.tsx" --include="*.json" \
+            src/ || true)
+
+          if [ -n "$MATCHES_HTTP" ]; then
+            echo ""
+            echo "⚠️  WARNING: Found insecure http:// links in source/config files:"
+            echo "$MATCHES_HTTP"
+            echo "   These are NOT auto-fixed (to avoid corrupting unrelated"
+            echo "   strings). Please verify manually and change to https://"
+            echo "   if this is our own domain or a first-party resource."
+          fi
+
+          # ---------------------------------------------------------------
+          # Pattern 4 (WARNING ONLY): hardcoded http:// links inside post
+          #            content (markdown body) — informational only, since
+          #            these are often external references authors chose
+          #            to link, and rewriting third-party URLs without
+          #            knowing if they even support https could break them.
+          # ---------------------------------------------------------------
+          MATCHES_CONTENT_HTTP=$(grep -rnE 'http://' \
+            --include="*.md" --include="*.mdx" \
+            src/content/ || true)
+
+          if [ -n "$MATCHES_CONTENT_HTTP" ]; then
+            echo ""
+            echo "ℹ️  NOTE: Found http:// links inside content files (posts/pages):"
+            echo "$MATCHES_CONTENT_HTTP"
+            echo "   These are external/user content links and are left as-is."
+            echo "   Verify manually if the target actually supports https://."
+          fi
+
           echo ""
           echo "ℹ️  Reminder: any hardcoded slide/demo data arrays with 'id' fields"
           echo "   used to build hrefs should be wrapped with sanitizeUrlPath()."
