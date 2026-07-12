@@ -7,6 +7,32 @@ export const slugify = (content: string) => {
   return slug(content);
 };
 
+// 1.1 ✅ NEW: sanitizeUrlPath — URL path segment එකක් (post id, slug, category
+//     name ආදිය) href/id ලෙස පාවිච්චි කරන්න කලින් "safe" කිරීම සඳහා.
+//     මෙය leading/trailing slashes, ඉරට්ටේ slashes (//), සහ අනවශ්‍ය
+//     whitespace ඉවත් කරයි. FeaturedSlider.astro වගේ තැන්වල hardcoded
+//     "id" values වලට trailing slash එකක් accidentally එකතු වුනොත්
+//     (`"some-post/"`), href={`/blog/${slide.id}/`} කරනකොට double-slash
+//     (`//`) හැදෙන එක මෙයින් සදහටම වළක්වයි — root-cause level fix එකක්.
+export const sanitizeUrlPath = (content: string): string => {
+  if (!content || typeof content !== "string") return "";
+  return content
+    .trim()
+    .replace(/^\/+/, "")   // ආරම්භයේ ඇති slash(es) ඉවත් කිරීම
+    .replace(/\/+$/, "")   // අවසානයේ ඇති slash(es) ඉවත් කිරීම
+    .replace(/\/{2,}/g, "/"); // මැදින් ඇති ඉරට්ටේ slashes එකකට හැරවීම
+};
+
+// 1.2 ✅ NEW: buildUrl — base path එකකට segment එකක් "safe" විදිහට
+//     ඈඳගැනීම සඳහා. හැම තැනකම trailing-slash convention එකම (config.json
+//     trailing_slash: false → slash නැතුව) manual විදිහට enforce කරයි.
+//     උදා: buildUrl("/blog", "some-post/") -> "/blog/some-post"
+export const buildUrl = (base: string, segment: string): string => {
+  const cleanBase = base.replace(/\/+$/, "");
+  const cleanSegment = sanitizeUrlPath(segment);
+  return `${cleanBase}/${cleanSegment}`;
+};
+
 // 2. Markdownify (Markdown සිට HTML දක්වා ආරක්ෂිතව පරිවර්තනය)
 export const markdownify = (content: string, div?: boolean) => {
   if (!content || typeof content !== "string") return "";
