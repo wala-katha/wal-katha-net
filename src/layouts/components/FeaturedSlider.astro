@@ -1,27 +1,27 @@
 ---
-import { humanize } from "@/lib/utils/textConverter";
+import { humanize, sanitizeUrlPath } from "@/lib/utils/textConverter";
 
 const demoSlides = [
   {
-    id: "thaththa-duwa-wal-katha/",
+    id: "thaththa-duwa-wal-katha",
     title: "thaththa duwa wal katha - තාත්තයි දුවයි වල් කතා",
     image: "/images/slider/slide-1.webp",
     category: "Wal Katha"
   },
   {
-    id: "methsala-akka-wal-katha/",
+    id: "methsala-akka-wal-katha",
     title: "methsala akka wal katha - මෙත්සලා අක්කා වල් කතා",
     image: "/images/slider/slide-2.webp",
     category: "Wela Katha"
   },
   {
-    id: "nandage-duwa-wal-katha/",
+    id: "nandage-duwa-wal-katha",
     title: "Nandage duwa wal katha - නැන්දගේ දුව වල් කතා",
     image: "/images/slider/slide-3.webp",
     category: "wala katha"
   },
   {
-    id: "gedara-driver-wal-katha/",
+    id: "gedara-driver-wal-katha",
     title: "Gedara driver wal katha - ගෙදර ඩ්‍රයිවර් වල් කතා",
     image: "/images/slider/slide-4.webp",
     category: "True Story"
@@ -33,7 +33,7 @@ const demoSlides = [
   <div class="flex transition-transform duration-500 ease-in-out" id="slider-wrapper" style="width: 400%;">
     {demoSlides.map((slide, index) => (
       <div class="w-full flex-shrink-0 relative" style="width: 25%;">
-        <a href={`/blog/${slide.id}/`} class="block w-full h-full group" aria-label={`Read story: ${slide.title}`}>
+        <a href={`/blog/${sanitizeUrlPath(slide.id)}/`} class="block w-full h-full group" aria-label={`Read story: ${slide.title}`}>
           <div class="relative w-full aspect-[16/8] sm:aspect-[21/8] md:aspect-[24/8] bg-[#010203] overflow-hidden">
             <img
               src={slide.image}
