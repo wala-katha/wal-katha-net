@@ -1,0 +1,78 @@
+name: URL Integrity Check (Trailing/Double Slash Guard)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  scan-url-patterns:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for risky hardcoded URL/id patterns
+        run: |
+          echo "🔍 Scanning .astro / .ts / .tsx files for trailing-slash risk patterns..."
+          FOUND_ISSUES=0
+
+          # ---------------------------------------------------------------
+          # Pattern 1: hardcoded object properties like  id: "something/"
+          #            or  slug: "something/"  (trailing slash inside a
+          #            string literal that's later used to build a URL)
+          # ---------------------------------------------------------------
+          MATCHES_1=$(grep -rnE '(id|slug|href|url)\s*:\s*"[^"]*/"' \
+            --include="*.astro" --include="*.ts" --include="*.tsx" \
+            src/ || true)
+
+          if [ -n "$MATCHES_1" ]; then
+            echo "❌ Found hardcoded string literals ending in '/' assigned to id/slug/href/url:"
+            echo "$MATCHES_1"
+            echo ""
+            echo "   These will likely produce double-slash (//) URLs when combined"
+            echo "   with a template literal like \`/blog/\${slide.id}/\`."
+            echo "   Fix: remove the trailing slash from the literal, OR wrap the"
+            echo "   value with sanitizeUrlPath() from '@/lib/utils/textConverter'."
+            FOUND_ISSUES=1
+          fi
+
+          # ---------------------------------------------------------------
+          # Pattern 2: template literals that already produce a double slash
+          #            directly in source, e.g. `/blog/${x}//` or literal '//'
+          #            inside an href/url template (excluding protocol '://')
+          # ---------------------------------------------------------------
+          MATCHES_2=$(grep -rnE 'href=\{`[^`]*//[^:][^`]*`\}' \
+            --include="*.astro" \
+            src/ || true)
+
+          if [ -n "$MATCHES_2" ]; then
+            echo "❌ Found template literals with a literal double-slash pattern:"
+            echo "$MATCHES_2"
+            FOUND_ISSUES=1
+          fi
+
+          # ---------------------------------------------------------------
+          # Pattern 3: href template literals that interpolate a raw value
+          #            WITHOUT going through sanitizeUrlPath / slugify —
+          #            informational warning only (not a hard fail), since
+          #            most content-collection-driven ids (post.id, etc.)
+          #            are already safe by construction.
+          # ---------------------------------------------------------------
+          echo ""
+          echo "ℹ️  Reminder: any hardcoded slide/demo data arrays with 'id' fields"
+          echo "   used to build hrefs should be wrapped with sanitizeUrlPath()."
+
+          if [ "$FOUND_ISSUES" -eq 1 ]; then
+            echo ""
+            echo "🛑 URL Integrity Check FAILED — fix the issues above before merging."
+            exit 1
+          else
+            echo "✅ No trailing/double-slash risk patterns found."
+          fi
+
+      - name: Build project (final safety net)
+        run: |
+          corepack enable
+          yarn install --frozen-lockfile
+          yarn build
