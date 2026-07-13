@@ -22,7 +22,19 @@ const httpsBase = base_url.replace(/^http:\/\//i, "https://");
 // ends with "/" or slug starts with "/", this always produces exactly
 // one slash between them.
 const cleanBase = httpsBase.endsWith("/") ? httpsBase.slice(0, -1) : httpsBase;
-const cleanSlug = slug?.startsWith("/") ? slug.slice(1) : slug;
+let cleanSlug = slug?.startsWith("/") ? slug.slice(1) : slug;
+
+// ✅ ROOT-CAUSE FIX: PostSingle.astro passes slug={post.id}, which is the
+// raw content-collection ID (e.g. "thaththa-duwa-wal-katha") WITHOUT the
+// "/blog/" route prefix. Every blog post's real URL is "/blog/<id>", so
+// if the incoming slug doesn't already start with "blog/", we prepend it
+// here. This guarantees correct share URLs regardless of what the caller
+// passes, and avoids "blog/blog/xxx" duplication if a caller ever passes
+// the prefix explicitly.
+if (cleanSlug && !cleanSlug.startsWith("blog/")) {
+  cleanSlug = `blog/${cleanSlug}`;
+}
+
 const postUrl = `${cleanBase}/${cleanSlug}`;
 ---
 
