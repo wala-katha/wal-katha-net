@@ -3,11 +3,20 @@
    * Cloudflare Workers — Static Assets deployment
    * Deploy:  npm run deploy:cf-workers
    * Preview: npm run preview:cf-workers
+   *
+   * html_handling: "drop-trailing-slash" — Astro config එකේ
+   * trailingSlash: "never" (config.json trailing_slash: false) සමග
+   * 100% align කරන්න මෙය අත්‍යවශ්‍යයි. මෙය නැතිනම් Cloudflare default
+   * behavior එක "auto-trailing-slash" බවට පත්වී, "/authors" වගේ
+   * trailing-slash-නැති URL එකක් "/authors/" ට 308 redirect කරයි —
+   * ඒත් canonical tag එකේ තියෙන්නේ trailing slash නැති version එක නිසා
+   * "Canonical points to redirect" SEO error එක හට ගනී.
    */
-  "name": "walkatha",
+  "name": "walakatha",
   "compatibility_date": "2026-03-01",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "404-page"
+    "not_found_handling": "404-page",
+    "html_handling": "drop-trailing-slash"
   }
 }
