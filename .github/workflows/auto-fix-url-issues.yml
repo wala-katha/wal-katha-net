@@ -1,0 +1,196 @@
+name: Auto-Fix URL Issues (PR-Based)
+
+# මෙම workflow එක main branch එකට කෙලින්ම commit කරන්නේ නැත.
+# වෙනුවට: 1) ගැටලු scan කරනවා  2) අලුත් branch එකක fix කරනවා
+# 3) Pull Request එකක් විවෘත කරනවා — ඔබ review කරලා merge කරන තුරු
+# කිසිම වෙනසක් site එකට යන්නේ නැත.
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # සතියකට වරක් ස්වයංක්‍රීයව scan කරනවා (සඳුදා උදේ)
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  detect-and-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "wal-katha-autofix-bot"
+          git config user.email "autofix-bot@users.noreply.github.com"
+
+      - name: Create working branch
+        id: branch
+        run: |
+          BRANCH="autofix/url-issues-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          echo "branch_name=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Detect & fix uppercase content filenames
+        id: rename
+        run: |
+          echo "🔍 Scanning src/content/posts/ for uppercase filenames..."
+          CHANGED=0
+          RENAME_LOG="/tmp/rename-log.txt"
+          : > "$RENAME_LOG"
+
+          for file in src/content/posts/*.md src/content/posts/*.mdx; do
+            [ -e "$file" ] || continue
+
+            base=$(basename "$file")
+
+            # "-index.md" වගේ special/system files touch කරන්නේ නෑ
+            if [[ "$base" == -* ]]; then
+              continue
+            fi
+
+            lower=$(echo "$base" | tr '[:upper:]' '[:lower:]')
+
+            if [ "$base" != "$lower" ]; then
+              dir=$(dirname "$file")
+              old_path="$file"
+              new_path="$dir/$lower"
+
+              # Case-only rename git-safe කිරීමට intermediate temp name එකක් හරහා යනවා
+              # (macOS/Windows/some filesystems case-insensitive නිසා දෙපාරෙන් කරනවා)
+              tmp_path="$dir/__tmp_rename__$lower"
+              git mv "$old_path" "$tmp_path"
+              git mv "$tmp_path" "$new_path"
+
+              echo "RENAMED: $old_path -> $new_path" >> "$RENAME_LOG"
+              CHANGED=1
+            fi
+          done
+
+          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "---- Rename Summary ----"
+          cat "$RENAME_LOG" || echo "No renames needed."
+
+      - name: Fix trailing-slash href mismatches
+        id: hrefs
+        run: |
+          echo "🔍 Scanning known components for trailing-slash href mismatches..."
+          HREF_CHANGED=0
+          HREF_LOG="/tmp/href-log.txt"
+          : > "$HREF_LOG"
+
+          # trailing_slash config එක "false" (never) විදිහට තියෙන නිසා
+          # /blog/${x}/ -> /blog/${x} බවට හරවනවා. ("never" mode base_url
+          # සමග href={`/blog/${post.id}/`} pattern එකම targeted.)
+          TARGET_FILES=(
+            "src/layouts/components/Posts.astro"
+            "src/layouts/components/SimilarPosts.astro"
+            "src/layouts/components/FeaturedSlider.astro"
+          )
+
+          for f in "${TARGET_FILES[@]}"; do
+            [ -e "$f" ] || continue
+
+            # href={`/blog/${...}/`}  ->  href={`/blog/${...}`}
+            # (backtick, ${...} අන්තර්ගතය, පසුව trailing / සහ backtick)
+            if grep -qE 'href=\{`/blog/\$\{[^}]+\}/`\}' "$f"; then
+              sed -i -E 's#href=\{`/blog/\$\{([^}]+)\}/`\}#href={`/blog/\1`}#g' "$f"
+              echo "FIXED trailing-slash href in: $f" >> "$HREF_LOG"
+              HREF_CHANGED=1
+            fi
+          done
+
+          echo "changed=$HREF_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "---- Href Fix Summary ----"
+          cat "$HREF_LOG" || echo "No href fixes needed."
+
+      - name: Update internal references after rename
+        if: steps.rename.outputs.changed == '1'
+        run: |
+          echo "🔍 Updating any internal markdown/config references to renamed files..."
+          # rename-log එකෙන් old->new filename pairs කියවලා, content/config
+          # files ඇතුළේ ඕනෑම reference එකක් (image alt links, related-post
+          # manual links, etc.) update කරනවා. Image workflow එකේම pattern එක.
+          while IFS= read -r line; do
+            old=$(echo "$line" | sed -E 's/RENAMED: (.*) -> .*/\1/' | xargs basename)
+            new=$(echo "$line" | sed -E 's/.*-> (.*)/\1/' | xargs basename)
+            old_noext="${old%.*}"
+            new_noext="${new%.*}"
+
+            if [ "$old_noext" != "$new_noext" ]; then
+              grep -rlZ --include="*.md" --include="*.mdx" --include="*.astro" \
+                "$old_noext" src/ 2>/dev/null | \
+                xargs -0 -r sed -i "s/$old_noext/$new_noext/g"
+            fi
+          done < /tmp/rename-log.txt
+
+      - name: Commit changes
+        id: commit
+        run: |
+          git add -A
+          if git diff --staged --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "✅ No issues found — nothing to fix."
+          else
+            git commit -m "Auto-fix: lowercase content filenames + trailing-slash href mismatches"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push branch
+        if: steps.commit.outputs.has_changes == 'true'
+        run: git push origin "${{ steps.branch.outputs.branch_name }}"
+
+      - name: Open Pull Request
+        if: steps.commit.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const renameLog = require('fs').existsSync('/tmp/rename-log.txt')
+              ? require('fs').readFileSync('/tmp/rename-log.txt', 'utf8').trim()
+              : '';
+            const hrefLog = require('fs').existsSync('/tmp/href-log.txt')
+              ? require('fs').readFileSync('/tmp/href-log.txt', 'utf8').trim()
+              : '';
+
+            const body = [
+              '## 🤖 Auto-Detected URL Issues',
+              '',
+              '### ⚠️ Merge කරන්න කලින් මේවා check කරන්න:',
+              '',
+              '- [ ] මෙම PR එකෙන් content file(s) rename වෙනවා නම්, ඒවායේ URL slug එකත් වෙනස් වේ.',
+              '- [ ] **Facebook/WhatsApp/Telegram වලට කලින් share කරපු පරණ URL තිබේ නම්**, `_redirects` file එකකින් 301 redirect එකක් manual ලෙස එකතු කරන්න (මෙම PR එකෙන් ඒක auto-add වන්නේ නැත).',
+              '- [ ] `yarn build` local එකේ test කරලා confirm කරන්න.',
+              '',
+              '### 📁 Renamed files:',
+              '```',
+              renameLog || '(none)',
+              '```',
+              '',
+              '### 🔗 Fixed trailing-slash hrefs:',
+              '```',
+              hrefLog || '(none)',
+              '```',
+              '',
+              '_මෙම PR එක ස්වයංක්‍රීයව scan-and-propose කරන bot එකකින් සාදන ලදී. Direct commit කිසිවක් main branch එකට සිදු වී නැත._'
+            ].join('\n');
+
+            await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🤖 Auto-fix: URL case & trailing-slash issues',
+              head: '${{ steps.branch.outputs.branch_name }}',
+              base: 'main',
+              body: body,
+            });
+
+      - name: Build check (informational, does not block PR creation)
+        if: steps.commit.outputs.has_changes == 'true'
+        run: |
+          corepack enable
+          yarn install --frozen-lockfile
+          yarn build
+        continue-on-error: true
