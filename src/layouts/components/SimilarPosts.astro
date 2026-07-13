@@ -34,7 +34,7 @@ const { posts } = Astro.props;
           >
             {post.data.image && (
               <a
-                href={`/blog/${post.id}/`}
+                href={`/blog/post.id`}
                 class="rounded-lg block overflow-hidden group relative bg-[#161616] mx-auto w-full aspect-[3/4]"
               >
                 <Image
@@ -75,7 +75,7 @@ const { posts } = Astro.props;
             {/* POST TITLE */}
             <h3 class="mb-1 line-clamp-2 leading-tight text-center mx-auto w-full">
               <a
-                href={`/blog/${post.id}/`}
+                href={`/blog/post.id`}
                 class="block hover:text-emerald-400 transition duration-200 text-xs sm:text-base font-extrabold text-white text-center"
               >
                 {post.data.title}
