@@ -58,7 +58,7 @@ jobs:
                 fi
               done <<< "$matches"
             fi
-          done < <(find src/ -type f \( -name "*.astro" \) -print0)
+          done < <(find src/ -type f \( -name "*.astro" -o -name "*.ts" -o -name "*.tsx" \) -print0)
 
           if [ "$FOUND_DOUBLE_SLASH" -eq 1 ]; then
             FOUND_ISSUES=1
