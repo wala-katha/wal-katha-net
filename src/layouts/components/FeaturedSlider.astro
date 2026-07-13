@@ -33,7 +33,7 @@ const demoSlides = [
   <div class="flex transition-transform duration-500 ease-in-out" id="slider-wrapper" style="width: 400%;">
     {demoSlides.map((slide, index) => (
       <div class="w-full flex-shrink-0 relative" style="width: 25%;">
-        <a href={`/blog/sanitizeUrlPath(slide.id)`} class="block w-full h-full group" aria-label={`Read story: ${slide.title}`}>
+        <a href={`/blog/${sanitizeUrlPath(slide.id)}`} class="block w-full h-full group" aria-label={`Read story: ${slide.title}`}>
           <div class="relative w-full aspect-[16/8] sm:aspect-[21/8] md:aspect-[24/8] bg-[#010203] overflow-hidden">
             <img
               src={slide.image}
