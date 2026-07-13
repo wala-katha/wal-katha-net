@@ -7,9 +7,14 @@ name: Auto-Fix URL Issues (PR-Based)
 
 on:
   workflow_dispatch: {}
-  schedule:
-    # සතියකට වරක් ස්වයංක්‍රීයව scan කරනවා (සඳුදා උදේ)
-    - cron: "0 3 * * 1"
+  # ⚠️ schedule trigger එක disable කර ඇත — කලින් sed bug එකක් නිසා
+  # weekly auto-run එකෙන් Posts.astro/SimilarPosts.astro/FeaturedSlider.astro
+  # හි href={`/blog/${post.id}`} corrupt වී href={`/blog/post.id`} බවට
+  # හැරී site එකම broken වුණා. දැන් self-test step එකක් එකතු කර ඇති
+  # නමුත්, safety එකට schedule එක manual විදිහටම තබා ඇත. අවශ්‍ය නම්
+  # පහත comment එක ඉවත් කර නැවත schedule කරගත හැක.
+  # schedule:
+  #   - cron: "0 3 * * 1"
 
 permissions:
   contents: write
@@ -60,8 +65,6 @@ jobs:
               old_path="$file"
               new_path="$dir/$lower"
 
-              # Case-only rename git-safe කිරීමට intermediate temp name එකක් හරහා යනවා
-              # (macOS/Windows/some filesystems case-insensitive නිසා දෙපාරෙන් කරනවා)
               tmp_path="$dir/__tmp_rename__$lower"
               git mv "$old_path" "$tmp_path"
               git mv "$tmp_path" "$new_path"
@@ -83,9 +86,6 @@ jobs:
           HREF_LOG="/tmp/href-log.txt"
           : > "$HREF_LOG"
 
-          # trailing_slash config එක "false" (never) විදිහට තියෙන නිසා
-          # /blog/${x}/ -> /blog/${x} බවට හරවනවා. ("never" mode base_url
-          # සමග href={`/blog/${post.id}/`} pattern එකම targeted.)
           TARGET_FILES=(
             "src/layouts/components/Posts.astro"
             "src/layouts/components/SimilarPosts.astro"
@@ -95,10 +95,30 @@ jobs:
           for f in "${TARGET_FILES[@]}"; do
             [ -e "$f" ] || continue
 
-            # href={`/blog/${...}/`}  ->  href={`/blog/${...}`}
-            # (backtick, ${...} අන්තර්ගතය, පසුව trailing / සහ backtick)
+            # ✅ FIXED: replacement string එකේ ${ } දෙකම literal ලෙස
+            # නැවත insert කරනවා. පරණ bug එකේදී replacement string එකේ
+            # backtick ඇතුළත ${ } අකුරු අහම්බෙන් මැකිලා ගියා
+            # (href={`/blog/post.id`} වගේ broken output එකක් හැදුනා).
+            # දැන් \$\{ සහ \} explicit escape කර ඇති නිසා, replacement
+            # string එකේ literal ${...} නිවැරදිව නැවත ලියැවේ.
             if grep -qE 'href=\{`/blog/\$\{[^}]+\}/`\}' "$f"; then
-              sed -i -E 's#href=\{`/blog/\$\{([^}]+)\}/`\}#href={`/blog/\1`}#g' "$f"
+              cp "$f" "$f.bak"
+              sed -i -E 's#href=\{`/blog/\$\{([^}]+)\}/`\}#href={`/blog/\$\{\1\}`}#g' "$f"
+
+              # 🛡️ SELF-TEST GUARD: replace කරාට පස්සේ file එකේ තවමත්
+              # literal "${" පේනවද කියලා verify කරනවා. නැත්නම් (පරණ
+              # bug එකේ වගේ) මේ step එකම fail කරලා, ගොනුව backup එකෙන්
+              # restore කරලා, safety එකට commit/push නවතිනවා.
+              if ! grep -qE 'href=\{`/blog/\$\{[a-zA-Z0-9_.]+\}`\}' "$f"; then
+                echo "❌ SELF-TEST FAILED: sed replacement did not produce valid \${...} syntax in $f"
+                echo "   Restoring original file to prevent corruption."
+                cp "$f.bak" "$f"
+                rm "$f.bak"
+                echo "SELF-TEST FAILED — no changes applied to: $f" >> "$HREF_LOG"
+                continue
+              fi
+
+              rm "$f.bak"
               echo "FIXED trailing-slash href in: $f" >> "$HREF_LOG"
               HREF_CHANGED=1
             fi
@@ -112,9 +132,6 @@ jobs:
         if: steps.rename.outputs.changed == '1'
         run: |
           echo "🔍 Updating any internal markdown/config references to renamed files..."
-          # rename-log එකෙන් old->new filename pairs කියවලා, content/config
-          # files ඇතුළේ ඕනෑම reference එකක් (image alt links, related-post
-          # manual links, etc.) update කරනවා. Image workflow එකේම pattern එක.
           while IFS= read -r line; do
             old=$(echo "$line" | sed -E 's/RENAMED: (.*) -> .*/\1/' | xargs basename)
             new=$(echo "$line" | sed -E 's/.*-> (.*)/\1/' | xargs basename)
@@ -127,6 +144,37 @@ jobs:
                 xargs -0 -r sed -i "s/$old_noext/$new_noext/g"
             fi
           done < /tmp/rename-log.txt
+
+      - name: Verify build integrity before commit
+        run: |
+          # 🛡️ ADDITIONAL SAFETY NET: href fix කරපු targeted files 3ම
+          # scan කරලා, "post.id" හෝ "slide.id" කියන broken-literal
+          # pattern එකක් (${ } නැතිව) කොහෙන්හරි ඉතුරු වෙලා තියෙනවද
+          # කියලා අවසාන වරටත් check කරනවා. මොනවහරි හම්බුනොත්
+          # workflow එකම fail කරලා, කිසිම PR එකක් create වෙන්නේ නෑ.
+          BROKEN_FOUND=0
+          TARGET_FILES=(
+            "src/layouts/components/Posts.astro"
+            "src/layouts/components/SimilarPosts.astro"
+            "src/layouts/components/FeaturedSlider.astro"
+          )
+          for f in "${TARGET_FILES[@]}"; do
+            [ -e "$f" ] || continue
+            if grep -qE 'href=\{`/blog/(post|slide)\.id`\}' "$f"; then
+              echo "❌ CRITICAL: Found broken literal href in $f (missing \${...})"
+              BROKEN_FOUND=1
+            fi
+            if grep -qE 'href=\{`/blog/sanitizeUrlPath\([a-zA-Z0-9_.]+\)`\}' "$f"; then
+              echo "❌ CRITICAL: Found broken literal function-call href in $f (missing \${...})"
+              BROKEN_FOUND=1
+            fi
+          done
+
+          if [ "$BROKEN_FOUND" -eq 1 ]; then
+            echo "🛑 Aborting workflow — broken href pattern detected. No commit will be made."
+            exit 1
+          fi
+          echo "✅ No broken href literals found."
 
       - name: Commit changes
         id: commit
@@ -164,6 +212,7 @@ jobs:
               '- [ ] මෙම PR එකෙන් content file(s) rename වෙනවා නම්, ඒවායේ URL slug එකත් වෙනස් වේ.',
               '- [ ] **Facebook/WhatsApp/Telegram වලට කලින් share කරපු පරණ URL තිබේ නම්**, `_redirects` file එකකින් 301 redirect එකක් manual ලෙස එකතු කරන්න (මෙම PR එකෙන් ඒක auto-add වන්නේ නැත).',
               '- [ ] `yarn build` local එකේ test කරලා confirm කරන්න.',
+              '- [ ] **Self-test guard passed** — මෙම PR එකේ href fixes ස්වයංක්‍රීයව verify කර ඇත, `${...}` syntax නිවැරදිව ඇත.',
               '',
               '### 📁 Renamed files:',
               '```',
