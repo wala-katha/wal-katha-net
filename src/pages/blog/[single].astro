@@ -29,7 +29,17 @@ const parsedDate = date ? new Date(date) : null;
 const safeDateISO = parsedDate && isValid(parsedDate) ? parsedDate.toISOString() : new Date().toISOString();
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
-const canonicalUrl = `${base_url}/blog/${post.id}`;
+
+// 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY:
+// Base.astro auto-appends a trailing slash to <link rel="canonical">
+// (Cloudflare Pages serves directory-style URLs with a trailing slash
+// by default). This local canonicalUrl is also embedded directly inside
+// the JSON-LD Article schema's mainEntityOfPage.@id below, bypassing
+// Base.astro's trailing-slash logic, so we add the slash here too to
+// keep both in sync. NOTE: PostSingle.astro's own postUrl (used for
+// og:url / social share links) is built independently from
+// Astro.site + post.id and is NOT affected by this change.
+const canonicalUrl = `${base_url}/blog/${post.id}/`;
 
 const authorName = Array.isArray(authors) && authors.length > 0 ? authors[0] : config?.metadata?.meta_author || "Admin";
 const authorSlug = globalSlugify(authorName || "");
@@ -45,7 +55,7 @@ const articleSchema = {
   "author": {
     "@type": "Person",
     "name": authorName,
-    "url": authorSlug ? `${base_url}/authors/${authorSlug}` : undefined
+    "url": authorSlug ? `${base_url}/authors/${authorSlug}/` : undefined
   },
   "publisher": {
     "@type": "Organization",
