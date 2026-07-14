@@ -46,9 +46,35 @@ const cleanBaseUrl = config.site.base_url.endsWith("/")
   ? config.site.base_url.slice(0, -1)
   : config.site.base_url;
 
-const currentCanonical = canonical
-  ? canonical
-  : `${cleanBaseUrl}${Astro.url.pathname}`;
+// 🎯 CLOUDFLARE PAGES TRAILING-SLASH FIX:
+// Cloudflare Pages (Git-integrated deployment, not native Workers Static
+// Assets) ignores wrangler.jsonc's html_handling setting completely and
+// enforces its own default: any no-trailing-slash directory-style URL
+// (e.g. "/authors") is 308-redirected to the trailing-slash version
+// ("/authors/"). This is a Cloudflare Pages platform-level default that
+// cannot be overridden via _redirects for this direction.
+//
+// Rather than fight the platform, we align the canonical tag itself with
+// Cloudflare's actual serving behavior: every canonical URL now ends in
+// a trailing slash (except file-like paths that contain a dot, e.g.
+// sitemap.xml, robots.txt — which should never get a trailing slash).
+// This guarantees the canonical URL always resolves with 0 redirects,
+// which is what Ahrefs/Google check for.
+function ensureTrailingSlash(url: string): string {
+  // Don't touch URLs that already end in "/"
+  if (url.endsWith("/")) return url;
+
+  // Don't touch file-like URLs (has a dot in the last path segment,
+  // e.g. /sitemap-index.xml, /robots.txt, /favicon.ico)
+  const lastSegment = url.split("/").pop() || "";
+  if (lastSegment.includes(".")) return url;
+
+  return `${url}/`;
+}
+
+const currentCanonical = ensureTrailingSlash(
+  canonical ? canonical : `${cleanBaseUrl}${Astro.url.pathname}`
+);
 
 const finalImageUrl = image
   ? image.startsWith("http")
