@@ -50,7 +50,14 @@ const currentPosts = sortPostsByDate.filter((post) => {
 
 // 📈 SEO ප්‍රශස්තකරණය: Canonical URL එක Trailing Slashes බග් එක නැතිව පිරිසිදුව සැකසීම
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
-const canonicalUrl = `${base_url}/authors/${author.id}`;
+
+// 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY:
+// Base.astro auto-appends a trailing slash to <link rel="canonical">
+// (Cloudflare Pages serves directory-style URLs with a trailing slash
+// by default). This local canonicalUrl is also embedded directly inside
+// the JSON-LD ProfilePage schema below, bypassing Base.astro's
+// trailing-slash logic, so we add the slash here too to keep both in sync.
+const canonicalUrl = `${base_url}/authors/${author.id}/`;
 
 // 🚀 GOOGLE SEO RICH SNIPPETS: Schema JSON-LD දත්ත ව්‍යුහය
 const schemaMarkup = {
