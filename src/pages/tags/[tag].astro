@@ -35,7 +35,15 @@ const metaTitle = `${title} - ටැගය | ${config?.site?.title || "Wala Kath
 const metaDescription = `${title} ටැගය (Tag) යටතේ ඇති සියලුම බ්ලොග් ලිපි සහ නවතම රසවත් කතා මෙතැනින් එකම තැනකින් කියවන්න.`;
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
-const canonicalUrl = `${base_url}/tags/${tag}`;
+
+// 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY:
+// Base.astro auto-appends a trailing slash to <link rel="canonical">
+// (Cloudflare Pages serves directory-style URLs with a trailing slash
+// by default). This local canonicalUrl is also embedded directly inside
+// the JSON-LD BreadcrumbList below, bypassing Base.astro's trailing-slash
+// logic, so we add the slash here too to keep both in sync.
+const canonicalUrl = `${base_url}/tags/${tag}/`;
+const tagsIndexUrl = `${base_url}/tags/`;
 
 // 🚀 GOOGLE SEO BREADCRUMB SCHEMA: සෙවුම් යන්ත්‍ර වලට ටැග් ව්‍යුහය වටහා දීමට (JSON-LD)
 const breadcrumbSchema = {
@@ -52,7 +60,7 @@ const breadcrumbSchema = {
       "@type": "ListItem",
       "position": 2,
       "name": "Tags",
-      "item": `${base_url}/tags` // යම් හෙයකින් /tags පිටුවක් තිබේ නම් ඒ සඳහා ලින්ක් එක
+      "item": tagsIndexUrl // යම් හෙයකින් /tags පිටුවක් තිබේ නම් ඒ සඳහා ලින්ක් එක
     },
     {
       "@type": "ListItem",
