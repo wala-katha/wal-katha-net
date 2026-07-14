@@ -15,7 +15,14 @@ const metaTitle = `සියලුම ප්‍රවර්ග - Categories | ${
 const metaDescription = "Wala Katha වෙබ් අඩවියේ ඇති සියලුම බ්ලොග් ලිපි සහ කතා කාණ්ඩ (Categories) අනුව මෙතැනින් පහසුවෙන් තෝරා ගන්න.";
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
-const canonicalUrl = `${base_url}/categories`;
+
+// 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY:
+// Base.astro auto-appends a trailing slash to <link rel="canonical">
+// (Cloudflare Pages serves directory-style URLs with a trailing slash
+// by default). This local canonicalUrl is also embedded directly inside
+// the JSON-LD BreadcrumbList below, bypassing Base.astro's trailing-slash
+// logic, so we add the slash here too to keep both in sync.
+const canonicalUrl = `${base_url}/categories/`;
 
 // 🚀 GOOGLE SEO BREADCRUMB SCHEMA (JSON-LD)
 const breadcrumbSchema = {
