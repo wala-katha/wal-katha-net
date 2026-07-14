@@ -1,0 +1,22 @@
+# ==========================================================
+# Cloudflare Pages Trailing-Slash Normalization
+# ==========================================================
+# Astro config: trailingSlash: "never" (config.json: trailing_slash: false)
+# Cloudflare Pages ignores wrangler.jsonc's html_handling setting entirely
+# (that config only applies to true Workers-with-Static-Assets deployments,
+# not Git-integrated Pages projects). This file is the Pages-native way to
+# force any accidental trailing-slash URL back to the canonical no-slash
+# version with a permanent 301, fixing "Canonical points to redirect" for
+# every dynamic route: /authors/, /tags/:tag/, /categories/:cat/, /blog/:slug/,
+# /page/:num/, /authors/page/:num/, and any other collection page.
+# ==========================================================
+
+/authors/           /authors                          301
+/authors/:slug/      /authors/:slug                     301
+/authors/page/:num/  /authors/page/:num                 301
+/categories/         /categories                        301
+/categories/:cat/    /categories/:cat                   301
+/tags/                /tags                              301
+/tags/:tag/           /tags/:tag                         301
+/blog/:slug/          /blog/:slug                        301
+/page/:num/           /page/:num    
