@@ -17,7 +17,16 @@ const searchList = posts.map((item) => ({
 
 // SEO 2026 — canonical URL & logo
 const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
-const canonicalUrl = `${base_url}/search`;
+
+// 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY:
+// Base.astro auto-appends a trailing slash to <link rel="canonical">
+// (Cloudflare Pages serves directory-style URLs with a trailing slash
+// by default). This local canonicalUrl is also embedded directly inside
+// the hreflang tags and the JSON-LD SearchAction/SearchResultsPage
+// schema below, bypassing Base.astro's trailing-slash logic, so we add
+// the slash here too to keep everything in sync (canonical, hreflang,
+// and structured data all resolve with 0 redirects).
+const canonicalUrl = `${base_url}/search/`;
 const siteLogo  = `${base_url}/images/logo.png`;
 const siteTitle = config?.site?.title || "WalaKatha";
 
@@ -42,7 +51,7 @@ const searchPageSchema = {
     },
     {
       "@type": "SearchResultsPage",
-      "@id": `${canonicalUrl}/#searchpage`,
+      "@id": `${canonicalUrl}#searchpage`,
       "url": canonicalUrl,
       "name": `කතා සෙවීම | Search Sinhala Wal Katha - ${siteTitle}`,
       "description": "ඔබට අවශ්‍ය ඕනෑම සිංහල වල් කතාවක් හෝ වැල කතාවක් නම හෝ අකුරු මඟින් පහසුවෙන් සොයා ගන්න.",
