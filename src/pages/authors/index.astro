@@ -22,7 +22,15 @@ const metaTitle = `Our Authors - අපේ ලේඛකයින් | ${config?.
 const metaDescription = "Wala Katha වෙබ් අඩවියේ ලිපි සහ නවතම රසවත් කතා ලියන සියලුම දක්ෂ කතෘවරුන් සහ ලේඛකයින් මෙතැනින් එකම තැනකින් සොයා ගන්න.";
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
-const canonicalUrl = `${base_url}/authors`;
+
+// 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY:
+// Base.astro auto-appends a trailing slash to the <link rel="canonical">
+// tag (Cloudflare Pages serves directory-style URLs with a trailing
+// slash by default). This local canonicalUrl is *also* embedded directly
+// inside the JSON-LD BreadcrumbList below, bypassing Base.astro's
+// trailing-slash logic. We add the slash here too so the canonical tag
+// and the structured-data URL always match exactly.
+const canonicalUrl = `${base_url}/authors/`;
 
 // ඊළඟ පිටුව තීරණය කිරීම (Google Bot Fix)
 const nextUrl = totalPages > 1 ? `${base_url}/authors/page/2` : null;
