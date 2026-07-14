@@ -7,7 +7,11 @@ layout: "Base"
 draft: false
 ---
 
+
+
 ![Copyright & Credit Policy](/images/Copyright%20%26%20Credit%20Policy.png)
+
+
 
 <div style="text-align: center; font-style: italic; color: #01AD9F; margin-top: 15px; margin-bottom: 25px; font-weight: 500;">
   ~ බුද්ධිමය ශ්‍රමයට සහ නිර්මාණශීලීත්වයට සැමවිටම ගරු කරන්නෙමු ~
@@ -38,7 +42,7 @@ draft: false
 
 ඔබ අපගේ වෙබ් අඩවියේ පළ වූ කිසියම් කතාවක හෝ ලිපියක මුල් සහ නීත්‍යානුකූල ਰචකයා වන්නේ නම්, එම අන්තර්ගතය වෙබ් අඩවියෙන් සම්පූර්ණයෙන්ම ඉවත් කිරීමට (Take Down) හෝ එහි ඔබගේ නම (Credit) නිවැරදිව ප්‍රදර්ශනය කිරීමට අවශ්‍ය නම්, කරුණාකර පහත සඳහන් නිල මාධ්‍ය ඔස්සේ අපගේ පරිපාලන කණ්ඩායම සම්බන්ධ කරගන්න:
 
-* **📧 නිල ඊමේල් ලිපිනය:** <a href="mailto:walakatha.net&#64;gmail.com">walakatha.net&#64;gmail.com</a>
+* **📧 නිල ඊමේල් ලිපිනය:** walakatha.net@gmail.com
 * **📞 දුරකථන සහාය:** Coming Soon (ළඟදීම ලබාදේ)
 * **🌐 නිල සම්බන්ධතා පිටුව:** [Contact Us පිටුවට මෙතනින් යන්න](https://walkatha.pages.dev/contact/)
 
@@ -52,7 +56,7 @@ draft: false
     <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
   </summary>
   <div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
-    කිසිදු කලබලයක් හෝ අපහසුතාවයක් ඇති කරගත යුතු නැත. කරුණාකර <strong style="color: #01AD9F;">walakatha.net&#64;gmail.com</strong> යන අපගේ නිල ඊමේල් ලිපිනයට අදාළ කතාවේ සබැඳිය (URL) සහ ඔබ එහි මුල් රචකයා බව සනාථ කළ හැකි කෙටි සාක්ෂි අප වෙත එවන්න. ඔබගේ අයිතිය තහවුරු වූ විගස අප ක්‍රියාත්මක වන්නෙමු.
+    කිසිදු කලබලයක් හෝ අපහසුතාවයක් ඇති කරගත යුතු නැත. කරුණාකර <strong style="color: #01AD9F;">walakatha.net@gmail.com</strong> යන අපගේ නිල ඊමේල් ලිපිනයට අදාළ කතාවේ සබැඳිය (URL) සහ ඔබ එහි මුල් රචකයා බව සනාථ කළ හැකි කෙටි සාක්ෂි අප වෙත එවන්න. ඔබගේ අයිතිය තහවුරු වූ විගස අප ක්‍රියාත්මක වන්නෙමු.
   </div>
 </details>
 
