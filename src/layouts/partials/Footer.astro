@@ -3,6 +3,7 @@ import Social from "@/components/Social.astro";
 import config from "@/config/config.json";
 import menu from "@/config/menu.json";
 import social from "@/config/social.json";
+import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import { markdownify } from "@/lib/utils/textConverter";
 ---
 
@@ -23,7 +24,7 @@ import { markdownify } from "@/lib/utils/textConverter";
         menu.footer.map((menu) => (
           <li class="inline-block">
             <a
-              href={menu.url}
+              href={withTrailingSlash(menu.url)}
               class="px-4 py-2 text-sm font-semibold text-white/80 transition-all duration-300 hover:text-[#01AD9F] hover:drop-shadow-[0_0_8px_rgba(1,173,159,0.5)]"
             >
               {menu.name}
