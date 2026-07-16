@@ -4,6 +4,7 @@ import SimilarPosts from "@/layouts/components/SimilarPosts.astro";
 import { getSinglePage } from "@/lib/contentParser.astro";
 import dateFormat from "@/lib/utils/dateFormat";
 import { humanize, markdownify, slugify } from "@/lib/utils/textConverter";
+import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import { Image } from "astro:assets";
 import { render } from "astro:content";
 import { BiCalendarEdit, BiCategoryAlt } from "react-icons/bi";
@@ -93,7 +94,7 @@ const breadcrumbSchema = JSON.stringify({
               )
               .map((author) => (
                 <a
-                  href={`/authors/${slugify(author.id)}`}
+                  href={withTrailingSlash(`/authors/${slugify(author.id)}`)}
                   class="flex items-center hover:text-primary font-bold text-[#F8F8FF]"
                 >
                   {author.data.image && (
@@ -119,7 +120,7 @@ const breadcrumbSchema = JSON.stringify({
               {categories.map((category: string, i: number) => (
                 <li class="inline-block">
                   <a
-                    href={`/categories/${slugify(category)}`}
+                    href={withTrailingSlash(`/categories/${slugify(category)}`)}
                     class="mr-2 hover:text-primary font-bold bg-white/10 px-2 py-0.5 rounded text-[#F8F8FF]"
                   >
                     {humanize(category)}
@@ -155,7 +156,7 @@ const breadcrumbSchema = JSON.stringify({
             {tags.map((tag: string) => (
               <li class="inline-block">
                 <a
-                  href={`/tags/${slugify(tag)}`}
+                  href={withTrailingSlash(`/tags/${slugify(tag)}`)}
                   class="block rounded-lg bg-[#FFCC00] border border-[#FFCC00] px-4 py-2 font-black text-[#010203] text-sm hover:bg-[#E6B800] transition duration-300"
                 >
                   #{humanize(tag)}
