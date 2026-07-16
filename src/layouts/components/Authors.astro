@@ -1,5 +1,6 @@
 ---
 import { markdownify } from "@/lib/utils/textConverter";
+import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import { Image } from "astro:assets";
 import type { CollectionEntry } from "astro:content";
 import { BsArrowRightCircle } from "react-icons/bs";
@@ -41,7 +42,7 @@ const { authors } = Astro.props;
           {/* AUTHOR NAME: කළු පසුබිම මත උපරිමයෙන්ම පෙනීමට තද සුදු (#F8F8FF) සහ font-black (Extra Bold) කිරීම */}
           <h3 class="h5 mt-4 mb-2">
             <a
-              href={`/authors/${author.id}/`}
+              href={withTrailingSlash(`/authors/${author.id}`)}
               itemprop="url"
               class="block text-[#F8F8FF] hover:text-[#01AD9F] transition duration-200 font-black"
             >
@@ -60,7 +61,7 @@ const { authors } = Astro.props;
 
           {/* READ MORE BUTTON: සයිට් එකේ ප්‍රධාන වර්ණය වන #010203 ට වඩා කැපී පෙනෙන #01AD9F (Teal) පැහැයෙන් බොත්තම සකස් කිරීම */}
           <a
-            href={`/authors/${author.id}/`}
+            href={withTrailingSlash(`/authors/${author.id}`)}
             class="inline-flex items-center justify-center w-full px-4 py-2 text-xs font-black text-white bg-[#01AD9F] rounded-xl transition duration-300 hover:bg-opacity-90 gap-2 shadow-sm"
             aria-label={`Read more about ${author.data.title}`}
           >
