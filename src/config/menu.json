@@ -6,31 +6,31 @@
     },
     {
       "name": "Wala Katha",
-      "url": "/categories/wala-katha"
+      "url": "/categories/wala-katha/"
     },
     {
       "name": "Sinhala Novels",
-      "url": "/categories/sinhala-novels"
+      "url": "/categories/sinhala-novels/"
     },
     {
       "name": "Aluth Katha",
-      "url": "/categories/aluth-katha"
+      "url": "/categories/aluth-katha/"
     },
     {
       "name": "Amma Katha",
-      "url": "/categories/amma-katha"
+      "url": "/categories/amma-katha/"
     },
     {
       "name": "Aka Katha",
-      "url": "/categories/aka-katha"
+      "url": "/categories/aka-katha/"
     },
     {
       "name": "Paule Katha",
-      "url": "/categories/paule-katha"
+      "url": "/categories/paule-katha/"
     },
     {
       "name": "Keti Katha",
-      "url": "/categories/keti-katha"
+      "url": "/categories/keti-katha/"
     },
     {
       "name": "Pages",
@@ -39,19 +39,19 @@
       "children": [
         {
           "name": "About Us",
-          "url": "/about"
+          "url": "/about/"
         },
         {
           "name": "Authors",
-          "url": "/authors"
+          "url": "/authors/"
         },
         {
           "name": "Contact Us",
-          "url": "/contact"
+          "url": "/contact/"
         },
         {
           "name": "Privacy Policy",
-          "url": "/privacy-policy"
+          "url": "/privacy-policy/"
         }
       ]
     }
@@ -59,15 +59,15 @@
   "footer": [
     {
       "name": "About Us",
-      "url": "/about"
+      "url": "/about/"
     },
     {
       "name": "Contact Us",
-      "url": "/contact"
+      "url": "/contact/"
     },
     {
       "name": "Privacy Policy",
-      "url": "/privacy-policy"
+      "url": "/privacy-policy/"
     }
   ]
 }
