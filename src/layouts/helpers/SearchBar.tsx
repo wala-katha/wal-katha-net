@@ -1,5 +1,6 @@
 import dateFormat from "@/lib/utils/dateFormat";
 import { humanize, slugify } from "@/lib/utils/textConverter";
+import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import Fuse from "fuse.js";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BiCalendarEdit, BiCategoryAlt } from "react-icons/bi";
@@ -201,7 +202,7 @@ export default function SearchBar({ searchList }: Props) {
             <div>
               {item.data.image && (
                 <a
-                  href={`/${item.slug}`}
+                  href={withTrailingSlash(`/${item.slug}`)}
                   className="rounded-xl block overflow-hidden relative aspect-video w-full bg-white/5"
                 >
                   <img
@@ -252,7 +253,7 @@ export default function SearchBar({ searchList }: Props) {
                       .map((category: string, i: number, arr: string[]) => (
                         <a
                           key={i}
-                          href={`/categories/${slugify(category)}`}
+                          href={withTrailingSlash(`/categories/${slugify(category)}`)}
                           className="hover:text-[#01AD9F]"
                           style={{ transition: "color 0.2s" }}
                         >
@@ -266,7 +267,7 @@ export default function SearchBar({ searchList }: Props) {
 
               <h3 className="mb-2 text-lg sm:text-xl font-bold tracking-tight">
                 <a
-                  href={`/${item.slug}`}
+                  href={withTrailingSlash(`/${item.slug}`)}
                   className="block text-[#F8F8FF] hover:text-[#01AD9F] line-clamp-2 leading-snug"
                   style={{ transition: "color 0.3s" }}
                 >
