@@ -1,6 +1,7 @@
 ---
 import Logo from "@/components/Logo.astro";
 import menu from "@/config/menu.json";
+import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import { IoSearch } from "react-icons/io5";
 
 export interface ChildNavigationLink {
@@ -30,7 +31,7 @@ const { main }: { main: NavigationLink[] } = menu;
     <div class="flex items-center order-1 lg:order-3 ml-auto mr-4 lg:mr-0 lg:ml-0">
       <a
         class="inline-block cursor-pointer p-2.5 text-xl text-slate-300 transition-all duration-300 hover:text-emerald-400 hover:scale-110 rounded-xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.05]"
-        href="/search"
+        href="/search/"
         title="search"
         aria-label="search"
       >
@@ -96,7 +97,7 @@ const { main }: { main: NavigationLink[] } = menu;
                     {menu.children?.map((child) => (
                       <li class="py-1.5">
                         <a 
-                          href={child.url} 
+                          href={withTrailingSlash(child.url)} 
                           class="block px-4 py-2 text-sm text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/[0.04] rounded-lg transition duration-200 text-center w-full font-medium"
                         >
                           {child.name}
@@ -109,7 +110,7 @@ const { main }: { main: NavigationLink[] } = menu;
             ) : (
               <li class="nav-item flex justify-center w-full lg:w-auto">
                 <a 
-                  href={menu.url} 
+                  href={withTrailingSlash(menu.url)} 
                   class="nav-link block text-center w-full text-slate-300 hover:text-emerald-400 font-semibold py-2 px-4 transition duration-200"
                 >
                   {menu.name}
