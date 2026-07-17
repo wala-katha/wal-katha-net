@@ -72,6 +72,31 @@ function ensureSitemapTrailingSlash(url) {
   return `${url}/`;
 }
 
+// 🎯 SITEMAP ORPHAN-PAGE EXCLUSION FIX:
+// Two URLs are intentionally never linked from anywhere in the site's
+// internal navigation (Header, Footer, home page):
+//   - /elements/  — a theme demo/showcase page (noindex:true in frontmatter),
+//                   not real content, was never meant to be discoverable.
+//   - /page/1/    — the pagination component intentionally never generates
+//                   a link to this URL (page 1 always links to "/" instead,
+//                   see Pagination.astro), since it would be duplicate
+//                   content of the home page.
+// Both still showed up in sitemap-0.xml purely because @astrojs/sitemap
+// generates entries from every static route Astro builds, regardless of
+// whether any page actually links to it — which crawlers flag as
+// "orphan page" (found only via sitemap, zero internal href inlinks).
+// Excluding them here removes the contradiction (and, for /elements/,
+// the redundancy with its own noindex tag) without touching routing,
+// Pagination.astro, or Header/Footer link logic.
+const EXCLUDED_SITEMAP_PATHS = ["/elements", "/page/1"];
+
+function isExcludedFromSitemap(url) {
+  // Strip protocol + domain, compare only the path, and ignore a trailing
+  // slash so both "/elements" and "/elements/" match the same rule.
+  const path = url.replace(/^https?:\/\/[^/]+/, "").replace(/\/$/, "");
+  return EXCLUDED_SITEMAP_PATHS.includes(path);
+}
+
 export default defineConfig({
   // 🎯 100% Dynamic Base URL Fetching from config.json
   site: config.site.base_url ? config.site.base_url : "https://www.walakatha.net",
@@ -98,10 +123,15 @@ export default defineConfig({
     // 🎯 ADDED: serialize() hook — sitemap URLs වලට trailing slash එකතු කිරීම
     // (308 redirect chain එක වළක්වයි, core routing/trailingSlash setting එකට
     // කිසිම බලපෑමක් නැතිව)
+    // 🎯 ADDED: /elements/ සහ /page/1/ URLs sitemap output එකෙන්ම exclude
+    // කිරීම (orphan-page contradiction fix, routing logic එකට බලපෑමක් නැතිව)
     sitemap({
       changefreq: "weekly",
       priority: 0.7,
       serialize(item) {
+        if (isExcludedFromSitemap(item.url)) {
+          return undefined;
+        }
         item.url = ensureSitemapTrailingSlash(item.url);
         return item;
       },
