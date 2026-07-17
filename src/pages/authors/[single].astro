@@ -7,6 +7,7 @@ import { Image } from "astro:assets";
 import config from "@/config/config.json"; 
 import { sortByDate } from "@/lib/utils/sortFunctions";
 import { humanize, slugify } from "@/lib/utils/textConverter";
+import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import type { CollectionEntry } from "astro:content";
 import { BiCalendarEdit, BiCategoryAlt } from "react-icons/bi";
 import AuthorSingle from "@/partials/AuthorSingle.astro";
@@ -103,7 +104,7 @@ const schemaMarkup = {
                 {/* 100% Original Post Image Structure with 100% Fixes */}
                 {post?.data?.image && (
                   <a
-                    href={`/blog/${post.id}/`}
+                    href={withTrailingSlash(`/blog/${post.id}`)}
                     class="rounded-lg block hover:text-primary overflow-hidden group"
                   >
                     <Image
@@ -134,7 +135,7 @@ const schemaMarkup = {
                         {post.data.categories.map((category, i: number) => (
                           <li class="inline-block">
                             <a
-                              href={`/categories/${slugify(category || "")}`}
+                              href={withTrailingSlash(`/categories/${slugify(category || "")}`)}
                               class="mr-2 hover:text-primary font-medium"
                             >
                               {humanize(category || "")}
@@ -150,7 +151,7 @@ const schemaMarkup = {
                 {/* 100% Original Post Title Structure */}
                 <h3 class="h5">
                   <a
-                    href={`/blog/${post.id}/`}
+                    href={withTrailingSlash(`/blog/${post.id}`)}
                     class="block hover:text-primary transition duration-300"
                   >
                     {post?.data?.title || "Untitled Post"}
