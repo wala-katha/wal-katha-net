@@ -58,6 +58,14 @@
   ],
   "footer": [
     {
+      "name": "All Categories",
+      "url": "/categories/"
+    },
+    {
+      "name": "All Tags",
+      "url": "/tags/"
+    },
+    {
       "name": "About Us",
       "url": "/about/"
     },
