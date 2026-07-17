@@ -82,6 +82,7 @@ const pagesCollection = defineCollection({
     image: z.string().optional(),
     layout: z.string().optional(),
     draft: z.boolean().optional(),
+    noindex: z.boolean().optional(),
   }),
 });
 
