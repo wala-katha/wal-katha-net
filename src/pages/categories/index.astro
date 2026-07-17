@@ -2,6 +2,7 @@
 import Base from "@/layouts/Base.astro";
 import config from "@/config/config.json";
 import { getTaxonomyWithCount } from "@/lib/taxonomyParser.astro";
+import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import { BiCategoryAlt } from "react-icons/bi";
 
 // ⚡ ප්‍රවර්ග සමඟ ලිපි ගණන සහ පිරිසිදු නම් එකවර ලබා ගනී
@@ -74,7 +75,7 @@ const breadcrumbSchema = {
           safeCategories.map((category) => (
             <li class="inline-block">
               <a
-                href={`/categories/${category.slug}`}
+                href={withTrailingSlash(`/categories/${category.slug}`)}
                 class="rounded-xl bg-[#0d0d0d] border border-[#1a1a1a] px-4 py-2.5 text-slate-300 transition-all duration-300 hover:border-emerald-500/40 hover:bg-emerald-500/[0.04] hover:text-emerald-400 flex items-center group font-semibold text-sm md:text-base shadow-[0_2px_10px_rgba(0,0,0,0.3)] hover:-translate-y-0.5"
               >
                 <BiCategoryAlt className="mr-1.5 text-emerald-500/70 group-hover:text-emerald-400 transition-colors duration-300 h-5 w-5" />
