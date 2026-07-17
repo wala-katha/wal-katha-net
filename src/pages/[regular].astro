@@ -27,7 +27,7 @@ if (!page || !page.data) {
   return Astro.redirect("/404");
 }
 
-const { title, meta_title, description, image } = page.data;
+const { title, meta_title, description, image, noindex } = page.data;
 const { Content } = await render(page);
 
 // 📈 2. SEO ප්‍රශස්තකරණය: Canonical URL එක Trailing Slashes බග් එක නැතිව පිරිසිදුව සැකසීම
@@ -58,6 +58,7 @@ const webpageSchema = {
   description={description}
   image={image}
   canonical={canonicalUrl}
+  noindex={noindex}
 >
   {/* Google Structured Data / Rich Snippet එක ඇතුළත් කිරීම */}
   <script type="application/ld+json" set:html={JSON.stringify(webpageSchema)} />
