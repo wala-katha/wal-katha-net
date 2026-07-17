@@ -40,6 +40,38 @@ const fontsConfig = Object.entries(theme.fonts.font_family)
     };
   });
 
+// 🎯 SITEMAP TRAILING-SLASH FIX:
+// Cloudflare Pages (Git-integrated deployment) serves every directory-style
+// URL with a trailing slash and 308-redirects the no-trailing-slash version
+// to it (see wrangler.jsonc / Base.astro comments for full context — this
+// is a Cloudflare Pages platform default that cannot be overridden via
+// _redirects for this direction).
+//
+// astro.config.mjs's own `trailingSlash: "never"` setting (driven by
+// config.json's trailing_slash: false) means every URL @astrojs/sitemap
+// generates has NO trailing slash by default — which means Googlebot/Ahrefs
+// following the sitemap always hits a 308 redirect hop before reaching the
+// real 200 page. That's wasted crawl budget and shows up as a "3xx redirect"
+// SEO issue site-wide.
+//
+// Rather than flipping the global `trailingSlash` routing setting (which
+// would affect every dynamic route's generated href across the whole site
+// and risk double-slash regressions in files already using
+// withTrailingSlash()), we scope the fix to the sitemap output only, via
+// the sitemap integration's own `serialize()` hook. This guarantees every
+// URL listed in sitemap-0.xml already ends in "/", so crawlers reach a 200
+// with zero redirect hops — without touching a single page's routing logic.
+function ensureSitemapTrailingSlash(url) {
+  if (url.endsWith("/")) return url;
+
+  // File-like URLs (e.g. anything with a dot in the last path segment)
+  // should never get a trailing slash appended.
+  const lastSegment = url.split("/").pop() || "";
+  if (lastSegment.includes(".")) return url;
+
+  return `${url}/`;
+}
+
 export default defineConfig({
   // 🎯 100% Dynamic Base URL Fetching from config.json
   site: config.site.base_url ? config.site.base_url : "https://www.walakatha.net",
@@ -63,9 +95,16 @@ export default defineConfig({
   integrations: [
     react(),
     // 🎯 FIXED: lastmod බග් එක ඉවත් කර සැබෑ පිටු දින සැකසීම (Google-Safe Optimization)
+    // 🎯 ADDED: serialize() hook — sitemap URLs වලට trailing slash එකතු කිරීම
+    // (308 redirect chain එක වළක්වයි, core routing/trailingSlash setting එකට
+    // කිසිම බලපෑමක් නැතිව)
     sitemap({
       changefreq: "weekly",
       priority: 0.7,
+      serialize(item) {
+        item.url = ensureSitemapTrailingSlash(item.url);
+        return item;
+      },
     }),
     AutoImport({
       imports: [
