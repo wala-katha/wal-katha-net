@@ -31,6 +31,10 @@ const sortedPosts = sortByDate(filterByTags);
 const title = humanize(tag || "");
 
 // 📈 SEO ප්‍රශස්තකරණය: සෙවුම් යන්ත්‍ර සඳහා නිවැරදි Meta දත්ත සහ පිරිසිදු ලින්ක්ස්
+// ✅ FIXED: "Wala Katha" duplication bug — metaTitle variable එකම දැන්
+// title සහ meta_title දෙකටම pass කරනවා, Base.astro එකෙන් "- Wala Katha"
+// නැවත append කරන්නේ meta_title empty වෙලාවට විතරයි නිසා, මෙතන
+// meta_title එකට value එකක් දීමෙන් duplication එක සම්පූර්ණයෙන්ම නවතී.
 const metaTitle = `${title} - ටැගය | ${config?.site?.title || "Wala Katha"}`;
 const metaDescription = `${title} ටැගය (Tag) යටතේ ඇති සියලුම බ්ලොග් ලිපි සහ නවතම රසවත් කතා මෙතැනින් එකම තැනකින් කියවන්න.`;
 
@@ -73,7 +77,8 @@ const breadcrumbSchema = {
 ---
 
 <Base 
-  title={metaTitle} 
+  title={title}
+  meta_title={metaTitle}
   description={metaDescription} 
   canonical={canonicalUrl}
 >
