@@ -3,4 +3,3 @@ Allow: /
 Disallow: /api/*
 
 Sitemap: https://www.walakatha.net/sitemap-index.xml
-Sitemap: https://www.walakatha.net/sitemap.xml
