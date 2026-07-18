@@ -1,7 +1,7 @@
 ---
 title: "Nandage Duwa - නැන්දගෙ දුව වල් කතා"
 meta_title: "Nandage Duwa wala katha | Sinhala Wal Katha"
-description: "මේක අහම්බෙන් සිදුවන සිද්ධියක්.. මේක උනේ මායි මගෙ cousin නංගී අතරෙ. මේක සත්‍ය සිද්ධියක්..."
+description: "මේක අහම්බෙන් සිදුවන සිද්ධියක්.. මේක උනේ මායි මගෙ cousin නංගී අතරෙ. මේක සත්‍ය සිද්ධියක් නිසා නම් සහ ගම වෙනස් කර ඉදිරිපත් කරන කතාවකි."
 date: 2026-06-18
 image: "/images/posts/Nandage-duwa-wal-katha.webp"
 draft: false
