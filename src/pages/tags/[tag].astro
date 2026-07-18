@@ -36,7 +36,15 @@ const title = humanize(tag || "");
 // නැවත append කරන්නේ meta_title empty වෙලාවට විතරයි නිසා, මෙතන
 // meta_title එකට value එකක් දීමෙන් duplication එක සම්පූර්ණයෙන්ම නවතී.
 const metaTitle = `${title} - ටැගය | ${config?.site?.title || "Wala Katha"}`;
-const metaDescription = `${title} ටැගය (Tag) යටතේ ඇති සියලුම බ්ලොග් ලිපි සහ නවතම රසවත් කතා මෙතැනින් එකම තැනකින් කියවන්න.`;
+
+// ✅ FIXED (Ahrefs "Meta description too short"): පරණ template එකෙන් 96-99
+// characters විතරයි ලැබුනේ (Ahrefs ~110 char minimum threshold එකට අඩුයි).
+// සියලුම tags වලට consistent ලෙස වැඩිකළ, තව keyword-rich sentence එකක්
+// එකතු කරලා 110+ characters ලබාගැනීමට template එක extend කළා. Post
+// count එකත් dynamic ලෙස description එකට එකතු කරලා uniqueness එකත්
+// වැඩිකළා (duplicate-description risk එකත් අඩුවෙනවා).
+const postCount = sortedPosts?.length || 0;
+const metaDescription = `${title} ටැගය (Tag) යටතේ ඇති සියලුම බ්ලොග් ලිපි, නවතම රසවත් සිංහල වල් කතා සහ වැල කතා${postCount > 0 ? ` (ලිපි ${postCount}ක්)` : ""} මෙතැනින් එකම තැනකින් නොමිලේ කියවා ගන්න.`;
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
 
