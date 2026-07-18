@@ -1,7 +1,7 @@
 ---
 title: "ගෙදර ඩ්‍රයිවර් - Gedara driver වල් කතා"
 meta_title: "ගෙදර ඩ්‍රයිවර් මට හුකපු හැටි | 2026 Sinhala Wal Katha"
-description: "මම බැදල ඉන්නෙ මට බබාල දෙන්නෙක් ඉන්නව මගේ මහත්තය රට..."
+description: "මම බැදල ඉන්නෙ මට බබාල දෙන්නෙක් ඉන්නව මගේ මහත්තය රට රස්සාවකට ගිය දවස්වල ගෙදර ඩ්‍රයිවර් සමඟ සිදුවූ රසවත් සත්‍ය අත්දැකීම මෙම කතාවෙන් කියවන්න."
 date: 2026-06-18
 image: "/images/posts/Gedara-driver-wal-katha.webp"
 draft: false
