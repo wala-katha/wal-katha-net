@@ -31,7 +31,13 @@ const title = humanize(category || "");
 
 // 📈 SEO ප්‍රශස්තකරණය: සෙවුම් යන්ත්‍ර සඳහා නිවැරදි විස්තර සහ පිරිසිදු ලින්ක්ස්
 const metaTitle = `${title} - ප්‍රවර්ගය | ${config?.site?.title || "Wala Katha"}`;
-const metaDescription = `${title} ප්‍රවර්ගය යටතේ ඇති සියලුම බ්ලොග් ලිපි සහ නවතම කතා මෙතැනින් එකම තැනකින් කියවන්න.`;
+
+// ✅ FIXED (Ahrefs "Meta description too short"): පරණ template එකෙන් 89-94
+// characters විතරයි ලැබුනේ (Ahrefs ~110 char minimum threshold එකට අඩුයි).
+// Post count එකත් dynamic ලෙස ඇතුළත් කරලා, sentence එකක් තවත් extend
+// කරලා 110+ characters ලබාගැනීමට template එක වැඩිකළා.
+const postCount = sortedPosts?.length || 0;
+const metaDescription = `${title} ප්‍රවර්ගය යටතේ ඇති සියලුම බ්ලොග් ලිපි, නවතම සිංහල වල් කතා සහ වැල කතා${postCount > 0 ? ` (ලිපි ${postCount}ක්)` : ""} මෙතැනින් එකම තැනකින් නොමිලේ කියවා ගන්න.`;
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
 
