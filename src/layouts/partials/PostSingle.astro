@@ -26,7 +26,17 @@ const finalSimilarPosts = smartSimilarPosts.slice(0, 6);
 const WORKER_API = "https://comments.wala-katha.workers.dev/api/comments";
 
 const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
-const postUrl = `${siteUrl}/blog/${post.id}`;
+// 🎯 OG:URL / CANONICAL MISMATCH FIX (Ahrefs "Open graph URL not matching
+// canonical URL"): postUrl previously had NO trailing slash while
+// blog/[single].astro's canonicalUrl (passed into Base.astro) DOES have
+// one — Cloudflare Pages serves this site's directory-style URLs with a
+// trailing slash by default (see wrangler.jsonc / Base.astro comments),
+// so the canonical URL is the source of truth. withTrailingSlash() is the
+// same central helper already used site-wide (Posts.astro, Header.astro,
+// Footer.astro, blog/[single].astro, etc.), so this keeps og:url and
+// canonical byte-for-byte identical without introducing a second,
+// divergent trailing-slash implementation.
+const postUrl = withTrailingSlash(`${siteUrl}/blog/${post.id}`);
 const authorName = allAuthors.find((a) =>
   authors.map((au: string) => slugify(au)).includes(slugify(a.data.title))
 )?.data.title ?? "Wala Katha";
