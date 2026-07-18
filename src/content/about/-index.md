@@ -1,6 +1,7 @@
 ---
 title: "Welcome to Wal Katha - The Ultimate Hub for Sinhala Novels & Stories"
 meta_title: "About Us - Sinhala Wal Katha"
+description: "Aluth Wala Katha ගැන දැනගන්න - සිංහල වල් කතා, වැල කතා සහ නවකතා නොමිලේ කියවීමට හැකි විශ්වාසනීය වේදිකාව. අපගේ අරමුණු සහ කතාව මෙතැනින් කියවන්න."
 image: "/images/author.webp"
 draft: false
 
