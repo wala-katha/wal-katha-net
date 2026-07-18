@@ -9,12 +9,16 @@ draft: false
 
 
 
-![Copyright & Credit Policy](/images/Copyright%20%26%20Credit%20Policy.png)
+
+
+![Copyright & Credit Policy](/images/Copyright%20%26%20Credit%20Policy.webp)
+
+
 
 
 
 <div style="text-align: center; font-style: italic; color: #01AD9F; margin-top: 15px; margin-bottom: 25px; font-weight: 500;">
-  ~ බුද්ධිමය ශ්‍රමයට සහ නිර්මාණශීලීත්වයට සැමවිටම ගරු කරන්නෙමු ~
+~ බුද්ධිමය ශ්‍රමයට සහ නිර්මාණශීලීත්වයට සැමවිටම ගරු කරන්නෙමු ~
 </div>
 
 **www.walakatha.net**
@@ -51,59 +55,59 @@ draft: false
 ### ❓ නිතර අසන ප්‍රශ්න (FAQ)
 
 <details name="walkatha-faq" style="background: #0d1117; padding: 16px; border-radius: 10px; margin-bottom: 14px; border: 1px solid #1f2937; cursor: pointer; transition: all 0.3s ease;">
-  <summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
-    <span>🤔 මගේ නිර්මාණයක් මගේ අවසරයකින් තොරව මෙහි පළකර ඇතිනම් මා කළ යුත්තේ කුමක්ද?</span>
-    <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
-  </summary>
-  <div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
-    කිසිදු කලබලයක් හෝ අපහසුතාවයක් ඇති කරගත යුතු නැත. කරුණාකර <strong style="color: #01AD9F;">walakatha.net@gmail.com</strong> යන අපගේ නිල ඊමේල් ලිපිනයට අදාළ කතාවේ සබැඳිය (URL) සහ ඔබ එහි මුල් රචකයා බව සනාථ කළ හැකි කෙටි සාක්ෂි අප වෙත එවන්න. ඔබගේ අයිතිය තහවුරු වූ විගස අප ක්‍රියාත්මක වන්නෙමු.
-  </div>
+<summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+ <span>🤔 මගේ නිර්මාණයක් මගේ අවසරයකින් තොරව මෙහි පළකර ඇතිනම් මා කළ යුත්තේ කුමක්ද?</span>
+ <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
+</summary>
+<div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
+ කිසිදු කලබලයක් හෝ අපහසුතාවයක් ඇති කරගත යුතු නැත. කරුණාකර <strong style="color: #01AD9F;">walakatha.net@gmail.com</strong> යන අපගේ නිල ඊමේල් ලිපිනයට අදාළ කතාවේ සබැඳිය (URL) සහ ඔබ එහි මුල් රචකයා බව සනාථ කළ හැකි කෙටි සාක්ෂි අප වෙත එවන්න. ඔබගේ අයිතිය තහවුරු වූ විගස අප ක්‍රියාත්මක වන්නෙමු.
+</div>
 </details>
 
 <details name="walkatha-faq" style="background: #0d1117; padding: 16px; border-radius: 10px; margin-bottom: 14px; border: 1px solid #1f2937; cursor: pointer; transition: all 0.3s ease;">
-  <summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
-    <span>📝 කතාව මගේම කියා සනාථ කිරීමට මා විසින් ඉදිරිපත් කළ හැකි වෙනත් සාක්ෂි මොනවාද?</span>
-    <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
-  </summary>
-  <div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
-    ඔබ එම නිර්මාණයේ මුල් අයිතිකරු බව තහවුරු කිරීමට පහත ඕනෑම සාක්ෂියක් අප වෙත ඉදිරිපත් කළ හැක:
-    <ul style="margin-top: 8px; padding-left: 20px; list-style-type: disc; margin-bottom: 15px;">
-      <li>ඔබ මීට පෙර එම කතාව නිල වශයෙන් පළකළ බ්ලොග් අඩවියක (Blog Link) හෝ Facebook සමූහයක/පිටුවක සබැඳියාවක් (Post Link).</li>
-      <li>ඔබ කතාව ලියූ මුල් Word, Notepad හෝ Text ෆයිල් එකෙහි නිර්මාණය වූ දිනය සහ විස්තර පෙනෙන සේ ලබාගත් Screenshot එකක්.</li>
-      <li>සමාජ මාධ්‍ය ජාලාවල ඔබ එම නමින්ම නිර්මාණ පළකරන බව පෙන්විය හැකි ඔබගේ නිල Profile එකෙහි සබැඳියාවක්.</li>
-    </ul>
-    <div style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; padding: 12px; border-radius: 4px; color: #fca5a5; font-size: 0.95rem; font-weight: 500;">
-      ⚠️ <strong>අවධානයට (Warning):</strong> ව්‍යාජ හිමිකම් පෑම් (False Claims) වැළැක්වීම සඳහා, ඉදිරිපත් කරන ලද මූලික තොරතුරු ප්‍රමාණවත් නොවන අවස්ථාවලදී, අදාළ කතාවේ අයිතිය තහවුරු කිරීමට තවත් අතිරේක සහ වඩාත් ශක්තිමත් සාක්ෂි (Stronger Ownership Proofs) ඉල්ලා සිටීමට අපගේ පරිපාලන කණ්ඩායමට පූර්ණ අයිතිය ඇත.
-    </div>
-  </div>
+<summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+ <span>📝 කතාව මගේම කියා සනාථ කිරීමට මා විසින් ඉදිරිපත් කළ හැකි වෙනත් සාක්ෂි මොනවාද?</span>
+ <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
+</summary>
+<div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
+ ඔබ එම නිර්මාණයේ මුල් අයිතිකරු බව තහවුරු කිරීමට පහත ඕනෑම සාක්ෂියක් අප වෙත ඉදිරිපත් කළ හැක:
+ <ul style="margin-top: 8px; padding-left: 20px; list-style-type: disc; margin-bottom: 15px;">
+   <li>ඔබ මීට පෙර එම කතාව නිල වශයෙන් පළකළ බ්ලොග් අඩවියක (Blog Link) හෝ Facebook සමූහයක/පිටුවක සබැඳියාවක් (Post Link).</li>
+   <li>ඔබ කතාව ලියූ මුල් Word, Notepad හෝ Text ෆයිල් එකෙහි නිර්මාණය වූ දිනය සහ විස්තර පෙනෙන සේ ලබාගත් Screenshot එකක්.</li>
+   <li>සමාජ මාධ්‍ය ජාලාවල ඔබ එම නමින්ම නිර්මාණ පළකරන බව පෙන්විය හැකි ඔබගේ නිල Profile එකෙහි සබැඳියාවක්.</li>
+ </ul>
+ <div style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; padding: 12px; border-radius: 4px; color: #fca5a5; font-size: 0.95rem; font-weight: 500;">
+   ⚠️ <strong>අවධානයට (Warning):</strong> ව්‍යාජ හිමිකම් පෑම් (False Claims) වැළැක්වීම සඳහා, ඉදිරිපත් කරන ලද මූලික තොරතුරු ප්‍රමාණවත් නොවන අවස්ථාවලදී, අදාළ කතාවේ අයිතිය තහවුරු කිරීමට තවත් අතිරේක සහ වඩාත් ශක්තිමත් සාක්ෂි (Stronger Ownership Proofs) ඉල්ලා සිටීමට අපගේ පරිපාලන කණ්ඩායමට පූර්ණ අයිතිය ඇත.
+ </div>
+</div>
 </details>
 
 <details name="walkatha-faq" style="background: #0d1117; padding: 16px; border-radius: 10px; margin-bottom: 14px; border: 1px solid #1f2937; cursor: pointer; transition: all 0.3s ease;">
-  <summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
-    <span>⏳ ඔබගේ ඉල්ලීමක් ඉටු කිරීමට අප කොපමණ කාලයක් ලබා ගන්නවාද?</span>
-    <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
-  </summary>
-  <div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
-    ඔබගේ ඊමේල් පණිවිඩය අප වෙත ලැබුණු සැනින් ක්‍රියාත්මක වන අපගේ කණ්ඩායම, ඔබගේ ඉල්ලීමේ ස්වභාවය අනුව අදාළ කතාව සයිට් එකෙන් සම්පූර්ණයෙන්ම ඉවත් කිරීම හෝ රචකයාගේ නම නිවැරදි කිරීම <strong style="color: #fca5a5;">පැය 24ත් 48ත් අතර කාලයක් ඇතුළත</strong> (Within 48 Hours) අනිවාර්යයෙන්ම සිදු කරනු ලබයි.
-  </div>
+<summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+ <span>⏳ ඔබගේ ඉල්ලීමක් ඉටු කිරීමට අප කොපමණ කාලයක් ලබා ගන්නවාද?</span>
+ <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
+</summary>
+<div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
+ ඔබගේ ඊමේල් පණිවිඩය අප වෙත ලැබුණු සැනින් ක්‍රියාත්මක වන අපගේ කණ්ඩායම, ඔබගේ ඉල්ලීමේ ස්වභාවය අනුව අදාළ කතාව සයිට් එකෙන් සම්පූර්ණයෙන්ම ඉවත් කිරීම හෝ රචකයාගේ නම නිවැරදි කිරීම <strong style="color: #fca5a5;">පැය 24ත් 48ත් අතර කාලයක් ඇතුළත</strong> (Within 48 Hours) අනිවාර්යයෙන්ම සිදු කරනු ලබයි.
+</div>
 </details>
 
 <details name="walkatha-faq" style="background: #0d1117; padding: 16px; border-radius: 10px; margin-bottom: 14px; border: 1px solid #1f2937; cursor: pointer; transition: all 0.3s ease;">
-  <summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
-    <span>🤝 අන්තර්ගතයන් ඉවත් කරන්නේ නැතුව මගේ නම සහ මගේ සයිට් එකේ ලින්ක් එක දාන්න පුළුවන්ද?</span>
-    <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
-  </summary>
-  <div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
-    ඔව්, ඉතාමත් සතුටින් එය සිදු කර දිය හැක. ඔබට ඔබගේ නිර්මාණය අපගේ සයිට් එක හරහා තවත් දහස් ගණනක් පාඨකයන් වෙත ළඟා වීමට අවශ්‍ය නම්, මුල් රචකයා ලෙස ඔබගේ නම, Facebook Profile එක හෝ ඔබගේ වෙබ් අඩවි සබැඳියාව (Backlink) ඉතා කැපී පෙනෙන ලෙස ඇතුළත් කර දීමට අප කටයුතු සූදානම් කර දෙන්නෙමු.
-  </div>
+<summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+ <span>🤝 අන්තර්ගතයන් ඉවත් කරන්නේ නැතුව මගේ නම සහ මගේ සයිට් එකේ ලින්ක් එක දාන්න පුළුවන්ද?</span>
+ <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
+</summary>
+<div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
+ ඔව්, ඉතාමත් සතුටින් එය සිදු කර දිය හැක. ඔබට ඔබගේ නිර්මාණය අපගේ සයිට් එක හරහා තවත් දහස් ගණනක් පාඨකයන් වෙත ළඟා වීමට අවශ්‍ය නම්, මුල් රචකයා ලෙස ඔබගේ නම, Facebook Profile එක හෝ ඔබගේ වෙබ් අඩවි සබැඳියාව (Backlink) ඉතා කැපී පෙනෙන ලෙස ඇතුළත් කර දීමට අප කටයුතු සූදානම් කර දෙන්නෙමු.
+</div>
 </details>
 
 <details name="walkatha-faq" style="background: #0d1117; padding: 16px; border-radius: 10px; margin-bottom: 14px; border: 1px solid #1f2937; cursor: pointer; transition: all 0.3s ease;">
-  <summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
-    <span>💰 මෙහි පළවන කතා වෙනත් වාණිජමය අරමුණු සඳහා පාවිච්චි කරනු ලබනවාද?</span>
-    <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
-  </summary>
-  <div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
-    නැත. අප වෙබ් අඩවියේ පළවන කිසිදු කතාවක් හෝ නවකතාවක් මුදලට විකිණීමක් හෝ වෙනත් බාහිර වාණිජමය ප්‍රකාශන (Commercial Publications) සඳහා කිසිසේත්ම පාවිච්චි කරනු නොලැබේ. මේවා තෙවන පාර්ශවයන්ගෙන් ආරක්ෂා කිරීමටද අප බැඳී සිටිමු.
-  </div>
+<summary style="font-size: 1.1rem; font-weight: 600; color: #01AD9F; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+ <span>💰 මෙහි පළවන කතා වෙනත් වාණිජමය අරමුණු සඳහා පාවිච්චි කරනු ලබනවාද?</span>
+ <span style="color: #01AD9F; font-size: 1.2rem;">▼</span>
+</summary>
+<div style="margin-top: 12px; color: #e5e7eb; line-height: 1.7; border-top: 1px solid #1f2937; padding-top: 10px;">
+ නැත. අප වෙබ් අඩවියේ පළවන කිසිදු කතාවක් හෝ නවකතාවක් මුදලට විකිණීමක් හෝ වෙනත් බාහිර වාණිජමය ප්‍රකාශන (Commercial Publications) සඳහා කිසිසේත්ම පාවිච්චි කරනු නොලැබේ. මේවා තෙවන පාර්ශවයන්ගෙන් ආරක්ෂා කිරීමටද අප බැඳී සිටිමු.
+</div>
 </details>
