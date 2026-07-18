@@ -20,12 +20,19 @@ const { title, meta_title, description, image, what_i_do } = entry.data;
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
 const canonicalUrl = `${base_url}/about`;
 
+// ✅ FIXED (Ahrefs "Meta description too short"): පරණ fallback string එක
+// 68 characters විතරයි (Ahrefs ~110 char minimum threshold එකට හෙන
+// අඩුයි). content/about/-index.md එකේ දැන් description field එකක්
+// define කර ඇති නිසා fallback string එකත් extend කර, දෙකම consistent
+// ලෙස 110+ characters වන පරිදි යාවත්කාලීන කළා (defense-in-depth).
+const finalDescription = description || "අපේ වෙබ් අඩවිය සහ අපගේ සේවාවන් පිළිබඳ සියලු විස්තර, අපගේ අරමුණු සහ Wal Katha වෙබ් අඩවියේ කතාව මෙතැනින් සම්පූර්ණයෙන් කියවා දැනගන්න.";
+
 // 🚀 GOOGLE SEO ABOUTPAGE SCHEMA: සෙවුම් යන්ත්‍ර වලට වෙබ් අඩවියේ නිල අනන්‍යතාවය තහවුරු කිරීමට (JSON-LD)
 const aboutPageSchema = {
   "@context": "https://schema.org",
   "@type": "AboutPage",
   "name": title || "About Us",
-  "description": description || "අපේ වෙබ් අඩවිය සහ අපගේ සේවාවන් පිළිබඳ සියලු විස්තර මෙතැනින් කියවන්න.",
+  "description": finalDescription,
   "url": canonicalUrl,
   "mainEntity": {
     "@type": "Organization",
@@ -39,7 +46,7 @@ const aboutPageSchema = {
 <Base 
   title={title} 
   meta_title={meta_title} 
-  description={description || "අපේ වෙබ් අඩවිය සහ අපගේ සේවාවන් පිළිබඳ සියලු විස්තර මෙතැනින් කියවන්න."}
+  description={finalDescription}
   image={image}
   canonical={canonicalUrl}
 >
