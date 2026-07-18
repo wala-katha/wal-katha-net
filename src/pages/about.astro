@@ -2,6 +2,7 @@
 import Base from "@/layouts/Base.astro";
 import config from "@/config/config.json"; // 📈 SEO සහ Canonical URL සැකසීම සඳහා Config ගොනුව සම්බන්ධ කළා
 import { markdownify } from "@/lib/utils/textConverter";
+import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import { Image } from "astro:assets";
 import type { CollectionEntry } from "astro:content";
 import { getEntry, render } from "astro:content";
@@ -81,7 +82,12 @@ const aboutPageSchema = {
             <Content />
           </div>
           
-          <a href="/contact" class="btn btn-primary text-white py-2 mt-6 inline-block">
+          {/* 🎯 FIXED (Ahrefs "3xx redirect" inlink issue): href="/contact" trailing
+              slash එකක් නැතුව hardcoded කර තිබූ නිසා, Cloudflare Pages විසින්
+              /contact -> /contact/ ලෙස 308 redirect කරමින් තිබුණි. සයිට් එකේ
+              අනිත් සියලුම components වල දැනටමත් පාවිච්චි කරන withTrailingSlash()
+              helper එකම මෙතනටත් යොදා, 0-redirect-hop link එකක් බවට හැරවීම. */}
+          <a href={withTrailingSlash("/contact")} class="btn btn-primary text-white py-2 mt-6 inline-block">
             Get In Touch
           </a>
         </div>
