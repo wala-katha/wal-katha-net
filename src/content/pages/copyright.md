@@ -2,7 +2,7 @@
 title: "රචනා අයිතිවාසිකම් හා ගෞරවය පිළිබඳ ප්‍රකාශය"
 meta_title: "රචනා අයිතිවාසිකම් හා ගෞරවය පිළිබඳ ප්‍රකාශය - walakatha.net"
 description: "අප වෙබ් අඩවියේ පළවන සියලුම අන්තර්ගතයන්හි අයිතිවාසිකම්, ප්‍රකාශන හිමිකම් (Copyright) සහ මුල් රචකයන්ට නිසි ගෞරවය දැක්වීම පිළිබඳ නීතිමය පැහැදිලි කිරීම."
-image: "/images/Copyright & Credit Policy.webp"
+image: "/images/copyright-credit-policy.webp"
 layout: "Base"
 draft: false
 ---
@@ -11,7 +11,7 @@ draft: false
 
 
 
-![Copyright & Credit Policy](/images/Copyright%20%26%20Credit%20Policy.webp)
+![Copyright & Credit Policy](/images/copyright-credit-policy.webp)
 
 
 
