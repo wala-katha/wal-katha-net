@@ -23,11 +23,18 @@ const targetEmail = "walkatha.com@gmail.com";
 const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 const canonicalUrl = `${base_url}/contact`;
 
+// ✅ FIXED (Ahrefs "Meta description too short"): පරණ fallback string එක
+// 73 characters විතරයි (Ahrefs ~110 char minimum threshold එකට අඩුයි).
+// content/contact/-index.md එකේ දැන් description field එකක් define
+// කර ඇති නිසා, fallback string එකත් consistency සඳහා 110+ characters
+// වන පරිදි යාවත්කාලීන කළා.
+const finalDescription = description || "Wala Katha වෙබ් අඩවිය සම්බන්ධ කර ගැනීමට අවශ්‍ය ලිපිනය, විද්‍යුත් තැපෑල, දුරකථන අංකය ඇතුළු සියලුම තොරතුරු මෙතැනින් සම්පූර්ණයෙන් ලබා ගන්න.";
+
 const contactPageSchema = {
   "@context": "https://schema.org",
   "@type": "ContactPage",
   "name": title || "Contact Us",
-  "description": description || "අපේ වෙබ් අඩවිය සම්බන්ධ කර ගැනීමට අවශ්‍ය සියලුම තොරතුරු මෙතැනින් ලබා ගන්න.",
+  "description": finalDescription,
   "url": canonicalUrl,
   "mainEntity": {
     "@type": "Organization",
@@ -46,7 +53,7 @@ const contactPageSchema = {
 <Base
   title={title}
   meta_title={meta_title}
-  description={description || "අපේ වෙබ් අඩවිය සම්බන්ධ කර ගැනීමට අවශ්‍ය සියලුම තොරතුරු මෙතැනින් ලබා ගන්න."}
+  description={finalDescription}
   image={image}
   canonical={canonicalUrl}
 >
