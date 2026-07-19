@@ -30,10 +30,13 @@ const canonicalUrl = `${base_url}/search/`;
 const siteLogo  = `${base_url}/images/logo.png`;
 const siteTitle = config?.site?.title || "WalaKatha";
 
-// ✅ FIXED (Ahrefs "Meta description too short"): පරණ description එක 94
-// characters විතරයි (Ahrefs ~110 char minimum threshold එකට අඩුයි).
-// Sentence එකක් තව එකතු කරලා 110+ characters ලබාගැනීමට extend කළා.
-const pageDescription = "ඔබට අවශ්‍ය ඕනෑම සිංහල වල් කතාවක්, වැල කතාවක් හෝ කෙටි කතාවක් නම භාවිත කරමින් ක්ෂණිකව සොයා ගන්න. Wala Katha හි ඇති සියලුම කතා එකම තැනකින් සොයාගන්න පහසුම ක්‍රමය මෙයයි.";
+// ✅ FIXED (Ahrefs "Meta description too long" — 2026-07-19): පරණ
+// description එක 164 characters වුණා (Ahrefs ~155-160 char maximum
+// threshold එක ඉක්මවා ගියා). මීට කලින් "too short" (94 chars) fix
+// කරද්දී විස්තර කිරීමේදී upper limit එකත් ඉක්මවුනා. දැන් 120-155
+// character "sweet spot" එකට සරිලන පරිදි concise කර ඇත — core
+// keywords (Wala Katha, සිංහල වල් කතා, වැල කතා) සියල්ලම රැඳවී ඇත.
+const pageDescription = "ඔබට අවශ්‍ය ඕනෑම සිංහල වල් කතාවක්, වැල කතාවක් නම භාවිත කරමින් ක්ෂණිකව සොයා ගන්න. Wala Katha හි සියලුම කතා එකම තැනකින් සොයාගන්න.";
 
 // 🚀 SEARCH PAGE SCHEMA 2026 — SearchAction + WebSite sameAs
 const searchPageSchema = {
