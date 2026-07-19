@@ -17,24 +17,73 @@
  * - Already ends in "/" -> returned unchanged
  * - File-like paths (last segment has a dot, e.g. "/sitemap.xml",
  *   "/robots.txt", "/logo.png") -> returned unchanged (never slashed)
- * - Absolute external URLs (http://, https://, mailto:, tel:, #anchor)
- *   -> returned unchanged (never touch third-party or in-page links)
- * - Everything else -> trailing slash appended
+ * - mailto:, tel:, "#" anchors -> returned unchanged (never touch
+ *   non-navigational/in-page links)
+ * - Absolute URLs on OUR OWN domain (config.site.base_url, e.g.
+ *   "https://www.walakatha.net/blog/foo") -> trailing slash appended,
+ *   same as a relative path would get. This fixes the Ahrefs
+ *   "Open Graph URL not matching canonical URL" issue: PostSingle.astro
+ *   builds og:url as an absolute `${siteUrl}/blog/${post.id}` string,
+ *   and that must resolve to the exact same trailing-slash URL as the
+ *   canonical tag (which is always slashed by Base.astro).
+ * - Absolute URLs on ANY OTHER domain (Facebook, WhatsApp, Telegram,
+ *   YouTube, Google Fonts, etc.) -> returned unchanged. We must never
+ *   rewrite a third-party URL we don't control.
+ * - Everything else (relative internal paths) -> trailing slash appended
  */
+
+// Our own site's origin, derived once from config so this file has a
+// single source of truth for "is this URL ours". We intentionally read
+// this from config.json rather than hardcoding the domain, so staging/
+// preview deployments with a different base_url are handled correctly
+// too.
+import config from "@/config/config.json";
+
+const OWN_ORIGIN = (() => {
+  try {
+    return new URL(config.site.base_url).origin.toLowerCase();
+  } catch {
+    return "";
+  }
+})();
+
 export function withTrailingSlash(url: string | undefined | null): string {
   if (!url) return "/";
 
-  // Never touch external/absolute/protocol/anchor links
-  if (
-    /^https?:\/\//i.test(url) ||
-    /^mailto:/i.test(url) ||
-    /^tel:/i.test(url) ||
-    url.startsWith("#")
-  ) {
+  // Never touch mailto/tel/in-page anchor links
+  if (/^mailto:/i.test(url) || /^tel:/i.test(url) || url.startsWith("#")) {
     return url;
   }
 
-  // Already correct
+  // Absolute URL handling (http:// or https://)
+  if (/^https?:\/\//i.test(url)) {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      // Malformed absolute URL — return unchanged rather than guessing
+      return url;
+    }
+
+    // Third-party domain (Facebook, WhatsApp, Telegram, YouTube, CDN
+    // fonts, etc.) — never rewrite URLs we don't own.
+    if (!OWN_ORIGIN || parsed.origin.toLowerCase() !== OWN_ORIGIN) {
+      return url;
+    }
+
+    // It's our own domain — fall through to the same slashing rules
+    // used for relative paths, applied to the pathname only (query
+    // string / hash preserved untouched).
+    if (parsed.pathname.endsWith("/")) return url;
+
+    const lastSegment = parsed.pathname.split("/").pop() || "";
+    if (lastSegment.includes(".")) return url; // file-like (e.g. sitemap.xml)
+
+    parsed.pathname = `${parsed.pathname}/`;
+    return parsed.toString();
+  }
+
+  // Already correct (relative path)
   if (url.endsWith("/")) return url;
 
   // File-like paths (has a dot in the last path segment) — leave as-is
