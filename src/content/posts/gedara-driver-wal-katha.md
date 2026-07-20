@@ -7,7 +7,7 @@ image: "/images/posts/Gedara-driver-wal-katha.webp"
 draft: false
 authors: ["WalKatha"]
 tags: ["akka-katha", "aluth-katha", "hot-katha"]
-categories: ["amma-wala-katha","school-wala-katha","lesbian-and-gay-wala-Katha","family-wala-katha","new-wala-katha","old-wala-katha","other-wala-katha"]
+categories: ["amma-wala-katha","school-wala-katha","lesbian-gay-wala-Katha","family-wala-katha","new-wala-katha","old-wala-katha","other-wala-katha"]
 ---
 
 මම හැමදාම sinhala wela katha කියවන​වා. මේ මගේ wal katha ව... මම බැදල ඉන්නෙ මට බබාල දෙන්නෙක් ඉන්නව මගේ මහත්තය රට රස්සාවකට ගියා බබාල දෙන්න ලැබිල ටික කාලයකට පස්සෙ. මම ඉන්නෙ මීගමුවෙ මන් ගැන කියනව නම් කලුයි මහතත් නෑ කෙට්ටුත් නෑ ගානට ඇග තියෙනව. මේ සිද්දිය උනේ මහත්තය රට ගිහිල්ල ඉන්න දවස්වල. 
