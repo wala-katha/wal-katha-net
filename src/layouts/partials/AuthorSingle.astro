@@ -8,29 +8,14 @@ const { author } = Astro.props;
 const { title, image, social } = author.data;
 const { Content } = await render(author);
 
-// Astro සයිට් එකේ දැනට බලන පිටුවේ සම්පූර්ණ URL එක ගැනීම
-const currentUrl = Astro.url.href;
-
-// social කියන දත්තය Array එකක්ද කියලා 100%ක්ම තහවුරු කරගැනීම (ලෙඩ නොවෙන්න)
-const socialLinks = Array.isArray(social) 
-  ? social.map((item: { url: string }) => item.url).filter(Boolean)
-  : [];
-
-// Google වෙනුවෙන් පිරිසිදු JSON-LD Schema Markup එක සකස් කිරීම
-const authorSchema = {
-  "@context": "https://schema.org",
-  "@type": "ProfilePage",
-  "mainEntity": {
-    "@type": "Person",
-    "name": title,
-    "url": currentUrl,
-    ...(image && { "image": new URL(image, Astro.site || currentUrl).href }),
-    ...(socialLinks.length > 0 && { "sameAs": socialLinks })
-  }
-};
+// ✅ REMOVED: Duplicate JSON-LD ProfilePage schema block.
+// මෙම component එක authors/[single].astro (page) එකෙන් call වෙනවා,
+// ඒ page එකේ දැනටමත් සම්පූර්ණ ProfilePage schema එකක් (image URL
+// handling, base_url join logic, canonical URL සමඟ) තියෙනවා. මෙතන
+// තව එකක් තිබ්බොත් එකම page එකට ProfilePage schema 2ක් duplicate
+// ලෙස render වී, Google Rich Results Test එකේ error එකක් ලෙස පෙන්වයි.
+// Single-source-of-truth එක දැන් authors/[single].astro පමණි.
 ---
-
-<script type="application/ld+json" set:html={JSON.stringify(authorSchema)} />
 
 <section class="section py-16 select-none">
   <div class="container">
