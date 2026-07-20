@@ -5,6 +5,8 @@
 
 .navbar-brand img {
   @apply h-auto max-w-[170px] sm:h-auto sm:max-w-full;
+  height: auto !important;
+  width: auto;
 }
 
 .navbar-nav {
