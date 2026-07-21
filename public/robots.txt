@@ -2,4 +2,40 @@ User-agent: *
 Allow: /
 Disallow: /api/*
 
+# 🎯 2026 AI CRAWLER PERMISSIONS
+# AI search engines (ChatGPT, Perplexity, Claude, Google AI Overviews)
+# සියල්ලටම explicit ලෙස crawl permission දීම — 2026 වන විට මේ AI
+# crawlers හරහාත් සැලකිය යුතු traffic share එකක් එනවා. Default
+# "User-agent: *" rule එකෙන්ම crawl කරන්න පුළුවන් උනත්, explicit
+# allow rules දාන එකෙන් සමහර AI companies ගේ crawler-specific
+# opt-in policies වලට clearer signal එකක් යනවා.
+User-agent: GPTBot
+Allow: /
+Disallow: /api/*
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /api/*
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /api/*
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /api/*
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /api/*
+
+User-agent: anthropic-ai
+Allow: /
+Disallow: /api/*
+
+User-agent: Bingbot
+Allow: /
+Disallow: /api/*
+
 Sitemap: https://www.walakatha.net/sitemap-index.xml
+Sitemap: https://www.walakatha.net/news-sitemap.xml
