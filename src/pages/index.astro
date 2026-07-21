@@ -18,15 +18,13 @@ const canonicalUrl = base_url;
 
 // 🎯 FIXED (Broken Image / 404 Bug): "logo.png" කියලා file එකක් project
 // එකේ කිසිම තැනක නෑ — public/images/ folder එකේ තියෙන්නේ "logo.webp"
-// පමණි (config.json හි config.site.logo: "/images/logo.webp" එකෙන්ම
-// මෙය තහවුරු වේ). මීට කලින් මෙතන "logo.png" hardcode කර තිබූ නිසා
-// og:image, twitter:image, සහ JSON-LD ImageObject.url තුනම broken/404
-// image link එකක් වෙත point කළා — Facebook/Twitter/LinkedIn card
-// preview එකේ පින්තූරයක් නොපෙනීමට සහ Google Rich Results Test එකේ
-// logo validation failure එකකට මෙය සෘජු හේතුවක් විය හැක. දැන් config
-# .json හි already-verified path එකම (config.site.logo) භාවිතා කරයි —
-// site-wide තනි source-of-truth එකක් වීමෙන් ඉදිරියේදී logo file එක
-// වෙනස් වුවත් මෙතන manual update එකක් අවශ්‍ය නොවේ.
+// පමණි (config.json හි config.site.logo value එකෙන්ම මෙය තහවුරු වේ).
+// මීට කලින් මෙතන "logo.png" hardcode කර තිබූ නිසා og:image,
+// twitter:image, සහ JSON-LD ImageObject.url තුනම broken/404 image
+// link එකක් වෙත point කළා. දැන් config.json හි already-verified path
+// එකම (config.site.logo) භාවිතා කරයි — site-wide තනි source-of-truth
+// එකක් වීමෙන් ඉදිරියේදී logo file එක වෙනස් වුවත් මෙතන manual update
+// එකක් අවශ්‍ය නොවේ.
 const siteLogo = base_url + config.site.logo;
 
 // 🎯 SiteNavigationElement Schema — Google Sitelinks වල ප්‍රධාන
@@ -44,14 +42,6 @@ const siteLogo = base_url + config.site.logo;
 // concatenation එකෙන් වැඩ කළත්, menu.json වෙනස් වුවහොත් (trailing
 // slash නොමැති url එකක් එකතු කළහොත්) silently broken schema URL එකක්
 // හැදීම මින් ඉදිරියට සම්පූර්ණයෙන්ම වළක්වයි.
-//
-// 🎯 FIXED (Orphan Node — Entity Graph Weakness): SiteNavigationElement
-// items වලට කලින් @id/isPartOf කිසිවක් තිබුණේ නැති නිසා @graph array
-// එකේ floating/disconnected nodes ලෙස පැවතුනි. දැන් සෑම item එකකටම
-// deterministic @id (URL-based) එකක් සහ WebSite entity එකට isPartOf
-// reference එකක් එකතු කර ඇත — Google entity graph එකට මෙම navigation
-// items, site එකේ WebSite entity එකට අයිති දෙයක් ලෙස පැහැදිලිව
-// සම්බන්ධ කරයි.
 import menu from "@/config/menu.json";
 
 function buildNavItems(base: string) {
@@ -93,10 +83,10 @@ const navigationSchema = buildNavItems(base_url);
 // 🎯 FIXED (Duplicate Organization Definition): Organization entity එක
 // (@id: "${base_url}/#organization") මෙතන පමණක් fully define වේ.
 // blog/[single].astro හි publisher block එකද මෙම @id එකම reference
-// කරන පරිදි යාවත්කාලීන කළ යුතුය (එම file එකේ වෙනම, logo.png සහිත
-// Organization object එකක් inline define කරමින් තිබූ අතර, එය මෙම
-// entity එකේ conflicting duplicate definition එකක් ලෙස Google ට
-// පෙනී ඇත). මෙම file එකේ scope එක තුළ, "@id" reference එක සමග
+// කරන පරිදි යාවත්කාලීන කර ඇත (එම file එකේ කලින් වෙනම, logo.png
+// සහිත Organization object එකක් inline define කරමින් තිබූ අතර, එය
+// මෙම entity එකේ conflicting duplicate definition එකක් ලෙස Google ට
+// පෙනී තිබුණි). මෙම file එකේ scope එක තුළ, "@id" reference එක සමග
 // object එක සම්පූර්ණයෙන් define කර ඇත.
 const homePageSchema = {
   "@context": "https://schema.org",
