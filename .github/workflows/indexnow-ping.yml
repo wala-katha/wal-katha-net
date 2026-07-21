@@ -1,0 +1,130 @@
+name: IndexNow Auto-Ping (Bing/Yandex Instant Indexing)
+
+# 🎯 2026 INDEXNOW INTEGRATION:
+# main branch එකට post අලුතින් add/modify වුනාම, ඒ post URL එකම
+# Bing + Yandex (IndexNow protocol එකට join වී ඇති search engines) ට
+# ක්ෂණිකව notify කරයි — build/deploy වෙන තුරු බලා නොසිට, Cloudflare
+# Pages deployment එකෙන් සම්පූර්ණයෙන්ම independent, GitHub Action
+# workflow එකක් ලෙස වෙනම run වේ.
+#
+# ⚠️ IMPORTANT: Google IndexNow protocol එකට join වී නොමැත (Google
+# තමන්ගේම crawl schedule එකෙන් ස්වාධීනව index කරයි) — මෙය Bing/Yandex
+# සඳහා පමණක් වැඩ කරයි. Google Search Console එකට වෙනම manual
+# "Request Indexing" හෝ Sitemap submission එකක් අවශ්‍ය වේ.
+#
+# 🛡️ RATE-LIMIT SAFETY: හැම post එකක්ම නැවත නැවත submit කිරීම වළක්වා
+# ගැනීමට, "git diff" එකෙන් මෙම push එකේදී *අලුතින් add/modify* වුනු
+# posts files පමණක් හඳුනාගෙන, ඒවායේ URL පමණක් submit කරයි —
+# Bing IndexNow docs එකේම සඳහන් "429 Too Many Requests (potential
+# Spam)" ගැටලුව මින් වළක්වා ගනී.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/content/posts/**"
+  workflow_dispatch: {}
+
+jobs:
+  indexnow-ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed/new post files
+        id: changed-posts
+        run: |
+          echo "🔍 Detecting changed post files in this push..."
+
+          # ⚠️ SELF-HEALING FALLBACK: මුල් commit එකක් (parent commit
+          # නැති) නම් හෝ "workflow_dispatch" (manual trigger) එකක් නම්,
+          # git diff HEAD~1 fail විය හැක. එවැනි අවස්ථාවක ආරක්ෂිතව
+          # empty list එකක් ලබා දී, workflow එක crash නොවී ඉදිරියට යයි.
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD -- 'src/content/posts/*.md' 'src/content/posts/*.mdx' || echo "")
+          else
+            echo "⚠️ No parent commit found (first commit or shallow history) — skipping diff-based detection."
+            CHANGED_FILES=""
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Extract post slug (filename without extension, without "-index")
+          SLUGS=""
+          for f in $CHANGED_FILES; do
+            base=$(basename "$f")
+            slug="${base%.*}"
+            if [[ "$slug" == -* ]]; then
+              continue
+            fi
+            SLUGS="$SLUGS $slug"
+          done
+
+          echo "slugs=$SLUGS" >> "$GITHUB_OUTPUT"
+          echo "---- Detected post slugs ----"
+          echo "$SLUGS"
+
+      - name: Submit URLs to IndexNow
+        if: steps.changed-posts.outputs.slugs != ''
+        run: |
+          KEY="eb1f2345210e445fa362e71b94fa546c"
+          HOST="www.walakatha.net"
+          KEY_LOCATION="https://www.walakatha.net/${KEY}.txt"
+
+          SLUGS="${{ steps.changed-posts.outputs.slugs }}"
+
+          # Build JSON urlList array
+          URL_LIST="["
+          FIRST=1
+          for slug in $SLUGS; do
+            if [ "$FIRST" -eq 0 ]; then
+              URL_LIST="$URL_LIST,"
+            fi
+            URL_LIST="$URL_LIST\"https://www.walakatha.net/blog/${slug}/\""
+            FIRST=0
+          done
+          URL_LIST="$URL_LIST]"
+
+          echo "📤 Submitting URLs to IndexNow: $URL_LIST"
+
+          PAYLOAD=$(cat <<EOF
+          {
+            "host": "$HOST",
+            "key": "$KEY",
+            "keyLocation": "$KEY_LOCATION",
+            "urlList": $URL_LIST
+          }
+          EOF
+          )
+
+          # 🛡️ RESILIENT REQUEST: curl fail උනත් (network issue, timeout),
+          # workflow එකම crash නොවී, warning එකක් log කරලා exit code 0
+          # එකෙන් අවසන් වේ — IndexNow submission එකක් fail වීම site
+          # deployment එකට කිසිසේත් බලපෑමක් නොකළ යුතුය (best-effort
+          # notification, not a build-blocking requirement).
+          HTTP_STATUS=$(curl -s -o /tmp/indexnow-response.txt -w "%{http_code}" \
+            -X POST "https://api.indexnow.org/indexnow" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d "$PAYLOAD" || echo "000")
+
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response body:"
+          cat /tmp/indexnow-response.txt || echo "(no response body)"
+
+          case "$HTTP_STATUS" in
+            200) echo "✅ IndexNow submission successful." ;;
+            202) echo "✅ IndexNow submission accepted." ;;
+            400) echo "⚠️ Bad request — invalid format. Check payload." ;;
+            403) echo "⚠️ Forbidden — key file not found or key not in file." ;;
+            422) echo "⚠️ Unprocessable — URLs don't belong to host or key mismatch." ;;
+            429) echo "⚠️ Too many requests — potential spam flag. Backing off." ;;
+            000) echo "⚠️ Network error or timeout — IndexNow ping failed, but this does not block deployment." ;;
+            *) echo "ℹ️ Unexpected status: $HTTP_STATUS" ;;
+          esac
+
+      - name: No changed posts detected
+        if: steps.changed-posts.outputs.slugs == ''
+        run: echo "ℹ️ No new/modified post files detected in this push — skipping IndexNow submission."
