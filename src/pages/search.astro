@@ -22,10 +22,10 @@ const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 // Base.astro auto-appends a trailing slash to <link rel="canonical">
 // (Cloudflare Pages serves directory-style URLs with a trailing slash
 // by default). This local canonicalUrl is also embedded directly inside
-// the hreflang tags and the JSON-LD SearchAction/SearchResultsPage
-// schema below, bypassing Base.astro's trailing-slash logic, so we add
-// the slash here too to keep everything in sync (canonical, hreflang,
-// and structured data all resolve with 0 redirects).
+// the hreflang tags and the JSON-LD SearchResultsPage schema below,
+// bypassing Base.astro's trailing-slash logic, so we add the slash here
+// too to keep everything in sync (canonical, hreflang, and structured
+// data all resolve with 0 redirects).
 const canonicalUrl = `${base_url}/search/`;
 const siteLogo  = `${base_url}/images/logo.png`;
 const siteTitle = config?.site?.title || "WalaKatha";
@@ -38,25 +38,24 @@ const siteTitle = config?.site?.title || "WalaKatha";
 // keywords (Wala Katha, සිංහල වල් කතා, වැල කතා) සියල්ලම රැඳවී ඇත.
 const pageDescription = "ඔබට අවශ්‍ය ඕනෑම සිංහල වල් කතාවක්, වැල කතාවක් නම භාවිත කරමින් ක්ෂණිකව සොයා ගන්න. Wala Katha හි සියලුම කතා එකම තැනකින් සොයාගන්න.";
 
-// 🚀 SEARCH PAGE SCHEMA 2026 — SearchAction + WebSite sameAs
+// 🎯 FIXED (WebSite Schema Duplication — Google Entity Graph Conflict):
+// මීට කලින් මෙතන WebSite entity එකේ (@id: "${base_url}/#website")
+// සම්පූර්ණ, වෙනම object එකක් (url, name, potentialAction/SearchAction
+// සහිතව) define කර තිබුණි. index.astro එකේත් එකම @id එකට වෙනම
+// full-definition එකක් තිබූ නිසා (SearchAction urlTemplate එකේ
+// trailing-slash mismatch එකක්ම සමගින්), Google entity graph එකේ එකම
+// @id එකට conflicting field values පෙනී duplicate/inconsistent entity
+// data ලෙස ගැටලුවක් හැදිය හැක.
+//
+// නිවැරදි Schema.org pattern එක: WebSite entity එකේ එකම authoritative,
+// full definition එක index.astro (site root) එකේ පමණක් තිබිය යුතුය.
+// මෙම page ඇතුළු අනිකුත් සියලුම pages, "isPartOf" හරහා @id reference
+// එකක් පමණක් දිය යුතුය — SearchResultsPage object එකේ දැනටමත් තිබූ
+// isPartOf field එකම මෙම pattern එකයි, ඒ නිසා මෙතන කිසිදු අලුත් field
+// එකක් එකතු කරන්නේ නැත, පමණක් duplicate WebSite object එක ඉවත් කර ඇත.
 const searchPageSchema = {
   "@context": "https://schema.org",
   "@graph": [
-    {
-      "@type": "WebSite",
-      "@id": `${base_url}/#website`,
-      "url": base_url,
-      "name": siteTitle,
-      "inLanguage": "si",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": {
-          "@type": "EntryPoint",
-          "urlTemplate": `${canonicalUrl}?q={search_term_string}`
-        },
-        "query-input": "required name=search_term_string"
-      }
-    },
     {
       "@type": "SearchResultsPage",
       "@id": `${canonicalUrl}#searchpage`,
