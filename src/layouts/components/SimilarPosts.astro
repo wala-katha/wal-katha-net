@@ -50,8 +50,12 @@ const { posts } = Astro.props;
               </a>
             )}
             
-            {/* INFO ROW */}
-            <ul class="mt-2 mb-1 flex flex-wrap items-center text-slate-300 text-[10px] sm:text-xs justify-center gap-x-2 gap-y-1">
+            {/* INFO ROW — 🎯 FIXED (Google Mobile Usability "Text too small
+                to read"): text-[10px] Google's ~12px minimum body-text
+                guideline එකට අඩුයි. text-[11px] බවට වැඩි කර ඇත — sm:
+                breakpoint එකේ text-xs (12px) එලෙසම, layout/grid dimensions
+                (col-6 md:col-4, aspect-[3/4]) කිසිවක් වෙනස් නොවේ. */}
+            <ul class="mt-2 mb-1 flex flex-wrap items-center text-slate-300 text-[11px] sm:text-xs justify-center gap-x-2 gap-y-1">
               <li class="flex items-center flex-wrap">
                 <BiCategoryAlt className="mr-0.5 h-3 w-3 sm:h-[14px] sm:w-[14px] text-emerald-400" />
                 <ul>
@@ -59,7 +63,7 @@ const { posts } = Astro.props;
                     <li class="inline-block">
                       <a
                         href={withTrailingSlash(`/categories/${slugify(category)}`)}
-                        class="hover:text-emerald-400 font-bold text-[9px] sm:text-xs bg-white/5 px-1.5 py-0.5 rounded text-slate-200"
+                        class="hover:text-emerald-400 font-bold text-[10px] sm:text-xs bg-white/5 px-1.5 py-0.5 rounded text-slate-200"
                       >
                         {humanize(category)}
                       </a>
@@ -67,7 +71,7 @@ const { posts } = Astro.props;
                   ))}
                 </ul>
               </li>
-              <li class="flex items-center flex-wrap font-medium text-[9px] sm:text-xs text-slate-400">
+              <li class="flex items-center flex-wrap font-medium text-[10px] sm:text-xs text-slate-400">
                 <BiCalendarEdit className="mr-0.5 h-3 w-3 sm:h-4 sm:w-4 text-emerald-400/80" />
                 {dateFormat(post.data.date!)}
               </li>
