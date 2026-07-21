@@ -6,6 +6,7 @@ import Pagination from "@/layouts/components/Pagination.astro";
 import FeaturedSlider from "@/layouts/components/FeaturedSlider.astro";
 import { getSinglePage } from "@/lib/contentParser.astro";
 import { sortByDate } from "@/lib/utils/sortFunctions";
+import { withTrailingSlash } from "@/lib/utils/urlHelper";
 
 const posts = await getSinglePage("posts");
 const sortedPosts = sortByDate(posts);
@@ -14,15 +15,23 @@ const currentPosts = sortedPosts.slice(0, config.settings.pagination);
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 const canonicalUrl = base_url;
-const siteLogo = `${base_url}/images/logo.png`; 
+const siteLogo = `${base_url}/images/logo.png`;
 
-// 🎯 NEW: SiteNavigationElement Schema — Google Sitelinks වල ප්‍රධාන
+// 🎯 SiteNavigationElement Schema — Google Sitelinks වල ප්‍රධාන
 // menu items (Categories, Tags, About, Contact) වෙනම structured links
 // ලෙස පෙන්වීමට උදව් වේ. menu.json හි "main" ලැයිස්තුවෙන්ම dynamic ලෙස
 // generate කරන නිසා menu එක වෙනස් වුනත් schema එකත් auto-sync වේ.
 // Dropdown parent items (hasChildren: true, url: "") schema එකට useless
 // නිසා ඒවා filter කර ඉවත් කර ඇත; ඒවායේ children ටික නම් flatten කර
 // schema එකට එකතු කර ඇත.
+//
+// ✅ DEFENSIVE FIX: URLs දැන් withTrailingSlash() central helper එකෙන්
+// normalize කරයි (site-wide භාවිතා වන එකම helper — Header.astro,
+// Footer.astro, Posts.astro ආදී සියල්ලම මෙයම භාවිතා කරයි). මීට කලින්
+// menu.json හි url values දැනටමත් trailing slash සහිත නිසා direct
+// concatenation එකෙන් වැඩ කළත්, menu.json වෙනස් වුවහොත් (trailing
+// slash නොමැති url එකක් එකතු කළහොත්) silently broken schema URL එකක්
+// හැදීම මින් ඉදිරියට සම්පූර්ණයෙන්ම වළක්වයි.
 import menu from "@/config/menu.json";
 
 function buildNavItems(base: string) {
@@ -39,12 +48,27 @@ function buildNavItems(base: string) {
   return items.map((navItem) => ({
     "@type": "SiteNavigationElement",
     "name": navItem.name,
-    "url": `${base}${navItem.url}`,
+    "url": `${base}${withTrailingSlash(navItem.url)}`,
   }));
 }
 
 const navigationSchema = buildNavItems(base_url);
 
+// 🎯 FIXED (WebSite Schema Duplication): මෙය site-wide WebSite entity
+// (@id: "${base_url}/#website") එකේ එකම authoritative, full definition
+// එකයි. search.astro ඇතුළු අනිකුත් සියලුම pages දැන් මෙයට reference
+// විතරක් (@id සමග) දෙනවා මිස, full object එකක් නැවත define කරන්නේ නෑ —
+// Google entity graph එකේ එකම @id එකට field values (SearchAction URL,
+// alternateName, description) දෙකක් පෙනී duplicate/conflicting entity
+// data ලෙස flag වීම මින් සම්පූර්ණයෙන්ම වළක්වයි.
+//
+// 🎯 FIXED (SearchAction URL Trailing-Slash Mismatch): urlTemplate එක
+// කලින් "/search?q=" ලෙස (trailing slash නැතිව) තිබූ අතර, search.astro
+// එකේ එයම "/search/?q=" ලෙස (trailing slash සමග) තිබී parity නොතිබුණි.
+// Cloudflare Pages සියලුම directory-style URLs trailing-slash සමගම
+// serve කරන නිසා (wrangler.jsonc / withTrailingSlash() convention),
+// නිවැරදි canonical version එක trailing-slash සහිත එකයි — දෙකම දැන්
+// standardize කර ඇත.
 const homePageSchema = {
   "@context": "https://schema.org",
   "@graph": [
@@ -71,7 +95,7 @@ const homePageSchema = {
         "@type": "SearchAction",
         "target": {
           "@type": "EntryPoint",
-          "urlTemplate": `${base_url}/search?q={search_term_string}`
+          "urlTemplate": `${base_url}/search/?q={search_term_string}`
         },
         "query-input": "required name=search_term_string"
       }
