@@ -23,6 +23,31 @@ function Video({
   // වීඩියෝ එකේ ඇත්තම URL එක කෝඩ් එක ඇතුළෙන් තහවුරු කර ගැනීම
   const videoUrl = src.match(/^http/) ? src : `/videos/${src}`;
 
+  // 🎯 2026 SCHEMA UPGRADE: JSON-LD VideoObject added alongside the
+  // existing itemScope/itemProp Microdata block below. Google's
+  // structured-data docs prioritize JSON-LD as the recommended format
+  // (Microdata remains technically valid and is left untouched here so
+  // nothing that already depends on it breaks), so adding a JSON-LD
+  // script gives search engines the more reliably-parsed version too.
+  //
+  // Field parity note (consistency with Youtube.tsx's VideoObject):
+  // this is a self-hosted <video> file, not an embeddable third-party
+  // player, so "contentUrl" (the direct file URL) is the correct
+  // primary field here -- "embedUrl" is intentionally omitted since
+  // there is no embeddable player page for a raw video file. This
+  // mirrors the same schema.org VideoObject spec that Youtube.tsx
+  // follows, just with the field that matches this component's actual
+  // content type instead of copying Youtube.tsx's field set verbatim.
+  const videoObjectSchema = {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": title,
+    "description": `${title} - Watch High Quality Content on Wal Katha`,
+    "thumbnailUrl": thumbnail,
+    "uploadDate": uploadDate,
+    "contentUrl": videoUrl,
+  };
+
   return (
     <div 
       className="video-wrapper my-6 overflow-hidden rounded-2xl border border-neutral-800/80 bg-[#0a0b0d] p-1 transition-all duration-300 hover:border-[#01AD9F]/30 hover:shadow-lg hover:shadow-[#01AD9F]/5"
@@ -35,6 +60,13 @@ function Video({
       <meta itemProp="contentUrl" content={videoUrl} />
       <meta itemProp="uploadDate" content={uploadDate} />
       <meta itemProp="thumbnailUrl" content={thumbnail} />
+
+      {/* 🎯 JSON-LD VideoObject — Google's preferred structured-data format,
+          added alongside the Microdata block above without removing it */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(videoObjectSchema) }}
+      />
 
       {/* 🎬 ASPECT-VIDEO FOR REPREVENTING LAYOUT SHIFTS (SEO STABLE) */}
       <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black">
