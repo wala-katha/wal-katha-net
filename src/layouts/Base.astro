@@ -93,11 +93,28 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
 
     <style>
+      /* 🎯 FIXED (CRITICAL — Horizontal Page Wobble/Shake Bug):
+         .row class එකට (tw-bs-grid.mjs) Bootstrap-style negative margin
+         (calc(var(--bs-gutter-x) / -2)) තියෙනවා — මේක grid gutter alignment
+         සඳහා අවශ්‍ය සාමාන්‍ය pattern එකක්. නමුත් html/body level එකේ
+         overflow-x: hidden කිසිම තැනක define කර නොතිබූ නිසා, negative
+         margin එකෙන් හෝ badge/tag text content එකෙන් (Posts.astro,
+         SimilarPosts.astro) parent width එක ඉක්මවා giය හැකි ඕනෑම
+         තැනක, document scrollWidth එක viewport width එකට වඩා ලොකු වී,
+         touch/finger-drag කරන විට පැත්තට "wobble" හෝ "rubber-band"
+         ස්වභාවයක් පෙන්වයි (විශේෂයෙන් iOS/Android Chrome touch scroll
+         elastic overscroll ක්‍රියාවලිය තුළ). මෙය html සහ body දෙකටම
+         overflow-x: hidden යෙදීමෙන් root level එකේම block කරයි —
+         vertical scroll, existing layout, design කිසිවකට බලපෑමක් නැත,
+         document width එක viewport width එකට strictly clamp කරයි පමණි. */
       html, body {
         background-color: #050505;
         color: #f8fafc;
         margin: 0;
         padding: 0;
+        overflow-x: hidden;
+        width: 100%;
+        max-width: 100vw;
       }
       #main-content { min-height: 60vh; }
     </style>
@@ -165,7 +182,7 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
     <ClientRouter />
   </head>
 
-  <body class="bg-[#050505] text-[#f8fafc] min-h-screen flex flex-col antialiased selection:bg-emerald-500/30 selection:text-[#34d399]">
+  <body class="bg-[#050505] text-[#f8fafc] min-h-screen flex flex-col antialiased selection:bg-emerald-500/30 selection:text-[#34d399] overflow-x-hidden">
     <TwSizeIndicator />
     <Header />
     <main id="main-content" class="min-h-[60vh] flex-1 bg-[#050505]">
