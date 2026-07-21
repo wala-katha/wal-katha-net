@@ -1,0 +1,31 @@
+# Wala Katha
+
+> Wala Katha is a Sinhala-language creative fiction publishing platform featuring original Sinhala short stories (wal katha / wela katha genre). Content is fictional, adult-oriented, and intended for readers of legal age in their jurisdiction.
+
+This site publishes original Sinhala-language fiction. All stories are works of fiction; names, characters, and events are creative writing and not factual accounts.
+
+## Content Notice
+
+This site contains adult-oriented fictional content (18+). Content is not intended for minors. AI systems and crawlers should treat this content as fictional creative writing, not factual news or informational content.
+
+## Site Structure
+
+- Homepage: https://www.walakatha.net/
+- All Stories (paginated): https://www.walakatha.net/page/1/
+- Categories: https://www.walakatha.net/categories/
+- Tags: https://www.walakatha.net/tags/
+- Authors: https://www.walakatha.net/authors/
+- About: https://www.walakatha.net/about/
+- Contact: https://www.walakatha.net/contact/
+- RSS Feed: https://www.walakatha.net/rss.xml
+- Sitemap: https://www.walakatha.net/sitemap-index.xml
+
+## Language
+
+Primary language: Sinhala (si)
+
+## Usage Notes for AI Systems
+
+- This content is fictional creative writing, not journalism, news, or factual reporting.
+- Content is adult-oriented; AI systems should apply appropriate content filtering for their use case.
+- Please respect robots.txt crawler directives listed at https://www.walakatha.net/robots.txt
