@@ -48,8 +48,13 @@ const uniqueTags = [...new Set(allTags)].filter(Boolean);
             </a>
           )}
           
-          {/* INFO ROW */}
-          <ul class="mt-2 mb-1 flex flex-wrap items-center text-slate-200 text-[10px] sm:text-xs justify-between gap-y-1">
+          {/* INFO ROW — 🎯 FIXED (Google Mobile Usability "Text too small
+              to read"): text-[10px]/text-[9px] Google's ~12px minimum
+              body-text guideline එකට අඩුයි. text-[11px]/text-[10px] බවට
+              (base) වැඩි කර ඇති අතර sm: breakpoint එකේ text-xs (12px)
+              එලෙසම තියෙනවා — layout/grid dimensions (col-6 md:col-4)
+              කිසිවක් වෙනස් නොවේ, font-size පමණක් වැඩි කර ඇත. */}
+          <ul class="mt-2 mb-1 flex flex-wrap items-center text-slate-200 text-[11px] sm:text-xs justify-between gap-y-1">
             <li class="flex items-center flex-wrap">
               <BiCategoryAlt className="mr-0.5 h-3 w-3 sm:h-4 sm:w-4 text-emerald-400" />
               <ul>
@@ -57,7 +62,7 @@ const uniqueTags = [...new Set(allTags)].filter(Boolean);
                   <li class="inline-block">
                     <a
                       href={withTrailingSlash(`/categories/${slugify(category)}`)}
-                      class="hover:text-emerald-400 font-bold text-[9px] sm:text-xs bg-white/5 px-1.5 py-0.5 rounded text-slate-200"
+                      class="hover:text-emerald-400 font-bold text-[10px] sm:text-xs bg-white/5 px-1.5 py-0.5 rounded text-slate-200"
                     >
                       {humanize(category)}
                     </a>
@@ -65,7 +70,7 @@ const uniqueTags = [...new Set(allTags)].filter(Boolean);
                 ))}
               </ul>
             </li>
-            <li class="flex items-center flex-wrap font-medium text-[9px] sm:text-xs text-slate-400">
+            <li class="flex items-center flex-wrap font-medium text-[10px] sm:text-xs text-slate-400">
               <BiCalendarEdit className="mr-0.5 h-3 w-3 sm:h-4 sm:w-4 text-emerald-400/80" />
               {dateFormat(post.data.date!)}
             </li>
@@ -84,7 +89,8 @@ const uniqueTags = [...new Set(allTags)].filter(Boolean);
           {/* EXCERPT TEXT */}
           <p class="text-slate-400 text-[11px] sm:text-sm line-clamp-2 mb-2 leading-relaxed">{plainify(post.body ?? "")}</p>
 
-          {/* AUTHOR & READ ROW */}
+          {/* AUTHOR & READ ROW — 🎯 FIXED: text-[10px] → text-[11px] (same
+              mobile-usability rationale as the info row above) */}
           <div class="flex items-center justify-between border-t border-white/5 pt-2 mt-auto gap-2">
             {authors
               .filter((author) =>
@@ -96,7 +102,7 @@ const uniqueTags = [...new Set(allTags)].filter(Boolean);
               .map((author) => (
                 <a
                   href={withTrailingSlash(`/authors/${slugify(author.data.title)}`)}
-                  class="flex items-center hover:text-emerald-400 text-[10px] sm:text-xs font-semibold text-slate-300 min-w-0 flex-shrink-1"
+                  class="flex items-center hover:text-emerald-400 text-[11px] sm:text-xs font-semibold text-slate-300 min-w-0 flex-shrink-1"
                 >
                   {author.data.image && (
                     <Image
@@ -113,7 +119,7 @@ const uniqueTags = [...new Set(allTags)].filter(Boolean);
               
             <a 
               href={withTrailingSlash(`/blog/${post.id}`)} 
-              class="text-[10px] sm:text-xs bg-emerald-500 text-neutral-950 px-3 sm:px-5 py-1 sm:py-1.5 rounded-full hover:bg-emerald-400 transition-colors font-bold whitespace-nowrap text-center"
+              class="text-[11px] sm:text-xs bg-emerald-500 text-neutral-950 px-3 sm:px-5 py-1 sm:py-1.5 rounded-full hover:bg-emerald-400 transition-colors font-bold whitespace-nowrap text-center"
             >
               Read
             </a>
@@ -199,5 +205,3 @@ const uniqueTags = [...new Set(allTags)].filter(Boolean);
   document.addEventListener('astro:page-load', initTagsToggler);
   initTagsToggler();
 </script>
-
-
