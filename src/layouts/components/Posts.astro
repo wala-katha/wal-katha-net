@@ -1,11 +1,12 @@
 ---
 import { getSinglePage } from "@/lib/contentParser.astro";
 import dateFormat from "@/lib/utils/dateFormat";
+import readingTime from "@/lib/utils/readingTime";
 import { humanize, plainify, slugify } from "@/lib/utils/textConverter";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import { Image } from "astro:assets";
 import type { CollectionEntry } from "astro:content";
-import { BiCalendarEdit, BiCategoryAlt, BiPurchaseTagAlt } from "react-icons/bi";
+import { BiCalendarEdit, BiCategoryAlt, BiPurchaseTagAlt, BiTime } from "react-icons/bi";
 
 type Props = {
   posts: CollectionEntry<"posts">[];
@@ -93,7 +94,18 @@ const uniqueTags = [...new Set(allTags)].filter(Boolean);
           </h3>
 
           {/* EXCERPT TEXT */}
-          <p class="text-slate-400 text-[11px] sm:text-sm line-clamp-2 mb-2 leading-relaxed">{plainify(post.body ?? "")}</p>
+          <p class="text-slate-400 text-[11px] sm:text-sm line-clamp-2 mb-1 leading-relaxed">{plainify(post.body ?? "")}</p>
+
+          {/* 🎯 2026 READING TIME: readingTime.ts utility එක (කලින්
+              කිසිම component එකකින් use වුනේ නැති dead code) දැන්
+              Posts.astro grid card එකේ excerpt text එකට යටින්
+              display කරයි. Icon styling එක BiCalendarEdit badge
+              pattern එකටම සමාන (text-slate-400, small icon + text),
+              visual consistency එක පවත්වා ගනී. */}
+          <p class="mb-2 flex items-center text-[10px] sm:text-xs text-slate-500 font-medium">
+            <BiTime className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 text-emerald-500/70 flex-shrink-0" />
+            {readingTime(post.body ?? "").toString()}
+          </p>
 
           {/* AUTHOR & READ ROW */}
           <div class="flex items-center justify-between border-t border-white/5 pt-2 mt-auto gap-2 min-w-0">
