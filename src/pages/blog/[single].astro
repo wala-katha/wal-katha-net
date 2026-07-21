@@ -56,6 +56,15 @@ const authorSlug = globalSlugify(authorName || "");
 // purely additive — safe for any tooling already reading this schema.
 const wordCount = post.body ? post.body.trim().split(/\s+/).filter(Boolean).length : undefined;
 
+// 🎯 FIXED (Duplicate/Conflicting Organization Entity — Cross-File
+// Consistency): මීට කලින් මෙතන "publisher" field එක වෙනම, inline
+// Organization object එකක් (@id කිසිවක් නැතුව, broken "logo.png" path
+// එකක් සමග) define කරමින් තිබුණි. index.astro හි homePageSchema එකේ
+// "${base_url}/#organization" කියන @id එකෙන් දැනටමත් සම්පූර්ණ, correct
+// Organization entity එකක් (logo.webp සමග) define වී ඇති නිසා, මෙතන
+// duplicate/conflicting definition එකක් වෙනුවට එකම @id එකට reference
+// එකක් පමණක් දෙයි. මෙය Google entity graph එකට site පුරාම එකම
+// Organization එක එකම, consistent data set එකක් ලෙස පෙනීමට සලස්වයි.
 const articleSchema = {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
@@ -69,14 +78,7 @@ const articleSchema = {
     "name": authorName,
     "url": authorSlug ? `${base_url}/authors/${authorSlug}/` : undefined
   },
-  "publisher": {
-    "@type": "Organization",
-    "name": config?.site?.title || "Wala Katha",
-    "logo": {
-      "@type": "ImageObject",
-      "url": `${base_url}/images/logo.png`
-    }
-  },
+  "publisher": { "@id": `${base_url}/#organization` },
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": canonicalUrl
