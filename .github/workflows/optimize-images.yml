@@ -39,12 +39,19 @@ jobs:
           //    widths. Height දෙන්නේ නෑ — aspect ratio ස්වභාවිකව පවතී,
           //    crop/distort කිසිවක් සිදු නොවේ (proportional resize only).
           //
-          //    Posts.astro grid card එක display කරන්නේ 204x290px
-          //    (PageSpeed confirmed), ඒ නිසා maxWidth 420px = ~2x retina
-          //    safety margin.
-          // ==========================================================
+          //    🎯 2026 UPGRADE (Google Discover Optimization):
+          //    Posts.astro grid card එක display කරන්නේ 204x290px විතරයි
+          //    (PageSpeed confirmed), ඒත් Google Discover feed එකට post
+          //    image එකක් qualify වෙන්න අවශ්‍ය MINIMUM 1200px width
+          //    (Google's official large-image-preview / Discover
+          //    guideline). Display size එකට වඩා source file dimension
+          //    එකයි Discover crawler එක බලන්නේ, ඒ නිසා maxWidth එක
+          //    1200px දක්වා වැඩි කර ඇත — display card size (204px) එකට
+          //    කිසිම බලපෑමක් නැත, Posts.astro හි "sizes" attribute එකම
+          //    browser එකට නිවැරදි display resolution එක තෝරාගැනීමට
+          //    උදව් කරයි (responsive densities: 1x/2x).
           const folders = [
-            { dir: 'public/images/posts',   maxWidth: 420,  type: 'post'   },
+            { dir: 'public/images/posts',   maxWidth: 1200, type: 'post'   },
             { dir: 'public/images/slider',  maxWidth: 1200, type: 'slider' },
             { dir: 'public/images/authors', maxWidth: 150,  type: 'author', square: true },
           ];
@@ -63,10 +70,12 @@ jobs:
           //       targetWidth එකට ගැලපෙනවද?
           //
           //    දෙකම true නම් විතරයි "up to date" — timestamp අලුත් උනත්
-          //    dimension mismatch නම් (උදා: maxWidth 750→420 වගේ config
+          //    dimension mismatch නම් (උදා: maxWidth 420→1200 වගේ config
           //    change එකකින් පස්සේ), stale කියලා සලකලා force re-process
           //    කරයි. මේකෙන් maxWidth අගය future එකේදී වෙනස් කළොත්,
-          //    manual .webp deletion කිසිවක් නැතුවම auto-heal වේ.
+          //    manual .webp deletion කිසිවක් නැතුවම auto-heal වේ — 
+          //    මේ deploy එකෙන්ම, existing 420px posts images සියල්ල
+          //    ස්වයංක්‍රීයව 1200px දක්වා re-generate වේ.
           // ==========================================================
           async function isUpToDate(input, out, targetWidth, isSquare = false) {
             if (!existsSync(out)) return false;
@@ -148,6 +157,12 @@ jobs:
               }
               // metadata.width <= maxWidth නම් — කිසිම resize එකක් නෑ,
               // දැනටමත් කුඩා පින්තූරයක් නම් stretch කරන්නේ නෑ (quality preserved)
+              //
+              // ⚠️ IMPORTANT: 1200px maxWidth එකට upgrade කළත්, source
+              // image එක 1200px ට අඩු resolution එකක් (උදා: 800px) නම්,
+              // withoutEnlargement නිසා upscale කරන්නේ නෑ — pixelation/
+              // quality loss අවම කරයි. Google Discover සඳහා source
+              // images 1200px+ resolution එකෙන්ම upload කිරීම නිර්දේශිතයි.
 
               await pipeline
                 .webp({ quality: 85, smartSubsample: true, effort: 6 })
@@ -332,5 +347,5 @@ jobs:
           git add src/content/contact/*.md || true
           git add src/content/pages/*.md || true
           git add src/config/config.json || true
-          git diff --staged --quiet || git commit -m "Auto: Self-healing WebP optimization (dimension-aware staleness detection) + root images + frontmatter update"
+          git diff --staged --quiet || git commit -m "Auto: Self-healing WebP optimization (1200px Discover-ready dimensions) + root images + frontmatter update"
           git push
