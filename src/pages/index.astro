@@ -16,35 +16,6 @@ const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 const canonicalUrl = base_url;
 const siteLogo = `${base_url}/images/logo.png`; 
 
-// 🎯 NEW: SiteNavigationElement Schema — Google Sitelinks වල ප්‍රධාන
-// menu items (Categories, Tags, About, Contact) වෙනම structured links
-// ලෙස පෙන්වීමට උදව් වේ. menu.json හි "main" ලැයිස්තුවෙන්ම dynamic ලෙස
-// generate කරන නිසා menu එක වෙනස් වුනත් schema එකත් auto-sync වේ.
-// Dropdown parent items (hasChildren: true, url: "") schema එකට useless
-// නිසා ඒවා filter කර ඉවත් කර ඇත; ඒවායේ children ටික නම් flatten කර
-// schema එකට එකතු කර ඇත.
-import menu from "@/config/menu.json";
-
-function buildNavItems(base: string) {
-  const items: { name: string; url: string }[] = [];
-  for (const item of menu.main || []) {
-    if (item.hasChildren && Array.isArray(item.children)) {
-      for (const child of item.children) {
-        if (child?.url) items.push({ name: child.name, url: child.url });
-      }
-    } else if (item?.url) {
-      items.push({ name: item.name, url: item.url });
-    }
-  }
-  return items.map((navItem) => ({
-    "@type": "SiteNavigationElement",
-    "name": navItem.name,
-    "url": `${base}${navItem.url}`,
-  }));
-}
-
-const navigationSchema = buildNavItems(base_url);
-
 const homePageSchema = {
   "@context": "https://schema.org",
   "@graph": [
@@ -84,8 +55,7 @@ const homePageSchema = {
       "description": "Daily updated premium Sinhala wal katha, wala katha and wela stories collection.",
       "isPartOf": { "@id": `${base_url}/#website` },
       "about": { "@type": "Thing", "name": "Sinhala Wal Katha Literature" }
-    },
-    ...navigationSchema
+    }
   ]
 };
 ---
