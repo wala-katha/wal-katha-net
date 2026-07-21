@@ -22,6 +22,26 @@ const Youtube = ({
   // YouTube thumbnail සහ embed URL එක ස්මාර්ට් විදිහට සකස් කිරීම
   const thumbnailUrl = `https://img.youtube.com/vi/${id}/maxresdefault.jpg`;
   const embedUrl = `https://www.youtube.com/embed/${id}`;
+  const watchUrl = `https://www.youtube.com/watch?v=${id}`;
+
+  // 🎯 2026 SCHEMA UPGRADE: JSON-LD VideoObject added alongside the
+  // existing itemScope/itemProp Microdata block below. Google's
+  // structured-data docs prioritize JSON-LD as the recommended format
+  // (Microdata remains technically valid and is left untouched here so
+  // nothing that already depends on it breaks), so adding a JSON-LD
+  // script gives search engines the more reliably-parsed version too.
+  // "contentUrl" (the canonical watch-page URL) is included since it's
+  // a recommended VideoObject field the Microdata block didn't have.
+  const videoObjectSchema = {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": title,
+    "description": `${title} - Watch High Quality Video on Wal Katha`,
+    "thumbnailUrl": thumbnailUrl,
+    "uploadDate": uploadDate,
+    "embedUrl": embedUrl,
+    "contentUrl": watchUrl,
+  };
 
   return (
     <div 
@@ -35,6 +55,13 @@ const Youtube = ({
       <meta itemProp="thumbnailUrl" content={thumbnailUrl} />
       <meta itemProp="embedUrl" content={embedUrl} />
       <meta itemProp="uploadDate" content={uploadDate} />
+
+      {/* 🎯 JSON-LD VideoObject — Google's preferred structured-data format,
+          added alongside the Microdata block above without removing it */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(videoObjectSchema) }}
+      />
 
       {/* 🎬 ASPECT-VIDEO FOR 100% STABLE RENDERING (NO LAYOUT SHIFT) */}
       <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black">
