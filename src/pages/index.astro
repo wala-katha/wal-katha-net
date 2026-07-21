@@ -54,21 +54,16 @@ function buildNavItems(base: string) {
 
 const navigationSchema = buildNavItems(base_url);
 
-// 🎯 FIXED (WebSite Schema Duplication): මෙය site-wide WebSite entity
-// (@id: "${base_url}/#website") එකේ එකම authoritative, full definition
-// එකයි. search.astro ඇතුළු අනිකුත් සියලුම pages දැන් මෙයට reference
-// විතරක් (@id සමග) දෙනවා මිස, full object එකක් නැවත define කරන්නේ නෑ —
-// Google entity graph එකේ එකම @id එකට field values (SearchAction URL,
-// alternateName, description) දෙකක් පෙනී duplicate/conflicting entity
-// data ලෙස flag වීම මින් සම්පූර්ණයෙන්ම වළක්වයි.
+// 🎯 WebSite Schema — this page's WebSite entity (@id: "${base_url}/#website")
+// is the ONE authoritative, full definition site-wide. All other pages
+// (search.astro included) reference this via "isPartOf": {"@id": ...}
+// only, never redefining the full object — this avoids Google's entity
+// graph seeing conflicting field values for the same @id.
 //
-// 🎯 FIXED (SearchAction URL Trailing-Slash Mismatch): urlTemplate එක
-// කලින් "/search?q=" ලෙස (trailing slash නැතිව) තිබූ අතර, search.astro
-// එකේ එයම "/search/?q=" ලෙස (trailing slash සමග) තිබී parity නොතිබුණි.
-// Cloudflare Pages සියලුම directory-style URLs trailing-slash සමගම
-// serve කරන නිසා (wrangler.jsonc / withTrailingSlash() convention),
-// නිවැරදි canonical version එක trailing-slash සහිත එකයි — දෙකම දැන්
-// standardize කර ඇත.
+// SearchAction urlTemplate uses "/search/" (trailing slash) to stay
+// consistent with Cloudflare Pages' directory-style URL serving
+// behavior (see wrangler.jsonc / withTrailingSlash() convention) and
+// with search.astro's own canonicalUrl.
 const homePageSchema = {
   "@context": "https://schema.org",
   "@graph": [
@@ -209,7 +204,20 @@ const homePageSchema = {
     }
   </style>
 
-  <main class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
+  <!--
+    🎯 FIXED (CRITICAL — Rich Results Test "No items detected"):
+    මෙය කලින් <main class="section pt-4 pb-12..."> ලෙස ආරම්භ වී, Base.astro
+    layout එකේ දැනටමත් තිබූ <main id="main-content">...<slot /></main>
+    ඇතුළත NESTED <main> tag එකක් ලෙස render විය (main > main). HTML spec
+    එකට අනුව document එකකට <main> landmark එකක් පමණක් තිබිය යුතු අතර,
+    මෙම duplicate/nested <main> එක Google Rich Results Test / Search
+    Console හි parser එකට document structure එක malformed ලෙස පෙනී,
+    homepage එකේ valid JSON-LD schema තිබුණත් "No items detected" ලෙස
+    වාර්තා වීමට හේතු විය. Inner <main> එක සෙමැන්ටික් වශයෙන් නිවැරදි
+    <div> එකකට මාරු කර ඇත — CSS classes සියල්ල එලෙසම රඳවා ඇති නිසා
+    visual design එකට කිසිදු බලපෑමක් නැත.
+  -->
+  <div class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
     <div class="container">
 
       {/* ✅ FIX: real H1 — FeaturedSlider එකට උඩින්ම, DOM order එකේ පළමුවෙන්.
@@ -225,5 +233,5 @@ const homePageSchema = {
       <Pagination currentPage={1} totalPages={totalPages} />
       
     </div>
-  </main>
+  </div>
 </Base>
