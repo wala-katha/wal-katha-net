@@ -44,9 +44,21 @@ const canonicalUrl = `${base_url}/blog/${post.id}/`;
 const authorName = Array.isArray(authors) && authors.length > 0 ? authors[0] : config?.metadata?.meta_author || "Admin";
 const authorSlug = globalSlugify(authorName || "");
 
+// 🎯 2026 SCHEMA UPGRADE: Article -> BlogPosting
+// Google's structured data docs list BlogPosting as the semantically
+// correct subtype for blog content (Article/NewsArticle/BlogPosting are
+// structurally interchangeable, but BlogPosting is the precise type for
+// this site's content). Added "isPartOf" (ties the post to the site's
+// WebSite entity already defined in index.astro's homePageSchema, which
+// strengthens topical/entity association for Google) and "wordCount"
+// (an optional-but-recommended field that adds a small E-E-A-T content-
+// depth signal). No existing fields were removed or renamed, so this is
+// purely additive — safe for any tooling already reading this schema.
+const wordCount = post.body ? post.body.trim().split(/\s+/).filter(Boolean).length : undefined;
+
 const articleSchema = {
   "@context": "https://schema.org",
-  "@type": "Article",
+  "@type": "BlogPosting",
   "headline": title || "",
   "description": description || "",
   "image": image ? (image.startsWith("http") ? image : `${base_url}${image}`) : undefined,
@@ -68,7 +80,12 @@ const articleSchema = {
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": canonicalUrl
-  }
+  },
+  "isPartOf": {
+    "@type": "WebSite",
+    "@id": `${base_url}/#website`
+  },
+  "wordCount": wordCount
 };
 ---
 
