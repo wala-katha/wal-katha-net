@@ -1,10 +1,11 @@
 ---
 import dateFormat from "@/lib/utils/dateFormat";
+import readingTime from "@/lib/utils/readingTime";
 import { humanize, slugify } from "@/lib/utils/textConverter";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import { Image } from "astro:assets";
 import type { CollectionEntry } from "astro:content";
-import { BiCalendarEdit, BiCategoryAlt, BiChevronDown, BiChevronUp } from "react-icons/bi";
+import { BiCalendarEdit, BiCategoryAlt, BiChevronDown, BiChevronUp, BiTime } from "react-icons/bi";
 
 type Props = {
   posts: CollectionEntry<"posts">[];
@@ -76,6 +77,14 @@ const { posts } = Astro.props;
                 {dateFormat(post.data.date!)}
               </li>
             </ul>
+
+            {/* 🎯 2026 READING TIME: SimilarPosts card එකටත් Posts.astro
+                එකේම pattern එකෙන් reading time badge එක එකතු කර ඇත —
+                centered layout එකට ගැලපෙන පරිදි justify-center. */}
+            <p class="mb-1 flex items-center justify-center text-[10px] sm:text-xs text-slate-500 font-medium">
+              <BiTime className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 text-emerald-500/70 flex-shrink-0" />
+              {readingTime(post.body ?? "").toString()}
+            </p>
 
             {/* POST TITLE */}
             <h3 class="mb-1 line-clamp-2 leading-tight text-center mx-auto w-full">
