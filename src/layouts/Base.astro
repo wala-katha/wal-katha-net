@@ -93,20 +93,39 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
 
     <style>
-      /* 🎯 FIXED (CRITICAL — Horizontal Page Wobble/Shake Bug):
+      /* 🎯 FIXED (CRITICAL — Horizontal Page Wobble/Shake Bug — Android Chrome):
          .row class එකට (tw-bs-grid.mjs) Bootstrap-style negative margin
          (calc(var(--bs-gutter-x) / -2)) තියෙනවා — මේක grid gutter alignment
-         සඳහා අවශ්‍ය සාමාන්‍ය pattern එකක්. නමුත් html/body level එකේ
-         overflow-x: hidden කිසිම තැනක define කර නොතිබූ නිසා, negative
-         margin එකෙන් හෝ badge/tag text content එකෙන් (Posts.astro,
-         SimilarPosts.astro) parent width එක ඉක්මවා giය හැකි ඕනෑම
-         තැනක, document scrollWidth එක viewport width එකට වඩා ලොකු වී,
-         touch/finger-drag කරන විට පැත්තට "wobble" හෝ "rubber-band"
-         ස්වභාවයක් පෙන්වයි (විශේෂයෙන් iOS/Android Chrome touch scroll
-         elastic overscroll ක්‍රියාවලිය තුළ). මෙය html සහ body දෙකටම
-         overflow-x: hidden යෙදීමෙන් root level එකේම block කරයි —
-         vertical scroll, existing layout, design කිසිවකට බලපෑමක් නැත,
-         document width එක viewport width එකට strictly clamp කරයි පමණි. */
+         සඳහා අවශ්‍ය සාමාන්‍ය pattern එකක්. 
+
+         මීට පෙර html/body වලට විතරක් overflow-x: hidden දාලා තිබ්බා, ඒත් ඒක
+         scrollbar එක "hide" කරනවා විතරයි — Android Chrome එකේ, document එකේ
+         actual scrollable width එක viewport එකට වඩා ලොකු වුනොත් (negative
+         margins, transforms, badge/tag text content නිසා), touch-drag කරන
+         විට Chrome එකේ horizontal pan gesture එක තාමත් "catch" වෙලා content
+         එක පොඩ්ඩක් පැත්තට move වෙනවා (elastic/rubber-band නොවුනත් drag
+         ස්වභාවයක්) — scrollbar නොපෙනුනත් underlying overflow එක තිබුණු නිසා.
+
+         🎯 PERMANENT ROOT-LEVEL FIX (2-Layer Defense):
+         1. touch-action: pan-y — html/body මට්ටමින්ම browser එකට කියනවා
+            vertical pan/scroll පමණක් allow කරන්න, horizontal pan gesture
+            එකක් කිසිසේත් trigger වෙන්නේ නැති පරිදි hard-block කරනවා. මේක
+            Android Chrome + iOS Safari දෙකෙටම වැඩ කරන cross-browser fix
+            එකක්, vertical scroll එකට කිසිම බලපෑමක් නැත.
+         2. .row (Bootstrap-grid negative margin source) එකටම සෘජුවම
+            overflow-x: hidden + max-width: 100% දාලා, root cause එකම
+            (negative margin causing width overflow) contain කරනවා —
+            html/body level fix එක විතරක් "safety net" එකක් විදිහට තියාගෙන,
+            .row level එකේ ම root cause එක clamp කරනවා. මේක site එකේ .row
+            පාවිච්චි කරන ඕනෑම component එකකට (Posts.astro, SimilarPosts.astro,
+            Authors.astro, PostSingle.astro ආදී) automatic ලෙස apply වෙනවා —
+            single central point එකෙන් අනාගතයේ අලුත් component එකකින්
+            wobble bug එකක් ආවත් මෙතනින්ම block වෙනවා (self-healing).
+
+         මේ දෙකම එකතු කිරීමෙන්, existing layout, design, spacing, gutter
+         alignment කිසිවකට බලපෑමක් නැත — document width එක viewport width
+         එකට strictly clamp කරලා, horizontal pan gesture එකම browser එකෙන්
+         hard-disable කරනවා. */
       html, body {
         background-color: #050505;
         color: #f8fafc;
@@ -115,6 +134,12 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
         overflow-x: hidden;
         width: 100%;
         max-width: 100vw;
+        touch-action: pan-y;
+        overscroll-behavior-x: none;
+      }
+      .row {
+        overflow-x: hidden;
+        max-width: 100%;
       }
       #main-content { min-height: 60vh; }
     </style>
@@ -182,7 +207,7 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
     <ClientRouter />
   </head>
 
-  <body class="bg-[#050505] text-[#f8fafc] min-h-screen flex flex-col antialiased selection:bg-emerald-500/30 selection:text-[#34d399] overflow-x-hidden">
+  <body class="bg-[#050505] text-[#f8fafc] min-h-screen flex flex-col antialiased selection:bg-emerald-500/30 selection:text-[#34d399] overflow-x-hidden" style="touch-action: pan-y; overscroll-behavior-x: none;">
     <TwSizeIndicator />
     <Header />
     <main id="main-content" class="min-h-[60vh] flex-1 bg-[#050505]">
