@@ -64,6 +64,15 @@ const postsCollection = defineCollection({
     meta_title: z.string().optional(),
     description: z.string().optional(),
     date: z.coerce.date().optional(),
+    // 🎯 2026 "LAST UPDATED" FEATURE: post එකක් publish කරාට පස්සේ
+    // content edit කළොත් (typo fix, content expand ආදී), මෙම optional
+    // field එකෙන් "Updated on: X" කියලා UI එකේත්, article:modified_time
+    // schema/meta tag එකේත් නිවැරදි (publish date එකට වඩා different)
+    // දිනයක් පෙන්විය හැක. Field එක .optional() නිසා, existing posts 4ම
+    // (updated field එකක් නැති) build කිසිවක් break නොවී දිගටම වැඩ කරයි —
+    // ඒවාට "Updated" badge එකක් පෙන්වන්නේ නැත (date === updated නම් හෝ
+    // updated නොමැති නම්), publish date එක විතරක් පෙන්වයි.
+    updated: z.coerce.date().optional(),
     image: z.string().optional(),
     categories: z.array(z.string()).default(() => ["others"]),
     authors: z.array(z.string()).default(() => ["Admin"]),
