@@ -6,7 +6,6 @@ import Pagination from "@/layouts/components/Pagination.astro";
 import FeaturedSlider from "@/layouts/components/FeaturedSlider.astro";
 import { getSinglePage } from "@/lib/contentParser.astro";
 import { sortByDate } from "@/lib/utils/sortFunctions";
-import { withTrailingSlash } from "@/lib/utils/urlHelper";
 
 const posts = await getSinglePage("posts");
 const sortedPosts = sortByDate(posts);
@@ -15,23 +14,15 @@ const currentPosts = sortedPosts.slice(0, config.settings.pagination);
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 const canonicalUrl = base_url;
-const siteLogo = `${base_url}/images/logo.png`;
+const siteLogo = `${base_url}/images/logo.png`; 
 
-// 🎯 SiteNavigationElement Schema — Google Sitelinks වල ප්‍රධාන
+// 🎯 NEW: SiteNavigationElement Schema — Google Sitelinks වල ප්‍රධාන
 // menu items (Categories, Tags, About, Contact) වෙනම structured links
 // ලෙස පෙන්වීමට උදව් වේ. menu.json හි "main" ලැයිස්තුවෙන්ම dynamic ලෙස
 // generate කරන නිසා menu එක වෙනස් වුනත් schema එකත් auto-sync වේ.
 // Dropdown parent items (hasChildren: true, url: "") schema එකට useless
 // නිසා ඒවා filter කර ඉවත් කර ඇත; ඒවායේ children ටික නම් flatten කර
 // schema එකට එකතු කර ඇත.
-//
-// ✅ DEFENSIVE FIX: URLs දැන් withTrailingSlash() central helper එකෙන්
-// normalize කරයි (site-wide භාවිතා වන එකම helper — Header.astro,
-// Footer.astro, Posts.astro ආදී සියල්ලම මෙයම භාවිතා කරයි). මීට කලින්
-// menu.json හි url values දැනටමත් trailing slash සහිත නිසා direct
-// concatenation එකෙන් වැඩ කළත්, menu.json වෙනස් වුවහොත් (trailing
-// slash නොමැති url එකක් එකතු කළහොත්) silently broken schema URL එකක්
-// හැදීම මින් ඉදිරියට සම්පූර්ණයෙන්ම වළක්වයි.
 import menu from "@/config/menu.json";
 
 function buildNavItems(base: string) {
@@ -48,22 +39,12 @@ function buildNavItems(base: string) {
   return items.map((navItem) => ({
     "@type": "SiteNavigationElement",
     "name": navItem.name,
-    "url": `${base}${withTrailingSlash(navItem.url)}`,
+    "url": `${base}${navItem.url}`,
   }));
 }
 
 const navigationSchema = buildNavItems(base_url);
 
-// 🎯 WebSite Schema — this page's WebSite entity (@id: "${base_url}/#website")
-// is the ONE authoritative, full definition site-wide. All other pages
-// (search.astro included) reference this via "isPartOf": {"@id": ...}
-// only, never redefining the full object — this avoids Google's entity
-// graph seeing conflicting field values for the same @id.
-//
-// SearchAction urlTemplate uses "/search/" (trailing slash) to stay
-// consistent with Cloudflare Pages' directory-style URL serving
-// behavior (see wrangler.jsonc / withTrailingSlash() convention) and
-// with search.astro's own canonicalUrl.
 const homePageSchema = {
   "@context": "https://schema.org",
   "@graph": [
@@ -90,7 +71,7 @@ const homePageSchema = {
         "@type": "SearchAction",
         "target": {
           "@type": "EntryPoint",
-          "urlTemplate": `${base_url}/search/?q={search_term_string}`
+          "urlTemplate": `${base_url}/search?q={search_term_string}`
         },
         "query-input": "required name=search_term_string"
       }
@@ -204,20 +185,7 @@ const homePageSchema = {
     }
   </style>
 
-  <!--
-    🎯 FIXED (CRITICAL — Rich Results Test "No items detected"):
-    මෙය කලින් <main class="section pt-4 pb-12..."> ලෙස ආරම්භ වී, Base.astro
-    layout එකේ දැනටමත් තිබූ <main id="main-content">...<slot /></main>
-    ඇතුළත NESTED <main> tag එකක් ලෙස render විය (main > main). HTML spec
-    එකට අනුව document එකකට <main> landmark එකක් පමණක් තිබිය යුතු අතර,
-    මෙම duplicate/nested <main> එක Google Rich Results Test / Search
-    Console හි parser එකට document structure එක malformed ලෙස පෙනී,
-    homepage එකේ valid JSON-LD schema තිබුණත් "No items detected" ලෙස
-    වාර්තා වීමට හේතු විය. Inner <main> එක සෙමැන්ටික් වශයෙන් නිවැරදි
-    <div> එකකට මාරු කර ඇත — CSS classes සියල්ල එලෙසම රඳවා ඇති නිසා
-    visual design එකට කිසිදු බලපෑමක් නැත.
-  -->
-  <div class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
+  <main class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
     <div class="container">
 
       {/* ✅ FIX: real H1 — FeaturedSlider එකට උඩින්ම, DOM order එකේ පළමුවෙන්.
@@ -233,5 +201,5 @@ const homePageSchema = {
       <Pagination currentPage={1} totalPages={totalPages} />
       
     </div>
-  </div>
+  </main>
 </Base>
