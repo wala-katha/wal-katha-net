@@ -113,34 +113,42 @@ const breadcrumbSchema = JSON.stringify({
 <!-- BreadcrumbList Schema -->
 <script type="application/ld+json" set:html={breadcrumbSchema} />
 
-<section class="section bg-[#010203] relative">
+<section class="section !pt-6 sm:!pt-8 bg-[#010203] relative">
   <div class="container">
 
-    {/* 🎯 2026 AUTO-COLLAPSING VISIBLE BREADCRUMB UI (v2 — SPACING &
-        SELF-HEALING TIMER FIX):
+    {/* 🎯 2026 AUTO-COLLAPSING VISIBLE BREADCRUMB UI (v3 — HEADER GAP
+        FIX & TOGGLE ICON COLOR FIX):
 
-        FIXES APPLIED (from user-reported screenshot issues):
-        1. Path <-> Logo gap fix: Path wrapper එකේ තිබූ "mb-6" (large
-           bottom margin) ඉවත් කර, "mt-1 mb-4" කුඩා ලෙස replace කර ඇත.
-           Section top padding (.section { py-20 }) එකත් "!pt-6" override
-           එකකින් මෙම section එකට පමණක් override කර ඇත — වෙනත් කිසිම
-           section (SimilarPosts, Base.astro global .section rule) එකකට
-           බලපෑමක් නැත, class scope එක මෙම එකම <section> tag එකට පමණි.
-        2. Path text size වැඩි කිරීම: "text-[11px] sm:text-xs" ->
-           "text-[13px] sm:text-sm" (readability improvement, layout
-           break කිසිවක් සිදු නොවේ — flex-wrap/truncate logic එලෙසම).
-        3. Collapsed toggle button upgrade: size වැඩි කර ("px-4 py-2.5"),
-           subtle pulse-glow animation එකක් (breadcrumb-toggle-pulse
-           keyframe) එකතු කර ඇත, icon size එකත් වැඩි කර ඇත.
-        4. 🎯 CRITICAL FIX — SELF-HEALING RECURSIVE AUTO-COLLAPSE:
-           කලින් logic එකේ, user click කර expand කළ පසු, "නැවත"
-           auto-collapse වීමක් සිදු නොවීය (setTimeout එක එක් වරක් පමණක්
-           schedule වී තිබූ නිසා). දැන් "scheduleAutoCollapse()" නම්
-           reusable function එකක් හඳුන්වා දී ඇති අතර, collapse හෝ
-           expand ඕනෑම action එකකින් පසු නැවත 5 තත්පරයේ timer එක
-           ස්වයංක්‍රීයව reschedule වේ — collapse/expand cycle එක
-           කොපමණ වාරයක් සිදු වුවත් (permanent, self-healing loop),
-           සෑම expand එකකින් පසුවත් නැවත ස්වයංක්‍රීයව hide වේ.
+        FIXES APPLIED (from user-reported screenshot issues, round 2):
+        1. 🎯 CRITICAL FIX — HEADER-TO-TITLE GAP: The parent <section>
+           tag uses the global ".section { @apply py-20; }" utility
+           (defined in src/styles/components.css), which adds 5rem
+           (80px) of TOP padding on every page that uses this class
+           (404.astro, contact.astro, categories/[category].astro,
+           etc). In v2 this was documented as being overridden but the
+           override class was never actually added to the <section>
+           tag — that was the root cause of the large visible gap
+           between the Header and the Path/Title seen in the user's
+           screenshot. Now "!pt-6 sm:!pt-8" is applied directly on
+           THIS <section> tag only (Tailwind's "!" important-modifier
+           scopes the override to this exact element's classlist —
+           it does not touch the shared ".section" utility definition
+           itself, so every OTHER page still using ".section" for its
+           default 80px top padding is completely unaffected).
+        2. Breadcrumb wrapper spacing tightened further: "mt-1 mb-4"
+           -> "mt-0 mb-3" to remove the remaining vertical gap between
+           the (now-closer) top of the section and the Path pill, and
+           between the Path pill and the H1 title below it.
+        3. 🎯 TOGGLE ICON COLOR FIX: The collapsed-state "Path" pill's
+           icon (BiMapPin) and its chevron arrow were rendering in a
+           dim white tone (text-[#F8F8FF]/70). Per user request, both
+           are now recolored to the site's signature emerald/green
+           theme color (#01AD9F, already used throughout Header.astro,
+           Logo.astro, Pagination.astro active-state, etc.) so the
+           icon stands out clearly on the dark background as either
+           green — matching the established site-wide accent color
+           convention (no new color introduced; reuses the existing
+           theme primary).
 
         SEO SAFETY: full breadcrumb <a> links සහ text සියල්ල DOM එකේ
         සම්පූර්ණයෙන්ම present වේ (display:none කිසිවිටෙකත් යොදා නැත) —
@@ -156,8 +164,12 @@ const breadcrumbSchema = JSON.stringify({
         site එකක් නිසා DOMContentLoaded නොව, site-wide already-established
         pattern එකම (astro:page-load, Header.astro/PostSingle.astro comment
         system එකේම pattern එක) භාවිතා කර ඇත — SPA navigation කිහිපයකින්
-        පසුවත් timer/toggle logic එක නිවැරදිව reset වී වැඩ කරයි. */}
-    <div id="breadcrumb-wrapper" class="row justify-center mt-1 mb-4">
+        පසුවත් timer/toggle logic එක නිවැරදිව reset වී වැඩ කරයි.
+
+        SELF-HEALING AUTO-COLLAPSE: expand කිරීමෙන් පසුවත්
+        "scheduleAutoCollapse()" reusable function එක හරහා නැවත 5
+        තත්පරයකින් auto-collapse වීම permanent ලෙස recurring වේ. */}
+    <div id="breadcrumb-wrapper" class="row justify-center mt-0 mb-3">
       <div class="md:col-10 flex justify-center sm:justify-start">
         <div id="breadcrumb-shell" class="relative min-h-[42px] flex items-center">
 
@@ -165,28 +177,27 @@ const breadcrumbSchema = JSON.stringify({
               visible වේ (JS එකෙන් "is-collapsed" class එක parent එකට
               add කරයි). No-JS fallback: JS disable නම් මෙය කිසිවිටෙකත්
               පෙනෙන්නේ නැත, full breadcrumb එකම සැමවිටම පෙනී පවතී.
-              🎯 UPGRADED: size වැඩි කර ("px-4 py-2.5"), icon size වැඩි
-              කර ("h-4 w-4"), subtle pulse-glow animation එකතු කර ඇත. */}
+              🎯 ICON COLOR FIX: BiMapPin icon සහ arrow SVG දෙකම දැන්
+              "text-[#01AD9F]" (site theme emerald/green) වර්ණයෙන්
+              — කලින් තිබූ "text-[#F8F8FF]/70" (dim white) වෙනුවට. */}
           <button
             id="breadcrumb-toggle"
             type="button"
             aria-label="පාර පෙන්වන්න/සඟවන්න"
             aria-expanded="true"
             aria-controls="breadcrumb-content"
-            class="hidden items-center gap-2 bg-white/[0.05] hover:bg-white/[0.1] border border-[#01AD9F]/20 hover:border-[#01AD9F]/50 text-[#F8F8FF]/70 hover:text-[#01AD9F] text-[13px] sm:text-sm font-bold px-4 py-2.5 rounded-full transition-colors duration-200 breadcrumb-toggle-pulse"
+            class="hidden items-center gap-2 bg-white/[0.05] hover:bg-white/[0.1] border border-[#01AD9F]/30 hover:border-[#01AD9F]/60 text-[#01AD9F] hover:text-[#01c4b4] text-[13px] sm:text-sm font-bold px-4 py-2.5 rounded-full transition-colors duration-200 breadcrumb-toggle-pulse"
           >
-            <BiMapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+            <BiMapPin className="h-4 w-4 flex-shrink-0 text-[#01AD9F]" aria-hidden="true" />
             <span>Path</span>
-            <svg id="breadcrumb-arrow" class="h-3.5 w-3.5 transition-transform duration-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <svg id="breadcrumb-arrow" class="h-3.5 w-3.5 text-[#01AD9F] transition-transform duration-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
             </svg>
           </button>
 
           {/* FULL BREADCRUMB NAV — always in DOM, always crawlable.
               breadcrumbItems array එකම (schema එකට use කරන) reuse කරන
-              නිසා, schema එකයි UI එකයි කවදාවත් desync වෙන්නේ නෑ.
-              🎯 FONT SIZE UPGRADE: "text-[11px] sm:text-xs" ->
-              "text-[13px] sm:text-sm" — readability improvement. */}
+              නිසා, schema එකයි UI එකයි කවදාවත් desync වෙන්නේ නෑ. */}
           <nav
             id="breadcrumb-content"
             aria-label="Breadcrumb"
@@ -658,7 +669,7 @@ const breadcrumbSchema = JSON.stringify({
     transform: rotate(-90deg);
   }
 
-  /* 🎯 NEW: Collapsed-state toggle button — subtle pulse-glow animation
+  /* 🎯 Collapsed-state toggle button — subtle pulse-glow animation
      to make it more noticeable/discoverable once breadcrumb auto-hides.
      Animation is gentle (opacity/shadow only, no layout-affecting
      transform), so it cannot cause any CLS or layout shift. */
@@ -676,15 +687,12 @@ const breadcrumbSchema = JSON.stringify({
 </style>
 
 <script>
-  // 🎯 AUTO-COLLAPSING BREADCRUMB LOGIC (v2 — SELF-HEALING RECURSIVE
-  // TIMER) — site-wide astro:page-load pattern එකම (Header.astro/comment
-  // system එකේම convention) භාවිතා කරයි, DOMContentLoaded නොව — Astro
-  // View Transitions (ClientRouter) සක්‍රීය නිසා SPA navigation
-  // කිහිපයකින් පසුවත් නිවැරදිව වැඩ කරයි.
+  // 🎯 AUTO-COLLAPSING BREADCRUMB LOGIC — site-wide astro:page-load
+  // pattern එකම (Header.astro/comment system එකේම convention) භාවිතා
+  // කරයි, DOMContentLoaded නොව — Astro View Transitions (ClientRouter)
+  // සක්‍රීය නිසා SPA navigation කිහිපයකින් පසුවත් නිවැරදිව වැඩ කරයි.
   //
-  // 🎯 FIX (user-reported): කලින් logic එකේ, expand කළ පසු "නැවත"
-  // auto-collapse වීමක් සිදු නොවීය — setTimeout එක එක් වරක් පමණක්
-  // schedule වී තිබූ නිසා. දැන් "scheduleAutoCollapse()" reusable
+  // SELF-HEALING RECURSIVE TIMER: "scheduleAutoCollapse()" reusable
   // function එකක් හරහා, collapse හෝ expand ඕනෑම action එකකින් පසු
   // නැවත 5 තත්පරයේ timer එක ස්වයංක්‍රීයව reschedule වේ — collapse/
   // expand cycle එක කොපමණ වාරයක් සිදු වුවත් (permanent, self-healing
