@@ -11,13 +11,13 @@
   "lang": "si",
   "icons": [
     {
-      "src": "/images/logo.webp",
+      "src": "/images/app-icon.webp",
       "sizes": "192x192",
       "type": "image/webp",
       "purpose": "any"
     },
     {
-      "src": "/images/logo.webp",
+      "src": "/images/app-icon.webp",
       "sizes": "512x512",
       "type": "image/webp",
       "purpose": "any"
