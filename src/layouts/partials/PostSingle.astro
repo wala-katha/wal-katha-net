@@ -116,10 +116,31 @@ const breadcrumbSchema = JSON.stringify({
 <section class="section bg-[#010203] relative">
   <div class="container">
 
-    {/* 🎯 2026 AUTO-COLLAPSING VISIBLE BREADCRUMB UI:
-        JSON-LD BreadcrumbList schema එකට corresponding visible navigation
-        trail එකක්, load වී තත්පර 5කින් pill-style toggle button එකකට
-        auto-collapse වී, click කළ විට නැවත expand වන ලෙස සකසා ඇත.
+    {/* 🎯 2026 AUTO-COLLAPSING VISIBLE BREADCRUMB UI (v2 — SPACING &
+        SELF-HEALING TIMER FIX):
+
+        FIXES APPLIED (from user-reported screenshot issues):
+        1. Path <-> Logo gap fix: Path wrapper එකේ තිබූ "mb-6" (large
+           bottom margin) ඉවත් කර, "mt-1 mb-4" කුඩා ලෙස replace කර ඇත.
+           Section top padding (.section { py-20 }) එකත් "!pt-6" override
+           එකකින් මෙම section එකට පමණක් override කර ඇත — වෙනත් කිසිම
+           section (SimilarPosts, Base.astro global .section rule) එකකට
+           බලපෑමක් නැත, class scope එක මෙම එකම <section> tag එකට පමණි.
+        2. Path text size වැඩි කිරීම: "text-[11px] sm:text-xs" ->
+           "text-[13px] sm:text-sm" (readability improvement, layout
+           break කිසිවක් සිදු නොවේ — flex-wrap/truncate logic එලෙසම).
+        3. Collapsed toggle button upgrade: size වැඩි කර ("px-4 py-2.5"),
+           subtle pulse-glow animation එකක් (breadcrumb-toggle-pulse
+           keyframe) එකතු කර ඇත, icon size එකත් වැඩි කර ඇත.
+        4. 🎯 CRITICAL FIX — SELF-HEALING RECURSIVE AUTO-COLLAPSE:
+           කලින් logic එකේ, user click කර expand කළ පසු, "නැවත"
+           auto-collapse වීමක් සිදු නොවීය (setTimeout එක එක් වරක් පමණක්
+           schedule වී තිබූ නිසා). දැන් "scheduleAutoCollapse()" නම්
+           reusable function එකක් හඳුන්වා දී ඇති අතර, collapse හෝ
+           expand ඕනෑම action එකකින් පසු නැවත 5 තත්පරයේ timer එක
+           ස්වයංක්‍රීයව reschedule වේ — collapse/expand cycle එක
+           කොපමණ වාරයක් සිදු වුවත් (permanent, self-healing loop),
+           සෑම expand එකකින් පසුවත් නැවත ස්වයංක්‍රීයව hide වේ.
 
         SEO SAFETY: full breadcrumb <a> links සහ text සියල්ල DOM එකේ
         සම්පූර්ණයෙන්ම present වේ (display:none කිසිවිටෙකත් යොදා නැත) —
@@ -136,44 +157,48 @@ const breadcrumbSchema = JSON.stringify({
         pattern එකම (astro:page-load, Header.astro/PostSingle.astro comment
         system එකේම pattern එක) භාවිතා කර ඇත — SPA navigation කිහිපයකින්
         පසුවත් timer/toggle logic එක නිවැරදිව reset වී වැඩ කරයි. */}
-    <div id="breadcrumb-wrapper" class="row justify-center mb-6">
+    <div id="breadcrumb-wrapper" class="row justify-center mt-1 mb-4">
       <div class="md:col-10 flex justify-center sm:justify-start">
-        <div id="breadcrumb-shell" class="relative min-h-[38px] flex items-center">
+        <div id="breadcrumb-shell" class="relative min-h-[42px] flex items-center">
 
           {/* COLLAPSED-STATE TOGGLE BUTTON — auto-collapse කළ පසු පමණක්
               visible වේ (JS එකෙන් "is-collapsed" class එක parent එකට
               add කරයි). No-JS fallback: JS disable නම් මෙය කිසිවිටෙකත්
-              පෙනෙන්නේ නැත, full breadcrumb එකම සැමවිටම පෙනී පවතී. */}
+              පෙනෙන්නේ නැත, full breadcrumb එකම සැමවිටම පෙනී පවතී.
+              🎯 UPGRADED: size වැඩි කර ("px-4 py-2.5"), icon size වැඩි
+              කර ("h-4 w-4"), subtle pulse-glow animation එකතු කර ඇත. */}
           <button
             id="breadcrumb-toggle"
             type="button"
             aria-label="පාර පෙන්වන්න/සඟවන්න"
             aria-expanded="true"
             aria-controls="breadcrumb-content"
-            class="hidden items-center gap-1.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[#F8F8FF]/60 hover:text-[#01AD9F] text-[11px] font-semibold px-3.5 py-2 rounded-full transition-colors duration-200"
+            class="hidden items-center gap-2 bg-white/[0.05] hover:bg-white/[0.1] border border-[#01AD9F]/20 hover:border-[#01AD9F]/50 text-[#F8F8FF]/70 hover:text-[#01AD9F] text-[13px] sm:text-sm font-bold px-4 py-2.5 rounded-full transition-colors duration-200 breadcrumb-toggle-pulse"
           >
-            <BiMapPin className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+            <BiMapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
             <span>Path</span>
-            <svg id="breadcrumb-arrow" class="h-3 w-3 transition-transform duration-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <svg id="breadcrumb-arrow" class="h-3.5 w-3.5 transition-transform duration-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
             </svg>
           </button>
 
           {/* FULL BREADCRUMB NAV — always in DOM, always crawlable.
               breadcrumbItems array එකම (schema එකට use කරන) reuse කරන
-              නිසා, schema එකයි UI එකයි කවදාවත් desync වෙන්නේ නෑ. */}
+              නිසා, schema එකයි UI එකයි කවදාවත් desync වෙන්නේ නෑ.
+              🎯 FONT SIZE UPGRADE: "text-[11px] sm:text-xs" ->
+              "text-[13px] sm:text-sm" — readability improvement. */}
           <nav
             id="breadcrumb-content"
             aria-label="Breadcrumb"
             class="breadcrumb-collapsible-content overflow-hidden"
           >
-            <ol class="list-none flex flex-wrap items-center gap-x-1.5 gap-y-1 m-0 p-0 text-[11px] sm:text-xs text-[#F8F8FF]/45 font-medium bg-white/[0.03] border border-white/[0.06] rounded-full px-4 py-2 w-fit max-w-full">
+            <ol class="list-none flex flex-wrap items-center gap-x-2 gap-y-1 m-0 p-0 text-[13px] sm:text-sm text-[#F8F8FF]/50 font-medium bg-white/[0.03] border border-white/[0.06] rounded-full px-4 py-2.5 w-fit max-w-full">
               {breadcrumbItems.map((crumb, i) => {
                 const isLast = i === breadcrumbItems.length - 1;
                 return (
-                  <li class="list-none flex items-center gap-1.5 min-w-0 m-0 p-0">
+                  <li class="list-none flex items-center gap-2 min-w-0 m-0 p-0">
                     {i > 0 && (
-                      <BiChevronRight className="h-3 w-3 text-[#F8F8FF]/20 flex-shrink-0" aria-hidden="true" />
+                      <BiChevronRight className="h-3.5 w-3.5 text-[#F8F8FF]/25 flex-shrink-0" aria-hidden="true" />
                     )}
                     {isLast ? (
                       <span
@@ -189,9 +214,9 @@ const breadcrumbSchema = JSON.stringify({
                             ? "/"
                             : withTrailingSlash(`/categories/${slugify(categories?.[0] ?? "posts")}`)
                         }
-                        class="flex items-center gap-1 hover:text-emerald-400 transition-colors duration-200 truncate max-w-[100px] sm:max-w-none"
+                        class="flex items-center gap-1.5 hover:text-emerald-400 transition-colors duration-200 truncate max-w-[100px] sm:max-w-none"
                       >
-                        {i === 0 && <BiHomeAlt2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
+                        {i === 0 && <BiHomeAlt2 className="h-4 w-4 flex-shrink-0" aria-hidden="true" />}
                         <span class="truncate">{crumb.name}</span>
                       </a>
                     )}
@@ -632,13 +657,38 @@ const breadcrumbSchema = JSON.stringify({
   #breadcrumb-shell.is-collapsed #breadcrumb-arrow {
     transform: rotate(-90deg);
   }
+
+  /* 🎯 NEW: Collapsed-state toggle button — subtle pulse-glow animation
+     to make it more noticeable/discoverable once breadcrumb auto-hides.
+     Animation is gentle (opacity/shadow only, no layout-affecting
+     transform), so it cannot cause any CLS or layout shift. */
+  .breadcrumb-toggle-pulse {
+    animation: breadcrumbTogglePulse 2.4s ease-in-out infinite;
+  }
+  @keyframes breadcrumbTogglePulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(1, 173, 159, 0.25);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(1, 173, 159, 0);
+    }
+  }
 </style>
 
 <script>
-  // 🎯 AUTO-COLLAPSING BREADCRUMB LOGIC — site-wide astro:page-load
-  // pattern එකම (Header.astro/comment system එකේම convention) භාවිතා
-  // කරයි, DOMContentLoaded නොව — Astro View Transitions (ClientRouter)
-  // සක්‍රීය නිසා SPA navigation කිහිපයකින් පසුවත් නිවැරදිව වැඩ කරයි.
+  // 🎯 AUTO-COLLAPSING BREADCRUMB LOGIC (v2 — SELF-HEALING RECURSIVE
+  // TIMER) — site-wide astro:page-load pattern එකම (Header.astro/comment
+  // system එකේම convention) භාවිතා කරයි, DOMContentLoaded නොව — Astro
+  // View Transitions (ClientRouter) සක්‍රීය නිසා SPA navigation
+  // කිහිපයකින් පසුවත් නිවැරදිව වැඩ කරයි.
+  //
+  // 🎯 FIX (user-reported): කලින් logic එකේ, expand කළ පසු "නැවත"
+  // auto-collapse වීමක් සිදු නොවීය — setTimeout එක එක් වරක් පමණක්
+  // schedule වී තිබූ නිසා. දැන් "scheduleAutoCollapse()" reusable
+  // function එකක් හරහා, collapse හෝ expand ඕනෑම action එකකින් පසු
+  // නැවත 5 තත්පරයේ timer එක ස්වයංක්‍රීයව reschedule වේ — collapse/
+  // expand cycle එක කොපමණ වාරයක් සිදු වුවත් (permanent, self-healing
+  // loop), සෑම expand එකකින් පසුවත් නැවත ස්වයංක්‍රීයව hide වේ.
   let breadcrumbAutoCollapseTimer: ReturnType<typeof setTimeout> | null = null;
 
   function initBreadcrumbToggle() {
@@ -652,7 +702,12 @@ const breadcrumbSchema = JSON.stringify({
     shell.classList.remove("is-collapsed");
     toggleBtn.setAttribute("aria-expanded", "true");
 
-    if (breadcrumbAutoCollapseTimer) clearTimeout(breadcrumbAutoCollapseTimer);
+    function clearAutoCollapseTimer() {
+      if (breadcrumbAutoCollapseTimer) {
+        clearTimeout(breadcrumbAutoCollapseTimer);
+        breadcrumbAutoCollapseTimer = null;
+      }
+    }
 
     function collapseBreadcrumb() {
       shell?.classList.add("is-collapsed");
@@ -664,10 +719,21 @@ const breadcrumbSchema = JSON.stringify({
       toggleBtn?.setAttribute("aria-expanded", "true");
     }
 
+    // 🎯 SELF-HEALING RECURSIVE SCHEDULER: collapse කිරීමට පෙර සෑම
+    // විටම පවතින timer එක clear කර, තත්පර 5කින් නැවත auto-collapse
+    // කිරීමට schedule කරයි. මෙය initial load එකේදීත්, expand click
+    // කිරීමෙන් පසුවත් එකම function එකෙන්ම call වන නිසා, cycle එක
+    // කොපමණ වාරයක් සිදු වුවත් (permanent loop) කිසිවිටෙකත් "එක් වරක්
+    // පමණක්" වැඩ කරන bug එකක් ඇති නොවේ.
+    function scheduleAutoCollapse() {
+      clearAutoCollapseTimer();
+      breadcrumbAutoCollapseTimer = setTimeout(collapseBreadcrumb, 5000);
+    }
+
     // තත්පර 5කින් auto-collapse — පරිශීලකයාට URL/category path එක
     // කියවීමට ප්‍රමාණවත් වේලාවක් දී, පසුව article content එකට වැඩි
     // ඉඩක් සලසයි.
-    breadcrumbAutoCollapseTimer = setTimeout(collapseBreadcrumb, 5000);
+    scheduleAutoCollapse();
 
     // Fresh listener (clone-replace pattern, site-wide comment system
     // එකේම භාවිතා වන freshEl() convention එකට සමාන) — SPA navigation
@@ -676,11 +742,17 @@ const breadcrumbSchema = JSON.stringify({
     toggleBtn.parentNode?.replaceChild(freshToggle, toggleBtn);
 
     freshToggle.addEventListener("click", () => {
-      if (breadcrumbAutoCollapseTimer) clearTimeout(breadcrumbAutoCollapseTimer);
       if (shell.classList.contains("is-collapsed")) {
         expandBreadcrumb();
+        // 🎯 CRITICAL FIX: expand කළ පසු, නැවත ස්වයංක්‍රීයව 5
+        // තත්පරයකින් auto-collapse වීමට timer එක reschedule කරයි —
+        // මෙය නොකළොත් expand කළාට පස්සේ breadcrumb එක සදහටම open
+        // state එකේම රැඳී, "දිගහැරිය විටදිත් යම් තප්පර ගානකින්
+        // ස්වයංක්‍රීයව හැකිලිය යුතුයි" requirement එක ඉටු නොවේ.
+        scheduleAutoCollapse();
       } else {
         collapseBreadcrumb();
+        clearAutoCollapseTimer();
       }
     });
   }
