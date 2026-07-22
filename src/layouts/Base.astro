@@ -142,44 +142,6 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
         max-width: 100%;
       }
       #main-content { min-height: 60vh; }
-
-      /* ==========================================================
-         🎯 CUSTOM PWA INSTALL BUTTON STYLING — Chrome's automatic
-         "beforeinstallprompt" popup එක suppress කරලා, ඒ වෙනුවට
-         site-wide (home + posts + pages, ඕනෑම තැනක) consistently
-         පෙන්නෙන අපේම floating install button එකක් සඳහා styles.
-         Default state: hidden — JS logic එකෙන් installability
-         detect වුනාට පස්සේ විතරක් "visible" class එක add කරයි.
-      ========================================================== */
-      #pwa-install-button {
-        position: fixed;
-        left: 1.25rem;
-        bottom: 1.25rem;
-        z-index: 60;
-        display: none;
-        align-items: center;
-        gap: 0.5rem;
-        background: #01AD9F;
-        color: #010203;
-        font-weight: 900;
-        font-size: 0.8rem;
-        padding: 0.65rem 1.1rem;
-        border-radius: 9999px;
-        border: none;
-        cursor: pointer;
-        box-shadow: 0 4px 20px rgba(1, 173, 159, 0.45);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-      }
-      #pwa-install-button.visible {
-        display: flex;
-      }
-      #pwa-install-button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 28px rgba(1, 173, 159, 0.55);
-      }
-      #pwa-install-button:active {
-        transform: scale(0.96);
-      }
     </style>
 
     <link rel="shortcut icon" href={config.site.favicon} />
@@ -248,68 +210,6 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
     {/* ⚡ DYNAMIC HEAD SLOT: PostSingle.astro එකෙන් එවන Meta/Schema ටැග්ස් මෙතනට වදියි */}
     <slot name="head" />
 
-    {/* ==========================================================
-        🎯 PWA INSTALL CONTROL — Chrome's automatic install popup
-        (Image 2 screenshot එකේ පේන "Install app / Cancel / Install")
-        එක home page එකේදී පෙනුනේ, page load ට කලින්ම browser එකේ
-        "beforeinstallprompt" event එක fire වුනු නිසා. මෙය <head>
-        එකේම, page render වෙන්නත් කලින්ම run වෙන්නට is:inline
-        script එකක් විදිහට තියෙනවා — event listener එක attach වෙන්නේ
-        page එකේ HTML parse වෙන ගමන්ම, DOMContentLoaded/load event
-        දෙකටත් කලින්.
-
-        🎯 PERMANENT FIX: event.preventDefault() call කරලා Chrome ගේ
-        automatic popup එකම සම්පූර්ණයෙන් suppress කරනවා — ඒ වෙනුවට
-        event object එක variable එකක ගබඩා කරගෙන, site-wide floating
-        button එකක් (#pwa-install-button, body එකේ පහළින්) පෙන්නලා,
-        user ඒක click කළොත් විතරක් event.prompt() call කරලා Chrome ගේ
-        install dialog එකම manually trigger කරනවා.
-
-        මේකෙන් සහතික වෙන්නේ:
-        - Home page, blog post pages, category pages — ඕනෑම page
-          එකක automatic popup timing race condition එකක් නෑ (popup
-          එකම suppress කර ඇති නිසා).
-        - User ට "Install" button එක ඕනෑම page එකක, ඕනෑම වේලාවක
-          click කරන්නට පුළුවන් — consistent, site-wide,
-          page-agnostic experience එකක්.
-        - Button click කළාට පස්සේ Chrome ම පෙන්නන dialog එකේ options
-          count එක (Install විතරක්ද, Install+Create shortcut දෙකම ද)
-          Chrome ගේම internal logic එකෙන් තීරණය වේ — මෙය Chrome
-          browser engine level එකේ behavior එකක්, site code එකෙන්
-          futher control කළ නොහැක. නමුත් "when" install prompt එක
-          පෙන්වනවාද කියන එකේ full control එක site owner ට ලැබේ.
-       ========================================================== */}
-    <script is:inline>
-      window.__pwaDeferredPrompt = null;
-
-      window.addEventListener("beforeinstallprompt", (event) => {
-        // Chrome ගේ automatic mini-infobar/popup එක සම්පූර්ණයෙන්ම නවත්තයි
-        event.preventDefault();
-        window.__pwaDeferredPrompt = event;
-
-        // Custom floating button එක පෙන්නීම (button එක body එකේ
-        // තවම render වී නොතිබුණොත් — <head> එකේ මේ script එක ඉතා
-        // ඉක්මනින් run විය හැකි නිසා — DOM ready වූ පසු try කරයි)
-        function showInstallButton() {
-          const btn = document.getElementById("pwa-install-button");
-          if (btn) btn.classList.add("visible");
-        }
-
-        if (document.readyState === "loading") {
-          document.addEventListener("DOMContentLoaded", showInstallButton);
-        } else {
-          showInstallButton();
-        }
-      });
-
-      // App දැනටමත් install වුනාට පස්සේ, button එක hide කිරීම
-      window.addEventListener("appinstalled", () => {
-        window.__pwaDeferredPrompt = null;
-        const btn = document.getElementById("pwa-install-button");
-        if (btn) btn.classList.remove("visible");
-      });
-    </script>
-
     <ClientRouter />
   </head>
 
@@ -322,96 +222,42 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
     <Footer />
 
     {/* ==========================================================
-        🎯 SITE-WIDE FLOATING INSTALL BUTTON — home, posts, pages,
-        ඕනෑම තැනක consistent ලෙස පෙන්වන single install trigger point.
-        Default state: hidden (CSS "display: none"), JS logic එකෙන්
-        "beforeinstallprompt" event එක fire වුනාට පස්සේ විතරක්
-        ".visible" class එක add වී පෙනේ. Astro View Transitions
-        (ClientRouter) සමඟ client-side navigation වලදීත් button
-        state එක preserve වෙන්නට "transition:persist" යොදා ඇත.
-       ========================================================== */}
-    <button
-      id="pwa-install-button"
-      type="button"
-      aria-label="Install Wala Katha App"
-      transition:persist="pwa-install-button"
-    >
-      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 2a1 1 0 011 1v10.586l3.293-3.293a1 1 0 111.414 1.414l-5 5a1 1 0 01-1.414 0l-5-5a1 1 0 111.414-1.414L11 13.586V3a1 1 0 011-1zM5 19a1 1 0 011-1h12a1 1 0 110 2H6a1 1 0 01-1-1z" />
-      </svg>
-      <span>Install App</span>
-    </button>
-
-    {/* ==========================================================
         🎯 PWA SERVICE WORKER REGISTRATION — Chrome ගේ richer install
-        dialog එක (manual ⋮ menu → "Add to home screen" ගියොත් පෙන්නෙන
-        "Install" + "Create shortcut" options දෙකම) සඳහා installability
-        confidence එක ශක්තිමත් කරයි.
+        dialog එක (github.com screenshot එකේ පේන "Install" +
+        "Create shortcut" options දෙකම) trigger කිරීමට අවශ්‍ය key
+        piece එක. Service Worker එකක් නොමැති PWA එකක් Chrome ට
+        "lower-confidence" candidate එකක් විදිහට පේනවා.
 
-        🎯 TIMING FIX: කලින් "window.addEventListener('load', ...)"
-        ඇතුළේ තිබූ නිසා, page fully load වුනාට පස්සේ විතරයි SW register
-        වුනේ — home page එකේ පළමු visit එකේදී automatic install-prompt
-        race condition එකට මේකත් එක හේතුවක් විය හැක. දැන් "load" event
-        එකට බලා නොසිට, script එක run වෙන ගමන්ම (body එකේ පහළින්, DOM
-        parse වී ඇති තැනකින්) register කිරීමට උත්සාහ කරයි — registration
-        window එක හැකි තරම් කුඩා කරයි.
+        - "load" event එකට කලින් register නොකරයි (main content paint
+          එකට priority දෙන්නට, SW registration එක blocking නොවන
+          background task එකක් විදිහට).
+        - astro:page-load event එකද listen කරයි — Astro View
+          Transitions (ClientRouter) සමඟ client-side navigation
+          වලදී SW registration logic එක reload නොවී duplicate
+          registration attempts වළක්වයි (browser එකෙන්ම දැනටමත්
+          registered SW එකක් නම් silently no-op කරයි, error නෑ).
+        - HTTPS/localhost නොවන environments වල (SW API නොමැති browsers)
+          silently skip කරයි — කිසිම console error එකක් user ට පේන්නේ නෑ.
        ========================================================== */}
     <script is:inline>
       (function registerServiceWorker() {
         if (!("serviceWorker" in navigator)) return;
 
-        navigator.serviceWorker
-          .register("/sw.js")
-          .then((registration) => {
-            console.log("SW registered:", registration.scope);
-          })
-          .catch((err) => {
-            // ⚠️ ආරක්ෂිත fallback: registration fail උනත් (offline,
-            // unsupported browser edge-case ආදී), site එකේ core
-            // functionality කිසිවකට බලපෑමක් නැත — silently log කරලා
-            // ඉදිරියට යයි.
-            console.warn("SW registration failed:", err);
-          });
-      })();
-
-      // ==========================================================
-      // 🎯 INSTALL BUTTON CLICK HANDLER — user "Install App" button
-      // එක click කළොත්, කලින් <head> එකේ ගබඩා කරගත් deferred prompt
-      // event එකම manually trigger කරයි (event.prompt()). මෙය Astro
-      // View Transitions (astro:page-load) සමඟ client-side navigation
-      // වලදීත් නැවත-attach වෙන්නට event delegation pattern එකක්
-      // (document level click listener + closest(id) check) යොදා ඇත,
-      // duplicate listeners එකතු වීම වළක්වයි.
-      // ==========================================================
-      function initPwaInstallButton() {
-        document.addEventListener("click", async (e) => {
-          const btn = e.target.closest && e.target.closest("#pwa-install-button");
-          if (!btn) return;
-
-          const deferredPrompt = window.__pwaDeferredPrompt;
-          if (!deferredPrompt) return;
-
-          btn.disabled = true;
-          try {
-            deferredPrompt.prompt();
-            await deferredPrompt.userChoice;
-          } catch (err) {
-            console.warn("Install prompt error:", err);
-          } finally {
-            window.__pwaDeferredPrompt = null;
-            btn.classList.remove("visible");
-            btn.disabled = false;
-          }
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then((registration) => {
+              console.log("SW registered:", registration.scope);
+            })
+            .catch((err) => {
+              // ⚠️ ආරක්ෂිත fallback: registration fail උනත් (offline,
+              // unsupported browser edge-case ආදී), site එකේ core
+              // functionality කිසිවකට බලපෑමක් නැත — silently log කරලා
+              // ඉදිරියට යයි.
+              console.warn("SW registration failed:", err);
+            });
         });
-      }
-
-      // ✅ Duplicate-listener guard — Astro View Transitions සමඟ
-      // astro:page-load event එක multiple times fire විය හැකි නිසා,
-      // module-level flag එකකින් එකම run එකක් විතරක් සහතික කරයි.
-      if (!window.__pwaInstallHandlerInitialized) {
-        window.__pwaInstallHandlerInitialized = true;
-        initPwaInstallButton();
-      }
+      })();
     </script>
   </body>
 </html>
