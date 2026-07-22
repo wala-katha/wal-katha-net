@@ -210,6 +210,82 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
     {/* ⚡ DYNAMIC HEAD SLOT: PostSingle.astro එකෙන් එවන Meta/Schema ටැග්ස් මෙතනට වදියි */}
     <slot name="head" />
 
+    {/* ==========================================================
+        🎯 PWA SERVICE WORKER — EARLY (HEAD-LEVEL) REGISTRATION FIX
+        (Home page එකේ "Install app" simple dialog vs Post page එකේ
+        "Install + Create shortcut" richer dialog අතර වෙනස විසඳීම)
+
+        🔍 ROOT CAUSE: කලින් SW registration script එක <body> එකේ
+        අගට දාලා, "load" event එකට පස්සේ විතරක් register වුනා. Chrome
+        ගේ richer install dialog (Install + Create shortcut options
+        දෙකම) එක trigger වෙන්නේ, SW එක page එකට "controller" විදිහට
+        active වෙලා තියෙනවා කියලා Chrome ට high-confidence එකක් තියෙනකොට
+        විතරයි. පළමු visit එකේදී (cold load) "load" event එකට පස්සේ
+        register කළාම, SW එක install වෙනවා ඒත් එම load එකේදීම page එක
+        control කරන්නේ නෑ (SW spec එකේම standard behavior එකක් —
+        පළමු register වෙන SW එක current page එක control කරන්නේ නෑ,
+        ඊළඟ navigation එකේදී විතරයි). ඒ නිසා Home page එකේ පළමු visit
+        එකේදී Chrome ට low-confidence, simple dialog එකක් පෙන්නන්න
+        සිද්ධ වුනා. Blog post එකට navigate කරනකොට (2 වෙනි navigation),
+        SW එක දැනටමත් "controlling" state එකේ තියෙන නිසා richer dialog
+        එක පෙන්නුනා.
+
+        ✅ PERMANENT FIX: Registration script එක <head> එකට, ඉතාම
+        ඉක්මනින්ම (blocking network request එකක් නොවන "register()"
+        call එකක්, main content render එකට කිසිම බලපෑමක් නැති
+        async/non-blocking call එකක්) දාලා, "load" event එකට කලින්ම
+        trigger කරනවා. මෙය Chrome ට SW එක install+active වෙන්න
+        හැකි තරම් ඉක්මනින්ම ලැබෙන chance එක වැඩි කරනවා, page load
+        එකේම (හෝ ඊළඟ ඉක්මන් reload එකකදී) richer dialog එකට
+        eligible වෙන්න පුළුවන් වෙනවා — Home page එකද, Post page
+        එකද කියලා වෙනසක් නැතුව site එක පුරාම consistent PWA install
+        experience එකක් සහතික කරනවා.
+
+        🛡️ SELF-HEALING GUARDS (unchanged from before, retained):
+        - "serviceWorker" API නොමැති browsers වල silently skip වෙනවා.
+        - astro:page-load listener එකෙන් View Transitions (ClientRouter)
+          client-side navigation වලදීත් duplicate registration
+          attempts වළක්වයි (browser එකෙන්ම දැනටමත් registered SW
+          එකක් නම් .register() call එක silently no-op වෙනවා, error
+          එකක් හෝ duplicate registration side-effect එකක් නෑ).
+        - registration fail උනොත් (offline, unsupported browser
+          edge-case ආදී) silently log කරලා core site functionality
+          කිසිවකට බලපෑමක් නැතුව ඉදිරියට යනවා.
+       ========================================================== */}
+    <script is:inline>
+      (function registerServiceWorkerEarly() {
+        if (!("serviceWorker" in navigator)) return;
+
+        function doRegister() {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then((registration) => {
+              console.log("SW registered (early):", registration.scope);
+            })
+            .catch((err) => {
+              console.warn("SW registration failed:", err);
+            });
+        }
+
+        // 🎯 ASAP TRIGGER: "load" event එකට කලින්ම, script tag එක
+        // parse වෙන ගමන්ම register() call කරනවා. register() call එක
+        // itself non-blocking (Promise-based) නිසා, main content
+        // render/paint එකට කිසිම delay එකක් හෝ blocking side-effect
+        // එකක් ඇති නොකරයි — Network Information API/Fetch handler
+        // setup එක background thread එකක (Service Worker thread)
+        // සිදු වෙනවා.
+        doRegister();
+
+        // 🎯 View Transitions (ClientRouter) client-side navigation
+        // සඳහාත් register logic එකම attach කරනවා — browser එකෙන්ම
+        // existing registration එකක් තියෙනවා නම් silently no-op වෙනවා
+        // (duplicate registration නෑ), නමුත් යම් හෙයකින් පළමු
+        // registration එක fail වුනා නම් (offline first-load ආදී)
+        // ඊළඟ page navigation එකේදී retry වෙන්නත් මේක උදව් වෙනවා.
+        document.addEventListener("astro:page-load", doRegister);
+      })();
+    </script>
+
     <ClientRouter />
   </head>
 
@@ -220,44 +296,5 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
       <slot />
     </main>
     <Footer />
-
-    {/* ==========================================================
-        🎯 PWA SERVICE WORKER REGISTRATION — Chrome ගේ richer install
-        dialog එක (github.com screenshot එකේ පේන "Install" +
-        "Create shortcut" options දෙකම) trigger කිරීමට අවශ්‍ය key
-        piece එක. Service Worker එකක් නොමැති PWA එකක් Chrome ට
-        "lower-confidence" candidate එකක් විදිහට පේනවා.
-
-        - "load" event එකට කලින් register නොකරයි (main content paint
-          එකට priority දෙන්නට, SW registration එක blocking නොවන
-          background task එකක් විදිහට).
-        - astro:page-load event එකද listen කරයි — Astro View
-          Transitions (ClientRouter) සමඟ client-side navigation
-          වලදී SW registration logic එක reload නොවී duplicate
-          registration attempts වළක්වයි (browser එකෙන්ම දැනටමත්
-          registered SW එකක් නම් silently no-op කරයි, error නෑ).
-        - HTTPS/localhost නොවන environments වල (SW API නොමැති browsers)
-          silently skip කරයි — කිසිම console error එකක් user ට පේන්නේ නෑ.
-       ========================================================== */}
-    <script is:inline>
-      (function registerServiceWorker() {
-        if (!("serviceWorker" in navigator)) return;
-
-        window.addEventListener("load", () => {
-          navigator.serviceWorker
-            .register("/sw.js")
-            .then((registration) => {
-              console.log("SW registered:", registration.scope);
-            })
-            .catch((err) => {
-              // ⚠️ ආරක්ෂිත fallback: registration fail උනත් (offline,
-              // unsupported browser edge-case ආදී), site එකේ core
-              // functionality කිසිවකට බලපෑමක් නැත — silently log කරලා
-              // ඉදිරියට යයි.
-              console.warn("SW registration failed:", err);
-            });
-        });
-      })();
-    </script>
   </body>
 </html>
