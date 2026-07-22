@@ -71,6 +71,30 @@ const authorSlug = globalSlugify(authorName || "");
 // ඉවත් කිරීමට අවශ්‍ය නොවීය, "@type" value එක විතරක් වෙනස් විය.
 const wordCount = post.body ? post.body.trim().split(/\s+/).filter(Boolean).length : undefined;
 
+// 🎯 2026 SCHEMA UPGRADE: ImageObject (instead of plain string URL)
+// Google ගේ Article/NewsArticle structured-data documentation එකේ
+// "image" field එකට plain string URL එකක් හෝ ImageObject එකක් දෙකම
+// valid, ඒත් ImageObject එකක් (width/height සමගින්) වඩාත් recommended
+// —Rich Results Test tool එකේදී image dimensions validate කිරීමට
+// පුළුවන් වෙනවා, සහ Google Discover/Images සඳහා image quality
+// signal එකක් ලෙසත් සලකනු ලැබිය හැක.
+//
+// 1200x630 dimensions (Open Graph image-size convention එකටම
+// ගැලපෙන standard) hardcode කර ඇත්තේ, astro:assets processing එකෙන්
+// පසු actual runtime dimensions මෙම schema-generation code point
+// එකට ලබාගත නොහැකි නිසා (build-time image optimization pipeline
+// එකෙන් වෙනස් context එකක). මෙය Base.astro/PostSingle.astro හි
+// දැනටමත් පවතින og:image:width/height (1200x630) අගයන්ටම සමානව
+// consistency පවත්වා ගනී.
+const imageObject = image
+  ? {
+      "@type": "ImageObject",
+      "url": image.startsWith("http") ? image : `${base_url}${image}`,
+      "width": 1200,
+      "height": 630
+    }
+  : undefined;
+
 // 🎯 FIXED (Duplicate/Conflicting Organization Entity — Cross-File
 // Consistency): මීට කලින් මෙතන "publisher" field එක වෙනම, inline
 // Organization object එකක් (@id කිසිවක් නැතුව, broken "logo.png" path
@@ -85,7 +109,7 @@ const articleSchema = {
   "@type": "NewsArticle",
   "headline": title || "",
   "description": description || "",
-  "image": image ? (image.startsWith("http") ? image : `${base_url}${image}`) : undefined,
+  "image": imageObject,
   "datePublished": safeDateISO,
   "dateModified": safeDateISO,
   "author": {
