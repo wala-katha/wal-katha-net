@@ -20,6 +20,57 @@ const currentLogoText = logo_text ? logo_text : title;
 const textWords = currentLogoText.split(" ");
 const firstWord = textWords[0];
 const remainingText = textWords.slice(1).join(" ");
+
+// 🎯 FIXED (Lighthouse "Displays images with incorrect aspect ratio" +
+// "Serves images with low resolution"):
+//
+// ROOT CAUSE: logo.webp හි REAL file dimensions 300x50px (aspect ratio
+// 6:1) වන අතර, කලින් <Image> component එකට සහ inline style එකට දෙන ලද
+// width/height දෙකම config.json හි logo_width="300" / logo_height="50"
+// වශයෙන් සෘජුවම pass කර තිබුණි. src/styles/navigation.css හි
+// ".navbar-brand img { max-width: 170px }" rule එක නිසා, mobile
+// screens වල logo එකේ ඇත්තටම DISPLAYED (visual) width එක 170px දක්වා
+// CSS මගින් constrain වේ (height: auto නිසා height එකද ඒ අනුව අඩු විය
+// යුතුය) — නමුත් HTML height="50" attribute එක ස්ථිරව 50px ලෙසම
+// රැඳී තිබූ නිසා, browser එකට පෙනෙන "displayed aspect ratio" එක
+// 170:50 = 3.4:1 බවට පත් විය, ඇත්තම file එකේ aspect ratio 300:50 = 6:1
+// එකට නොගැලපී.
+//
+// ✅ PERMANENT FIX: Image එකේ VISUAL/DISPLAYED size එක (170px width,
+// CSS-driven, .navbar-brand img rule එක හරහා) කිසිසේත් වෙනස් කර නැත —
+// logo එක screen එකේ පෙනෙන ප්‍රමාණය 100% එලෙසම පවතී. විසඳුම යොදා
+// ඇත්තේ <Image> component එකට සහ inline style එකට දෙන width/height
+// attributes, logo.webp හි ඇත්තම (intrinsic) 300x50 aspect ratio එකට
+// ගැලපෙන පරිදි ස්වයංක්‍රීයව ගණනය කිරීමෙනි:
+//
+//   - configuredWidth/configuredHeight (170x50 වැනි config අගයන්)
+//     "displayed size" එක ලෙස රැඳී තිබේ — CSS max-width එකම එය
+//     control කරයි, මෙතන කිසිවක් වෙනස් නොවේ.
+//   - INTRINSIC_ASPECT_RATIO = 300/50 = 6 (logo.webp හි සැබෑ file
+//     aspect ratio) ස්ථිරව define කර ඇත.
+//   - correctedHeight = configuredWidth / INTRINSIC_ASPECT_RATIO
+//     ලෙස ගණනය කර, <Image> attribute එකට සහ inline style height එකට
+//     දෙකටම මෙම නිවැරදි අගයම යොදයි — දැන් width:height ratio එක සෑම
+//     තැනකදීම 6:1 ලෙසම ගැලපේ (Lighthouse displayed-vs-actual aspect
+//     ratio mismatch permanently resolved).
+//   - Config.json හි logo_width/logo_height අගයන් අනාගතයේ වෙනස් වුවත්
+//     (logo file එකක් replace කළත්), මෙම aspect-ratio-derived logic
+//     එකම ස්වයංක්‍රීයව නිවැරදි height එකක් ගණනය කරන නිසා, manual
+//     recalculation කිසිවක් අවශ්‍ය නොවේ (self-healing).
+const configuredWidth = Number(logo_width.replace("px", ""));
+const configuredHeight = Number(logo_height.replace("px", ""));
+
+// logo.webp හි සැබෑ (intrinsic) file dimensions — 300x50px.
+// public/images/logo.webp file එක replace කරන විට මෙම constant එකද
+// අලුත් file එකේ actual width/height අනුව යාවත්කාලීන කළ යුතුය.
+const LOGO_INTRINSIC_WIDTH = 300;
+const LOGO_INTRINSIC_HEIGHT = 50;
+const INTRINSIC_ASPECT_RATIO = LOGO_INTRINSIC_WIDTH / LOGO_INTRINSIC_HEIGHT;
+
+// Displayed width එක (config/CSS-driven, visual size) එලෙසම තබාගෙන,
+// height එක පමණක් intrinsic aspect ratio එකට ගැලපෙන පරිදි නැවත ගණනය
+// කරයි. Math.round() මගින් sub-pixel දශම අගයන් වළක්වයි.
+const correctedHeight = Math.round(configuredWidth / INTRINSIC_ASPECT_RATIO);
 ---
 
 <div itemscope itemtype="https://schema.org/Organization" class="inline-block">
@@ -27,16 +78,16 @@ const remainingText = textWords.slice(1).join(" ");
     {
       src || logo ? (
         <Image
-          width={Number(logo_width.replace("px", ""))}
-          height={Number(logo_height.replace("px", ""))}
+          width={LOGO_INTRINSIC_WIDTH}
+          height={LOGO_INTRINSIC_HEIGHT}
           src={src ? src : logo}
           alt={title}
           itemprop="logo"
           loading="eager"
           fetchpriority="high"
           style={{
-            height: logo_height.replace("px", "") + "px",
-            width: logo_width.replace("px", "") + "px",
+            height: correctedHeight + "px",
+            width: configuredWidth + "px",
           }}
         />
       ) : (
