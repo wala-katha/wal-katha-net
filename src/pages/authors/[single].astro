@@ -34,7 +34,7 @@ if (!author || !author.data) {
   return Astro.redirect("/404");
 }
 
-const { title, meta_title, description, image } = author.data;
+const { title, meta_title, description, image, social } = author.data;
 const authorTitle = title || "";
 
 // Author Posts ආරක්ෂිතව ලබා ගැනීම සහ Filter කිරීම
@@ -60,6 +60,32 @@ const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 // trailing-slash logic, so we add the slash here too to keep both in sync.
 const canonicalUrl = `${base_url}/authors/${author.id}/`;
 
+// 🎯 2026 E-E-A-T UPGRADE: "sameAs" ARRAY (Author Social Profile Links)
+// Google ගේ E-E-A-T (Experience, Expertise, Authoritativeness, Trust)
+// guidelines අනුව, Person schema එකකට "sameAs" field එකෙන් author ගේ
+// social media profiles සම්බන්ධ කිරීම authoritativeness signal එකක්
+// ලෙස සලකනු ලබයි — Google ට author ව එකම "entity" එකක් ලෙස connect
+// කරගන්න පුළුවන් වෙනවා Person schema එකේ සිට social profiles දක්වා.
+//
+// content.config.ts හි authorsCollection schema එකේ දැනටමත් "social"
+// object එකක් (facebook, x, instagram, linkedin, github, website,
+// youtube keys) define වී ඇති අතර, Social.astro component එකේත් මෙම
+// object එකම භාවිතා වේ. මෙතන අලුතින් schema field එකක් එකතු කරන්නේ
+// නැතුව, දැනටමත් content collection එකේ තියෙන data එකම "sameAs"
+// array එකක් බවට map කරයි.
+//
+// Object.values() + filter(Boolean) නිසා, empty/undefined social
+// links (author.md file එකක "social:" block එකේ සමහර keys විතරක්
+// පුරවලා තිබුණත්) ස්වයංක්‍රීයව exclude වේ — "sameAs" array එකේ
+// valid, non-empty URLs පමණක් ඇතුළත් වේ. Social links කිසිවක්
+// නොමැති author කෙනෙකුට "sameAs" field එකම schema object එකෙන්
+// සම්පූර්ණයෙන් omit වේ (empty array එකක් නොව, undefined කර ඇත —
+// schema.org strict validators සමහරක් empty arrays වලට warning
+// දෙන නිසා).
+const socialLinks = social && typeof social === "object"
+  ? Object.values(social).filter((url): url is string => typeof url === "string" && url.trim() !== "")
+  : [];
+
 // 🚀 GOOGLE SEO RICH SNIPPETS: Schema JSON-LD දත්ත ව්‍යුහය
 const schemaMarkup = {
   "@context": "https://schema.org",
@@ -70,7 +96,8 @@ const schemaMarkup = {
     "description": description || "",
     "image": image ? (image.startsWith("http") ? image : `${base_url}${image}`) : undefined,
     "url": canonicalUrl,
-    "jobTitle": "Content Creator"
+    "jobTitle": "Content Creator",
+    ...(socialLinks.length > 0 ? { "sameAs": socialLinks } : {})
   }
 };
 ---
