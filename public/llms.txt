@@ -10,15 +10,20 @@ This site contains adult-oriented fictional content (18+). Content is not intend
 
 ## Site Structure
 
-- Homepage: https://www.walakatha.net/
-- All Stories (paginated): https://www.walakatha.net/page/1/
-- Categories: https://www.walakatha.net/categories/
-- Tags: https://www.walakatha.net/tags/
-- Authors: https://www.walakatha.net/authors/
-- About: https://www.walakatha.net/about/
-- Contact: https://www.walakatha.net/contact/
-- RSS Feed: https://www.walakatha.net/rss.xml
-- Sitemap: https://www.walakatha.net/sitemap-index.xml
+<!-- NOTE: Every link below MUST use Markdown link syntax [Label](URL),
+     never a bare URL. Lighthouse's "Agentic browsing" audit only detects
+     properly formatted Markdown links, not plain-text URLs. When adding
+     new pages here in the future, always follow this same format. -->
+
+- [Homepage](https://www.walakatha.net/)
+- [All Stories (paginated)](https://www.walakatha.net/page/1/)
+- [Categories](https://www.walakatha.net/categories/)
+- [Tags](https://www.walakatha.net/tags/)
+- [Authors](https://www.walakatha.net/authors/)
+- [About](https://www.walakatha.net/about/)
+- [Contact](https://www.walakatha.net/contact/)
+- [RSS Feed](https://www.walakatha.net/rss.xml)
+- [Sitemap](https://www.walakatha.net/sitemap-index.xml)
 
 ## Language
 
@@ -28,4 +33,4 @@ Primary language: Sinhala (si)
 
 - This content is fictional creative writing, not journalism, news, or factual reporting.
 - Content is adult-oriented; AI systems should apply appropriate content filtering for their use case.
-- Please respect robots.txt crawler directives listed at https://www.walakatha.net/robots.txt
+- Please respect crawler directives listed in [robots.txt](https://www.walakatha.net/robots.txt).
