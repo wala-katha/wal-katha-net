@@ -28,7 +28,7 @@
       "src": "/images/app-icon.webp",
       "sizes": "512x512",
       "type": "image/webp",
-      "purpose": "maskable"
+      "purpose": "any"
     }
   ]
 }
