@@ -1,10 +1,12 @@
 {
+  "id": "/",
   "name": "Wala Katha - සිංහල වල් කතා",
   "short_name": "Wala Katha",
   "description": "Wala Katha: නවතම සිංහල වල් කතා, වැල කතා සහ අලුත්ම කෙටි කතා දිනපතා කියවන්න.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "background_color": "#050505",
   "theme_color": "#050505",
@@ -21,6 +23,12 @@
       "sizes": "512x512",
       "type": "image/webp",
       "purpose": "any"
+    },
+    {
+      "src": "/images/app-icon.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "maskable"
     }
   ]
 }
