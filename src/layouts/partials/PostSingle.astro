@@ -8,7 +8,7 @@ import { humanize, markdownify, slugify } from "@/lib/utils/textConverter";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import { Image } from "astro:assets";
 import { render } from "astro:content";
-import { BiCalendarEdit, BiCategoryAlt, BiTime, BiChevronRight, BiHomeAlt2 } from "react-icons/bi";
+import { BiCalendarEdit, BiCategoryAlt, BiTime, BiChevronRight, BiHomeAlt2, BiMapPin } from "react-icons/bi";
 
 const allAuthors = await getSinglePage("authors");
 const posts = await getSinglePage("posts");
@@ -51,9 +51,9 @@ const authorName = allAuthors.find((a) =>
 const hasUpdatedDate = updated && date && new Date(updated).getTime() !== new Date(date).getTime();
 
 // 🎯 BREADCRUMB DATA — single source of truth used by BOTH the JSON-LD
-// schema below AND the visible <nav> UI further down. breadcrumbItems
-// array එකම (schema එකට use කරන) UI එකටත් reuse කරන නිසා, schema එකයි
-// UI එකයි කවදාවත් desync වෙන්නේ නෑ.
+// schema below AND the visible <nav> UI further down. Building one array
+// here and rendering it twice (script + nav) guarantees the visible trail
+// and the JSON-LD can never drift apart.
 const breadcrumbItems = [
   { name: "මුල් පිටුව", item: siteUrl },
   {
@@ -116,51 +116,94 @@ const breadcrumbSchema = JSON.stringify({
 <section class="section bg-[#010203] relative">
   <div class="container">
 
-    {/* 🎯 2026 VISIBLE BREADCRUMB UI: JSON-LD BreadcrumbList schema එකට
-        corresponding visible navigation trail එකක්. breadcrumbItems
-        array එකම (schema එකට use කරන) මෙතනටත් reuse කරන නිසා, schema
-        එකයි UI එකයි කවදාවත් desync වෙන්නේ නෑ. Pill-style container
-        එකක් තුළ, list-style:none explicit ලෙස දාලා browser default
-        bullet marker එක (screenshot එකේ පෙනුනු blue dot එක) සම්පූර්ණයෙන්
-        ඉවත් කර ඇත. Last item link කරන්නේ නෑ — standard breadcrumb
-        convention, aria-current="page" එකෙන් screen readers ට
-        indicate කරයි. */}
-    <nav aria-label="Breadcrumb" class="row justify-center mb-6">
-      <div class="md:col-10">
-        <ol class="list-none flex flex-wrap items-center gap-x-1.5 gap-y-1 m-0 p-0 text-[11px] sm:text-xs text-[#F8F8FF]/45 font-medium bg-white/[0.03] border border-white/[0.06] rounded-full px-4 py-2 w-fit max-w-full mx-auto sm:mx-0">
-          {breadcrumbItems.map((crumb, i) => {
-            const isLast = i === breadcrumbItems.length - 1;
-            return (
-              <li class="list-none flex items-center gap-1.5 min-w-0 m-0 p-0">
-                {i > 0 && (
-                  <BiChevronRight className="h-3 w-3 text-[#F8F8FF]/20 flex-shrink-0" aria-hidden="true" />
-                )}
-                {isLast ? (
-                  <span
-                    class="text-[#01AD9F] font-bold truncate max-w-[140px] sm:max-w-[280px]"
-                    aria-current="page"
-                  >
-                    {crumb.name}
-                  </span>
-                ) : (
-                  <a
-                    href={
-                      i === 0
-                        ? "/"
-                        : withTrailingSlash(`/categories/${slugify(categories?.[0] ?? "posts")}`)
-                    }
-                    class="flex items-center gap-1 hover:text-emerald-400 transition-colors duration-200 truncate max-w-[100px] sm:max-w-none"
-                  >
-                    {i === 0 && <BiHomeAlt2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
-                    <span class="truncate">{crumb.name}</span>
-                  </a>
-                )}
-              </li>
-            );
-          })}
-        </ol>
+    {/* 🎯 2026 AUTO-COLLAPSING VISIBLE BREADCRUMB UI:
+        JSON-LD BreadcrumbList schema එකට corresponding visible navigation
+        trail එකක්, load වී තත්පර 5කින් pill-style toggle button එකකට
+        auto-collapse වී, click කළ විට නැවත expand වන ලෙස සකසා ඇත.
+
+        SEO SAFETY: full breadcrumb <a> links සහ text සියල්ල DOM එකේ
+        සම්පූර්ණයෙන්ම present වේ (display:none කිසිවිටෙකත් යොදා නැත) —
+        visually collapse කරන්නේ max-height/opacity CSS transition එකකින්
+        පමණි, එබැවින් Googlebot/crawlers වලට content එක සම්පූර්ණයෙන් පෙනී
+        යාම සහතික වේ, JSON-LD schema සමග visible-match signal එකත් රැඳේ.
+
+        CLS SAFETY: collapsed state එකේදීත් wrapper එකේ min-height එකක්
+        reserve කර ඇති නිසා, collapse/expand animation එකෙන් ඉහළින්ම ඇති
+        article title එක "jump" වීමක් (layout shift) සිදු නොවේ.
+
+        NAVIGATION SAFETY: Astro View Transitions (ClientRouter) සක්‍රීය
+        site එකක් නිසා DOMContentLoaded නොව, site-wide already-established
+        pattern එකම (astro:page-load, Header.astro/PostSingle.astro comment
+        system එකේම pattern එක) භාවිතා කර ඇත — SPA navigation කිහිපයකින්
+        පසුවත් timer/toggle logic එක නිවැරදිව reset වී වැඩ කරයි. */}
+    <div id="breadcrumb-wrapper" class="row justify-center mb-6">
+      <div class="md:col-10 flex justify-center sm:justify-start">
+        <div id="breadcrumb-shell" class="relative min-h-[38px] flex items-center">
+
+          {/* COLLAPSED-STATE TOGGLE BUTTON — auto-collapse කළ පසු පමණක්
+              visible වේ (JS එකෙන් "is-collapsed" class එක parent එකට
+              add කරයි). No-JS fallback: JS disable නම් මෙය කිසිවිටෙකත්
+              පෙනෙන්නේ නැත, full breadcrumb එකම සැමවිටම පෙනී පවතී. */}
+          <button
+            id="breadcrumb-toggle"
+            type="button"
+            aria-label="පාර පෙන්වන්න/සඟවන්න"
+            aria-expanded="true"
+            aria-controls="breadcrumb-content"
+            class="hidden items-center gap-1.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[#F8F8FF]/60 hover:text-[#01AD9F] text-[11px] font-semibold px-3.5 py-2 rounded-full transition-colors duration-200"
+          >
+            <BiMapPin className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+            <span>Path</span>
+            <svg id="breadcrumb-arrow" class="h-3 w-3 transition-transform duration-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+          </button>
+
+          {/* FULL BREADCRUMB NAV — always in DOM, always crawlable.
+              breadcrumbItems array එකම (schema එකට use කරන) reuse කරන
+              නිසා, schema එකයි UI එකයි කවදාවත් desync වෙන්නේ නෑ. */}
+          <nav
+            id="breadcrumb-content"
+            aria-label="Breadcrumb"
+            class="breadcrumb-collapsible-content overflow-hidden"
+          >
+            <ol class="list-none flex flex-wrap items-center gap-x-1.5 gap-y-1 m-0 p-0 text-[11px] sm:text-xs text-[#F8F8FF]/45 font-medium bg-white/[0.03] border border-white/[0.06] rounded-full px-4 py-2 w-fit max-w-full">
+              {breadcrumbItems.map((crumb, i) => {
+                const isLast = i === breadcrumbItems.length - 1;
+                return (
+                  <li class="list-none flex items-center gap-1.5 min-w-0 m-0 p-0">
+                    {i > 0 && (
+                      <BiChevronRight className="h-3 w-3 text-[#F8F8FF]/20 flex-shrink-0" aria-hidden="true" />
+                    )}
+                    {isLast ? (
+                      <span
+                        class="text-[#01AD9F] font-bold truncate max-w-[140px] sm:max-w-[280px]"
+                        aria-current="page"
+                      >
+                        {crumb.name}
+                      </span>
+                    ) : (
+                      <a
+                        href={
+                          i === 0
+                            ? "/"
+                            : withTrailingSlash(`/categories/${slugify(categories?.[0] ?? "posts")}`)
+                        }
+                        class="flex items-center gap-1 hover:text-emerald-400 transition-colors duration-200 truncate max-w-[100px] sm:max-w-none"
+                      >
+                        {i === 0 && <BiHomeAlt2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
+                        <span class="truncate">{crumb.name}</span>
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
+
+        </div>
       </div>
-    </nav>
+    </div>
 
     <article class="row justify-center">
       <div class="md:col-10 text-center">
@@ -565,7 +608,94 @@ const breadcrumbSchema = JSON.stringify({
     transform: rotateY(0deg) rotateX(0deg) translateZ(24px) translateY(-6px);
     box-shadow: -2px 2px 0px rgba(0,0,0,0.3), 0 32px 60px rgba(0,0,0,0.65), 0 0 0 1px rgba(1,173,159,0.3), inset 3px 0 0 rgba(1,173,159,0.4);
   }
+
+  /* 🎯 AUTO-COLLAPSING BREADCRUMB — SEO-SAFE STYLES
+     max-height + opacity transition එකක් පමණි — display:none කිසිවිටෙකත්
+     යොදා නැත, එබැවින් content එක DOM/accessibility tree එකෙන් කිසිවිටෙකත්
+     ඉවත් නොවේ (Googlebot/crawlers සම්පූර්ණ breadcrumb එකම දකී). */
+  .breadcrumb-collapsible-content {
+    max-height: 60px;
+    opacity: 1;
+    transition: max-height 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.35s ease,
+                margin 0.45s ease;
+  }
+  #breadcrumb-shell.is-collapsed .breadcrumb-collapsible-content {
+    max-height: 0;
+    opacity: 0;
+    pointer-events: none;
+    margin: 0;
+  }
+  #breadcrumb-shell.is-collapsed #breadcrumb-toggle {
+    display: inline-flex;
+  }
+  #breadcrumb-shell.is-collapsed #breadcrumb-arrow {
+    transform: rotate(-90deg);
+  }
 </style>
+
+<script>
+  // 🎯 AUTO-COLLAPSING BREADCRUMB LOGIC — site-wide astro:page-load
+  // pattern එකම (Header.astro/comment system එකේම convention) භාවිතා
+  // කරයි, DOMContentLoaded නොව — Astro View Transitions (ClientRouter)
+  // සක්‍රීය නිසා SPA navigation කිහිපයකින් පසුවත් නිවැරදිව වැඩ කරයි.
+  let breadcrumbAutoCollapseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function initBreadcrumbToggle() {
+    const shell = document.getElementById("breadcrumb-shell");
+    const toggleBtn = document.getElementById("breadcrumb-toggle");
+    const content = document.getElementById("breadcrumb-content");
+
+    if (!shell || !toggleBtn || !content) return;
+
+    // Reset state on every page load (handles back/forward + SPA nav)
+    shell.classList.remove("is-collapsed");
+    toggleBtn.setAttribute("aria-expanded", "true");
+
+    if (breadcrumbAutoCollapseTimer) clearTimeout(breadcrumbAutoCollapseTimer);
+
+    function collapseBreadcrumb() {
+      shell?.classList.add("is-collapsed");
+      toggleBtn?.setAttribute("aria-expanded", "false");
+    }
+
+    function expandBreadcrumb() {
+      shell?.classList.remove("is-collapsed");
+      toggleBtn?.setAttribute("aria-expanded", "true");
+    }
+
+    // තත්පර 5කින් auto-collapse — පරිශීලකයාට URL/category path එක
+    // කියවීමට ප්‍රමාණවත් වේලාවක් දී, පසුව article content එකට වැඩි
+    // ඉඩක් සලසයි.
+    breadcrumbAutoCollapseTimer = setTimeout(collapseBreadcrumb, 5000);
+
+    // Fresh listener (clone-replace pattern, site-wide comment system
+    // එකේම භාවිතා වන freshEl() convention එකට සමාන) — SPA navigation
+    // කිහිපයකින් පසු duplicate event listeners එකතු වීම වළක්වයි.
+    const freshToggle = toggleBtn.cloneNode(true) as HTMLButtonElement;
+    toggleBtn.parentNode?.replaceChild(freshToggle, toggleBtn);
+
+    freshToggle.addEventListener("click", () => {
+      if (breadcrumbAutoCollapseTimer) clearTimeout(breadcrumbAutoCollapseTimer);
+      if (shell.classList.contains("is-collapsed")) {
+        expandBreadcrumb();
+      } else {
+        collapseBreadcrumb();
+      }
+    });
+  }
+
+  document.addEventListener("astro:page-load", initBreadcrumbToggle);
+
+  // Timer cleanup on page swap — Header.astro එකේම pattern එක,
+  // memory leak/stale-timer-firing-on-new-page වළක්වයි.
+  document.addEventListener("astro:before-swap", () => {
+    if (breadcrumbAutoCollapseTimer) {
+      clearTimeout(breadcrumbAutoCollapseTimer);
+      breadcrumbAutoCollapseTimer = null;
+    }
+  });
+</script>
 
 <script>
   function getSessionToken(): string {
