@@ -51,13 +51,9 @@ const authorName = allAuthors.find((a) =>
 const hasUpdatedDate = updated && date && new Date(updated).getTime() !== new Date(date).getTime();
 
 // 🎯 BREADCRUMB DATA — single source of truth used by BOTH the JSON-LD
-// schema below AND the new visible <nav> UI further down. Previously
-// only the schema existed (invisible structured data with no matching
-// visible element on the page) — Google's 2026 guidance treats visible
-// breadcrumb UI as a corroborating UX/trust signal for the schema, so a
-// schema-only breadcrumb risks being discounted as "unmatched structured
-// data". Building one array here and rendering it twice (script + nav)
-// guarantees the visible trail and the JSON-LD can never drift apart.
+// schema below AND the visible <nav> UI further down. breadcrumbItems
+// array එකම (schema එකට use කරන) UI එකටත් reuse කරන නිසා, schema එකයි
+// UI එකයි කවදාවත් desync වෙන්නේ නෑ.
 const breadcrumbItems = [
   { name: "මුල් පිටුව", item: siteUrl },
   {
@@ -123,26 +119,25 @@ const breadcrumbSchema = JSON.stringify({
     {/* 🎯 2026 VISIBLE BREADCRUMB UI: JSON-LD BreadcrumbList schema එකට
         corresponding visible navigation trail එකක්. breadcrumbItems
         array එකම (schema එකට use කරන) මෙතනටත් reuse කරන නිසා, schema
-        එකයි UI එකයි කවදාවත් desync වෙන්නේ නෑ. Last item (current page
-        title) link කරන්නේ නෑ — standard breadcrumb convention (current
-        page ට navigate කරන්න ඕනේ නෑ), aria-current="page" එකෙන් screen
-        readers ට indicate කරයි. Design theme එකට (dark bg, emerald
-        accent, existing spacing rhythm) ගැලපෙන පරිදි styled කර ඇත,
-        existing layout කිසිවකට බලපෑමක් නැත — article title එකට උඩින්
-        අලුත් row එකක් විතරයි. */}
-    <nav aria-label="Breadcrumb" class="row justify-center mb-4">
+        එකයි UI එකයි කවදාවත් desync වෙන්නේ නෑ. Pill-style container
+        එකක් තුළ, list-style:none explicit ලෙස දාලා browser default
+        bullet marker එක (screenshot එකේ පෙනුනු blue dot එක) සම්පූර්ණයෙන්
+        ඉවත් කර ඇත. Last item link කරන්නේ නෑ — standard breadcrumb
+        convention, aria-current="page" එකෙන් screen readers ට
+        indicate කරයි. */}
+    <nav aria-label="Breadcrumb" class="row justify-center mb-6">
       <div class="md:col-10">
-        <ol class="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-[#F8F8FF]/50 font-medium">
+        <ol class="list-none flex flex-wrap items-center gap-x-1.5 gap-y-1 m-0 p-0 text-[11px] sm:text-xs text-[#F8F8FF]/45 font-medium bg-white/[0.03] border border-white/[0.06] rounded-full px-4 py-2 w-fit max-w-full mx-auto sm:mx-0">
           {breadcrumbItems.map((crumb, i) => {
             const isLast = i === breadcrumbItems.length - 1;
             return (
-              <li class="flex items-center gap-1.5 min-w-0">
+              <li class="list-none flex items-center gap-1.5 min-w-0 m-0 p-0">
                 {i > 0 && (
-                  <BiChevronRight className="h-3.5 w-3.5 text-[#F8F8FF]/25 flex-shrink-0" aria-hidden="true" />
+                  <BiChevronRight className="h-3 w-3 text-[#F8F8FF]/20 flex-shrink-0" aria-hidden="true" />
                 )}
                 {isLast ? (
                   <span
-                    class="text-[#01AD9F] font-semibold truncate max-w-[160px] sm:max-w-[320px]"
+                    class="text-[#01AD9F] font-bold truncate max-w-[140px] sm:max-w-[280px]"
                     aria-current="page"
                   >
                     {crumb.name}
@@ -154,7 +149,7 @@ const breadcrumbSchema = JSON.stringify({
                         ? "/"
                         : withTrailingSlash(`/categories/${slugify(categories?.[0] ?? "posts")}`)
                     }
-                    class="flex items-center gap-1 hover:text-emerald-400 transition-colors duration-200 truncate max-w-[120px] sm:max-w-none"
+                    class="flex items-center gap-1 hover:text-emerald-400 transition-colors duration-200 truncate max-w-[100px] sm:max-w-none"
                   >
                     {i === 0 && <BiHomeAlt2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
                     <span class="truncate">{crumb.name}</span>
