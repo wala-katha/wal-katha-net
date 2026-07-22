@@ -29,6 +29,31 @@ const { posts } = Astro.props;
           initialClass = "hidden md:flex"; // ඩෙස්ක්ටොප් 6ක් පෙන්වීමට (මොබයිල් වල හංගයි)
         }
 
+        // 🎯 2026 LCP OPTIMIZATION FIX: කලින් cards 6ම loading="lazy"
+        // විදිහට hardcode කරලා තිබ්බා — mobile/desktop දෙකේම fold
+        // එකට උඩින්ම initially visible වෙන index<4 cards ටිකත් lazy
+        // load වුනා. lazy loading කියන්නේ browser එකට "මේ image එක
+        // viewport එකට කිට්ටු වෙනකම් fetch කරන්න එපා" කියන directive
+        // එකක් — ඒත් index 0-1 cards (mobile) initially "flex"
+        // (visible) class එකෙන්ම render වෙන නිසා, ඒවා ලෙස lazy
+        // කිරීම browser ට image fetch එක delay කරන්නට සලස්වා, LCP
+        // (Largest Contentful Paint) metric එකට අහිතකර ලෙස බලපෑ
+        // හැක — PostSingle.astro එකේ SimilarPosts section එක
+        // viewport height එක අනුව fold එකට ආසන්නව/තුළින්ම පෙනිය
+        // හැකි නිසා.
+        //
+        // Root-cause fix: Posts.astro එකේම දැනටමත් established
+        // pattern එකම (`i < 3 ? "eager" : "lazy"`) මෙතනටත් apply
+        // කර ඇත — index < 2 (මුල් cards දෙක, mobile-first initial
+        // "flex" විදිහට visible වන cards ටික) eager+high priority
+        // ලෙසත්, ඉතිරි ඒවා lazy ලෙසත් load කරයි. Layout/design/grid
+        // logic කිසිවක් වෙනස් නොවේ — loading strategy එක විතරයි
+        // dynamic කරන ලද්දේ.
+        const isAboveFold = index < 2;
+        const imgLoading = isAboveFold ? "eager" : "lazy";
+        const imgDecoding = isAboveFold ? "sync" : "async";
+        const imgFetchPriority = isAboveFold ? "high" : "auto";
+
         return (
           <div 
             class={`col-6 md:col-4 flex-col justify-between group mb-2 text-center bg-[#0d0d0d] p-2 sm:p-3 rounded-xl border border-[#1a1a1a] similar-post-card transition-all duration-300 ${initialClass}`}
@@ -45,8 +70,9 @@ const { posts } = Astro.props;
                   alt={post.data.title}
                   width={500}
                   height={666}
-                  loading="lazy"
-                  decoding="async"
+                  loading={imgLoading}
+                  decoding={imgDecoding}
+                  fetchpriority={imgFetchPriority}
                 />
               </a>
             )}
