@@ -146,6 +146,13 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
 
     <link rel="shortcut icon" href={config.site.favicon} />
 
+    {/* 🎯 2026 PWA MANIFEST: "Add to Home Screen" installability සඳහා.
+        ⚠️ NOTE: public/manifest.json හි icons (192x192, 512x512) දැනට
+        logo.webp (300x50px rectangular) එකම reference කරයි — spec-accurate
+        square icon file එකක් upload කළ පසු manifest.json එකේ icon paths
+        update කළ යුතුය, home-screen icon එක distorted නොපෙනීමට. */}
+    <link rel="manifest" href="/manifest.json" />
+
     {/* 🎯 FIXED SYNTAX ERROR: ඩූපිලිකේට් වැටිලා තිබ්බ <link ටැග් එක හැදුවා */}
     {isHomePage && (
       <link rel="preload" as="image" href="/images/slider/slide-1.webp" fetchpriority="high" />
