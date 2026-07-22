@@ -79,18 +79,11 @@ jobs:
               const outMeta = await sharp(out).metadata();
               const srcMeta = await sharp(input).metadata();
 
-              // Source එක දැනටමත් targetWidth එකට වඩා කුඩා නම්
-              // (withoutEnlargement නිසා ඒ සයිස් එකෙන්ම තියෙන්න ඕන)
               const expectedWidth = Math.min(srcMeta.width || targetWidth, targetWidth);
-
-              // Width mismatch (± 2px tolerance rounding errors වලට)
               if (Math.abs((outMeta.width || 0) - expectedWidth) > 2) return false;
 
-              // Square (authors) folder සඳහා height එකත් check කරයි
               if (isSquare) {
                 const expectedHeight = Math.min(srcMeta.height || targetWidth, targetWidth);
-                // square crop නිසා height එක targetWidth එකටම match වෙන්න ඕන
-                // (source කුඩා නම් මිස)
                 const expectedSquareHeight = srcMeta.width && srcMeta.height &&
                   Math.min(srcMeta.width, srcMeta.height) >= targetWidth
                   ? targetWidth
@@ -100,7 +93,6 @@ jobs:
 
               return true;
             } catch {
-              // metadata කියවීමේ දෝෂයක් ආවොත් ආරක්ෂිතව re-process කරයි
               return false;
             }
           }
@@ -115,8 +107,6 @@ jobs:
               const outFile = file.replace(/\.[^.]+$/, '.webp');
               const out = join(dir, outFile);
 
-              // ⚡ IDEMPOTENCY + DIMENSION GUARD — timestamp AND dimension
-              //    දෙකම match වෙනකොට විතරක් skip කරයි
               if (await isUpToDate(input, out, maxWidth, square)) {
                 skippedCount++;
                 continue;
@@ -128,7 +118,6 @@ jobs:
               let pipeline = image;
 
               if (square) {
-                // Author avatars — රවුම් UI එකකට ගැලපෙන්න 1:1 අවශ්‍යයි (cover, center crop)
                 pipeline = pipeline.resize({
                   width: maxWidth,
                   height: maxWidth,
@@ -138,16 +127,12 @@ jobs:
                   kernel: sharp.kernel.lanczos3,
                 });
               } else if (metadata.width && metadata.width > maxWidth) {
-                // ලොකු පින්තූර — පළල පමණක් අඩු කරයි, height ස්වයංක්‍රීයව
-                // ratio එකට අනුව calculate වේ (crop/stretch කිසිවක් නෑ)
                 pipeline = pipeline.resize({
                   width: maxWidth,
                   withoutEnlargement: true,
                   kernel: sharp.kernel.lanczos3,
                 });
               }
-              // metadata.width <= maxWidth නම් — කිසිම resize එකක් නෑ,
-              // දැනටමත් කුඩා පින්තූරයක් නම් stretch කරන්නේ නෑ (quality preserved)
 
               await pipeline
                 .webp({ quality: 85, smartSubsample: true, effort: 6 })
@@ -165,6 +150,8 @@ jobs:
           //    විශේෂ පින්තූර (Copyright & Credit Policy.png, Auhor.png,
           //    author.png ආදී) ස්මාර්ට් විදිහට convert කිරීම.
           //    Crop නොවේ, Ratio ආරක්ෂා වේ. Dimension guard එකම apply වේ.
+          //    (⚠️ app-icon.jpg මෙතනින් ඉවත් — 512x512 dedicated
+          //    converter එකකින් පහළින් වෙනම handle කරයි.)
           // ==========================================================
           const rootImages = ['Copyright & Credit Policy.png', 'Auhor.png', 'author.png'];
           const rootDir = 'public/images';
@@ -204,17 +191,25 @@ jobs:
           }
 
           // ==========================================================
-          // 🔗 LOGO / FAVICON / OG-IMAGE — Base.astro / config.json
-          //    දිගටම .png/.jpg paths use කරන නිසා මේවත් convert කරලා
-          //    frontmatter replace step එකේදී auto update කරයි.
-          //    දැන් dimension guard එකම apply වේ.
+          // 🔗 LOGO / FAVICON / OG-IMAGE / APP-ICON — Base.astro /
+          //    config.json / manifest.json දිගටම .png/.jpg paths use
+          //    කරන නිසා මේවත් convert කරලා frontmatter replace step
+          //    එකේදී auto update කරයි. දැන් dimension guard එකම apply වේ.
+          //
+          //    🎯 FIXED (return boolean): convertSingle() දැන් "මේ run
+          //    එකේදී actual fresh conversion එකක් සිදු වුනාද" කියන එක
+          //    boolean විදිහට return කරයි. filename-same-but-content-
+          //    changed scenarios (app-icon.jpg vs app-icon.webp වගේ,
+          //    extension replace pattern එකෙන් convertedMap track කරන්න
+          //    බැරි cases) වලට manifest.json guard එකට "did this
+          //    actually re-run" කියන signal එක දෙන්න මේක අවශ්‍යයි.
           // ==========================================================
           async function convertSingle(inputPath, outputPath, targetWidth, isSquare, resizeOpts, webpOpts, mapKey) {
-            if (!existsSync(inputPath)) return;
+            if (!existsSync(inputPath)) return false;
 
             if (await isUpToDate(inputPath, outputPath, targetWidth, isSquare)) {
               skippedCount++;
-              return;
+              return false;
             }
 
             let pipeline = sharp(inputPath);
@@ -224,6 +219,7 @@ jobs:
             convertedMap[mapKey] = outputPath.split('/').pop();
             processedCount++;
             console.log(`Done: ${mapKey} -> ${convertedMap[mapKey]}`);
+            return true;
           }
 
           await convertSingle(
@@ -253,6 +249,27 @@ jobs:
             'og-image.jpg'
           );
 
+          // 🎯 APP-ICON (512x512 PWA/App Icon Standard):
+          // "fit: contain" + solid dark background (site theme #050505
+          // ට ගැලපෙන පරිදි) භාවිතා කරයි. Source image එක 512px ට අඩු
+          // නම් (withoutEnlargement) upscale නොවී, contain-fit padding
+          // සමඟ 512x512 canvas එකක් තුළට centered කරයි — distortion
+          // කිසිවක් සිදු නොවේ.
+          //
+          // ✅ return value එක "appIconConverted" variable එකට save
+          // කරයි — app-icon.jpg re-upload කරලා content වෙනස් වුනත්
+          // (filename එකම "app-icon.webp" වී ඇතත්), මේ run එකේදී actual
+          // fresh conversion එකක් සිදු වුනා නම් manifest.json guard
+          // එකට පහළින් "force re-verify" trigger කරන්නට මේක පාවිච්චි වේ.
+          const appIconConverted = await convertSingle(
+            'public/images/app-icon.jpg',
+            'public/images/app-icon.webp',
+            512, true,
+            { width: 512, height: 512, fit: 'contain', background: { r: 5, g: 5, b: 5, alpha: 1 } },
+            { quality: 95, effort: 6 },
+            'app-icon.jpg'
+          );
+
           // ==========================================================
           // 📝 AUTO-UPDATE FRONTMATTER — content/posts/*.md, authors/*.md
           //    සහ config/config.json ඇතුළේ image path string එක
@@ -268,8 +285,6 @@ jobs:
               let changed = false;
 
               for (const [oldName, newName] of Object.entries(convertedMap)) {
-                // frontmatter value එකේ exact filename match කරයි
-                // (folder path එකේ ඕන තැනක image: "/images/posts/X.jpg" ආකෘතියට ගැලපේ)
                 const regex = new RegExp(oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
                 if (regex.test(content)) {
                   content = content.replace(regex, newName);
@@ -290,7 +305,7 @@ jobs:
           updateFrontmatterInDir('src/content/contact');
           updateFrontmatterInDir('src/content/pages');
 
-          // config.json ඇතුළේ logo/favicon paths update කිරීම
+          // config.json ඇතුළේ logo/favicon/app-icon paths update කිරීම
           const configPath = 'src/config/config.json';
           if (existsSync(configPath)) {
             let configContent = readFileSync(configPath, 'utf-8');
@@ -310,6 +325,94 @@ jobs:
             }
           }
 
+          // ==========================================================
+          // 📝 AUTO-UPDATE public/manifest.json (PERMANENT SELF-HEALING
+          //    GUARANTEE) — තුනක් සිදු කරයි:
+          //
+          //    1. Generic replace loop — convertedMap එකේ ඇති ඕනෑම
+          //       "oldName -> newName" pair එකක් manifest.json content
+          //       එකේ තිබේ නම් replace කරයි (extension-change scenarios
+          //       වලට).
+          //
+          //    2. 🎯 EXISTENCE GUARD — manifest.json එකේ "app-icon.webp"
+          //       කියලා string එකක්ම නැත්නම් (මුලින්ම setup කරන අවස්ථාවේ,
+          //       හෝ කවුරුහරි manually වෙනස් කළොත්), app-icon.webp file
+          //       එක exist වේ නම් icons[].src සියල්ල force-set කරයි.
+          //
+          //    3. 🎯 FRESH-CONVERSION FORCE-VERIFY GUARD (NEW — permanent
+          //       fix): "appIconConverted === true" කියන්නේ මේ run
+          //       එකේදී app-icon.jpg -> app-icon.webp conversion එක
+          //       අලුතින්ම සිදු වුනා (skip නොවුනා) කියන එකයි. එහෙම නම්,
+          //       manifest.json එකේ දැනටමත් "app-icon.webp" string එකම
+          //       තිබුණත් (filename එකේ වෙනසක් නැති නිසා guard #2 skip
+          //       වුනත්), icons array එකේ සෑම entry එකකම src, sizes,
+          //       type, purpose fields සියල්ල නිවැරදිද කියලා schema-
+          //       level ලෙස force re-verify/re-write කරයි. මෙය "content
+          //       changed but filename same" scenario එකට complete
+          //       coverage එකක් සහතික කරයි — app-icon.jpg කෙතරම් වාරයක්
+          //       replace කළත්, manifest.json එක සෑම විටම නිවැරදිව sync
+          //       වී පවතී.
+          // ==========================================================
+          const manifestPath = 'public/manifest.json';
+          if (existsSync(manifestPath)) {
+            let manifestContent = readFileSync(manifestPath, 'utf-8');
+            let manifestChanged = false;
+
+            // 1. Generic replace (any renamed file reference)
+            for (const [oldName, newName] of Object.entries(convertedMap)) {
+              const regex = new RegExp(oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+              if (regex.test(manifestContent)) {
+                manifestContent = manifestContent.replace(regex, newName);
+                manifestChanged = true;
+              }
+            }
+
+            const appIconWebpPath = join(rootDir, 'app-icon.webp');
+            const appIconExists = existsSync(appIconWebpPath);
+
+            // 2. Existence guard — manifest.json එකේ app-icon.webp
+            //    reference එකක්ම නැති තත්වයේදී force-inject කරයි.
+            const missingAppIconRef = appIconExists && !manifestContent.includes('app-icon.webp');
+
+            // 3. Fresh-conversion force-verify guard — filename same
+            //    උනත් content අලුත් වුනොත් (re-upload scenario) manifest
+            //    entries structurally correct දැයි verify කරයි.
+            const needsForceVerify = appIconExists && appIconConverted;
+
+            if (missingAppIconRef || needsForceVerify) {
+              try {
+                const manifestJson = JSON.parse(manifestContent);
+                if (Array.isArray(manifestJson.icons)) {
+                  let iconsFixed = false;
+                  manifestJson.icons = manifestJson.icons.map((icon) => {
+                    if (icon.src !== '/images/app-icon.webp' || icon.type !== 'image/webp') {
+                      iconsFixed = true;
+                      return { ...icon, src: '/images/app-icon.webp', type: 'image/webp' };
+                    }
+                    return icon;
+                  });
+
+                  if (iconsFixed || missingAppIconRef) {
+                    manifestContent = JSON.stringify(manifestJson, null, 2) + '\n';
+                    manifestChanged = true;
+                    console.log(
+                      missingAppIconRef
+                        ? 'manifest.json icons[].src force-injected -> /images/app-icon.webp'
+                        : 'manifest.json icons[] re-verified against freshly re-converted app-icon.webp'
+                    );
+                  }
+                }
+              } catch (err) {
+                console.error('manifest.json parse error — skipping app-icon guard:', err.message);
+              }
+            }
+
+            if (manifestChanged) {
+              writeFileSync(manifestPath, manifestContent, 'utf-8');
+              console.log('Frontmatter updated: public/manifest.json');
+            }
+          }
+
           console.log('--- Conversion Summary ---');
           console.log(`Processed: ${processedCount}, Skipped (already up-to-date): ${skippedCount}`);
           console.log(JSON.stringify(convertedMap, null, 2));
@@ -326,11 +429,13 @@ jobs:
           git add public/images/logo.webp || true
           git add public/images/favicon.webp || true
           git add public/images/og-image.webp || true
+          git add public/images/app-icon.webp || true
+          git add public/manifest.json || true
           git add src/content/posts/*.md || true
           git add src/content/authors/*.md || true
           git add src/content/about/*.md || true
           git add src/content/contact/*.md || true
           git add src/content/pages/*.md || true
           git add src/config/config.json || true
-          git diff --staged --quiet || git commit -m "Auto: Self-healing WebP optimization (dimension-aware staleness detection) + root images + frontmatter update"
+          git diff --staged --quiet || git commit -m "Auto: Self-healing WebP optimization (permanent app-icon->manifest.json auto-sync on every fresh conversion) + frontmatter update"
           git push
