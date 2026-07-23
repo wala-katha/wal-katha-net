@@ -255,7 +255,18 @@ const postGridImageSizes = "(max-width: 640px) 46vw, (max-width: 768px) 44vw, 30
     <div class="mt-12 p-4 sm:p-6 bg-[#FFCC00] rounded-xl border border-[#E6B800]">
       <div class="flex items-center gap-2 mb-4 border-b border-[#010203]/10 pb-2">
         <BiPurchaseTagAlt className="text-[#010203] h-5 w-5" />
-        <h4 class="text-sm sm:text-base font-black text-[#010203]">Labels (ටැග්ස්)</h4>
+        {/* 🎯 2026-07 W3C VALIDATOR FIX ("The heading h4 follows the
+            heading h2, skipping 1 heading level"): the post card
+            title just above (in the .map() loop) was upgraded from
+            <h3> to <h2> in this same pass, which means this "Labels"
+            heading — the next heading in document order — must now
+            step down by exactly one level (h2 -> h3), not jump two
+            levels (h2 -> h4). Changed from <h4> to <h3> here; every
+            Tailwind class (text-sm sm:text-base font-black
+            text-[#010203]) is preserved byte-for-byte, so the visual
+            appearance is 100% unchanged — this is a pure semantic-tag
+            fix. */}
+        <h3 class="text-sm sm:text-base font-black text-[#010203]">Labels (ටැග්ස්)</h3>
       </div>
       
       <div class="relative flex flex-col">
