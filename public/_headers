@@ -5,3 +5,33 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=()
+
+# 🎯 PAGESPEED "USE EFFICIENT CACHE LIFETIMES" FIX (Est savings 5 KiB):
+# PageSpeed flagged the Cloudflare beacon.min.js script (1d TTL) — that
+# script is served from Cloudflare's own static.cloudflareinsights.com
+# origin (Web Analytics dashboard feature), NOT from this codebase, so
+# its cache lifetime cannot be controlled here (see chat explanation).
+#
+# What CAN be controlled from this file is every asset WE serve from our
+# own origin. Astro's build output hashes filenames for JS/CSS bundles
+# and this site's images are all static (never mutate in-place — see
+# optimize-images.yml, which always writes to the same .webp path only
+# when content actually changed), so it is 100% safe to cache these
+# aggressively for a full year with "immutable" — eliminating any
+# repeat-visit re-download entirely for these paths, which directly
+# improves the "Use efficient cache lifetimes" score for every asset
+# this site actually controls.
+/images/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.webp
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
