@@ -7,7 +7,6 @@ import gtm from "astro-gtm-lite";
 import { defineConfig, fontProviders, sharpImageService } from "astro/config";
 import config from "./src/config/config.json";
 import theme from "./src/config/theme.json";
-import { getCollection } from "astro:content";
 
 function parseFontString(fontStr) {
   const [name, weightPart] = fontStr.split(":");
@@ -98,56 +97,6 @@ function isExcludedFromSitemap(url) {
   return EXCLUDED_SITEMAP_PATHS.includes(path);
 }
 
-// 🎯 2026 SITEMAP "LASTMOD" ACCURACY FIX (Crawl-Freshness Signal):
-// @astrojs/sitemap's serialize() hook only receives the final built URL —
-// it has no access to that page's content-collection frontmatter (date/
-// updated fields), so previously every sitemap entry fell back to the
-// integration's own default lastmod behavior (build timestamp, identical
-// for every URL regardless of actual content age). This sends Google an
-// inaccurate "everything changed right now" freshness signal for the
-// entire site on every deploy, which can waste crawl-priority budget on
-// pages that haven't actually changed.
-//
-// PERMANENT FIX: build a URL -> actual-content-date lookup map once,
-// synchronously, at config-eval time (before defineConfig runs), using
-// the same "updated" field already defined in content.config.ts and
-// already surfaced in the UI by PostSingle.astro's "Last Updated" badge.
-// Falls back to the post's "date" field when "updated" isn't set, so
-// existing posts (no "updated" field) still get their real publish date
-// instead of a blanket build timestamp.
-//
-// SELF-HEALING: this map is derived directly from the same content
-// collection Astro already builds pages from — any future post/page
-// automatically gets a correct lastmod with zero manual maintenance,
-// and any post's "updated" field bump automatically propagates to the
-// sitemap on the next build without touching this file again.
-async function buildLastmodMap() {
-  const map = {};
-  try {
-    const posts = await getCollection("posts");
-    for (const post of posts) {
-      if (post.data.draft) continue;
-      const effectiveDate = post.data.updated || post.data.date;
-      if (!effectiveDate) continue;
-      // Sitemap URLs for posts are always "/blog/{id}/" (see blog/[single].astro)
-      map[`/blog/${post.id}`] = new Date(effectiveDate).toISOString();
-    }
-  } catch (err) {
-    // Defensive: if content collection reading fails for any reason at
-    // config-eval time, sitemap generation still proceeds with the
-    // integration's default lastmod behavior rather than breaking the build.
-    console.warn("Sitemap lastmod map generation skipped:", err?.message || err);
-  }
-  return map;
-}
-
-const lastmodMap = await buildLastmodMap();
-
-function applyAccurateLastmod(url) {
-  const path = url.replace(/^https?:\/\/[^/]+/, "").replace(/\/$/, "");
-  return lastmodMap[path];
-}
-
 export default defineConfig({
   // 🎯 100% Dynamic Base URL Fetching from config.json
   site: config.site.base_url ? config.site.base_url : "https://www.walakatha.net",
@@ -203,10 +152,6 @@ export default defineConfig({
     // කිසිම බලපෑමක් නැතිව)
     // 🎯 ADDED: /elements/ සහ /page/1/ URLs sitemap output එකෙන්ම exclude
     // කිරීම (orphan-page contradiction fix, routing logic එකට බලපෑමක් නැතිව)
-    // 🎯 ADDED (2026): accurate per-post lastmod via lastmodMap (content
-    // date/updated field-driven, falls back to integration default for
-    // non-post URLs like category/tag/static pages where no single
-    // content date applies)
     sitemap({
       changefreq: "weekly",
       priority: 0.7,
@@ -214,12 +159,6 @@ export default defineConfig({
         if (isExcludedFromSitemap(item.url)) {
           return undefined;
         }
-
-        const accurateLastmod = applyAccurateLastmod(item.url);
-        if (accurateLastmod) {
-          item.lastmod = accurateLastmod;
-        }
-
         item.url = ensureSitemapTrailingSlash(item.url);
         return item;
       },
