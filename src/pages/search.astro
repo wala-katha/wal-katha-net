@@ -22,10 +22,9 @@ const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 // Base.astro auto-appends a trailing slash to <link rel="canonical">
 // (Cloudflare Pages serves directory-style URLs with a trailing slash
 // by default). This local canonicalUrl is also embedded directly inside
-// the hreflang tags and the JSON-LD SearchResultsPage schema below,
-// bypassing Base.astro's trailing-slash logic, so we add the slash here
-// too to keep everything in sync (canonical, hreflang, and structured
-// data all resolve with 0 redirects).
+// the JSON-LD SearchResultsPage schema below, bypassing Base.astro's
+// trailing-slash logic, so we add the slash here too to keep everything
+// in sync (canonical and structured data both resolve with 0 redirects).
 const canonicalUrl = `${base_url}/search/`;
 const siteLogo  = `${base_url}/images/logo.png`;
 const siteTitle = config?.site?.title || "WalaKatha";
@@ -97,7 +96,12 @@ const searchPageSchema = {
   {/* ── JSON-LD ── */}
   <script type="application/ld+json" set:html={JSON.stringify(searchPageSchema)} />
 
-  {/* ── HEAD SLOT — Extra Meta ONLY (No duplicate canonical/og tags) ── */}
+  {/* ── HEAD SLOT — Extra Meta ONLY (No duplicate canonical/og/hreflang/
+       content-language tags — Base.astro now renders hreflang="si",
+       hreflang="x-default", and content-language universally for every
+       page, so the three lines that used to live here manually have
+       been removed to avoid duplicate <link>/<meta> emission on this
+       exact page) ── */}
   <Fragment slot="head">
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
 
@@ -111,11 +115,6 @@ const searchPageSchema = {
 
     {/* Twitter / X Extra */}
     <meta name="twitter:card"        content="summary_large_image" />
-
-    {/* Sinhala / language */}
-    <meta http-equiv="content-language" content="si" />
-    <link rel="alternate" hreflang="si" href={canonicalUrl} />
-    <link rel="alternate" hreflang="x-default" href={canonicalUrl} />
   </Fragment>
 
   {/* ── STYLES ── */}
