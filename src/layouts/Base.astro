@@ -84,6 +84,46 @@ const finalImageUrl = image
 
 // ✅ Home page පමණයි slider preload කරනවා
 const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
+
+// ==========================================================
+// 🎯 UNIVERSAL hreflang / CONTENT-LANGUAGE INJECTION (NEW —
+// SEO Enhancement Pass #1: hreflang & Content-Language Consistency)
+//
+// ROOT CAUSE THIS SOLVES: previously, "content-language" meta +
+// "hreflang" self-referencing <link> tags existed ONLY inside
+// search.astro, manually hand-written there and nowhere else. Every
+// other route on the site ([regular].astro, blog/[single].astro,
+// authors/[single].astro, categories/*, tags/*, contact.astro,
+// page/[slug].astro, 404.astro, index.astro) had ZERO hreflang or
+// content-language signal — an inconsistent, page-by-page patchwork
+// instead of a site-wide guarantee.
+//
+// Even for a genuinely single-language site (si only, no translated
+// variants), explicitly declaring hreflang="si" + hreflang="x-default"
+// self-referencing tags on every page removes ambiguity for search
+// engines about which language/region variant is canonical — this
+// matters most when a domain is reachable via multiple host variants
+// (www vs non-www) or when third-party aggregators scrape and re-host
+// content, since it gives Google an unambiguous, page-level signal of
+// "this exact URL is the canonical si-language version" independent
+// of the html lang attribute alone.
+//
+// PERMANENT, SELF-HEALING FIX: this block now lives ONCE, in
+// Base.astro (the single layout every page in the site imports),
+// computed from the SAME "currentCanonical" value already used for
+// <link rel="canonical"> below — so hreflang/content-language can
+// never drift out of sync with the canonical URL, no matter how many
+// new page types are added in the future. Any new route added later
+// automatically inherits this without any additional code, since it
+// is impossible to render a page through Base.astro without also
+// getting these tags.
+//
+// NOTE: the previous manual duplicate of these exact three tags
+// inside src/pages/search.astro has been removed as part of this same
+// change, since rendering them twice on the same page (once from
+// here, once from search.astro's own <Fragment slot="head">) would be
+// an invalid duplicate <link>/<meta> emission.
+// ==========================================================
 ---
 
 <!doctype html>
@@ -169,6 +209,16 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
     <meta name="theme-name" content="bookworm-light-astro" />
     <meta name="generator" content={Astro.generator} />
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+
+    {/* 🎯 UNIVERSAL hreflang / CONTENT-LANGUAGE BLOCK (SEO Enhancement
+        Pass #1) — see full rationale in the frontmatter comment above.
+        Rendered site-wide, once, for every page that goes through
+        Base.astro. Computed from the same currentCanonical value used
+        by <link rel="canonical"> below, so these can never drift out
+        of sync with the canonical URL. */}
+    <meta http-equiv="content-language" content="si" />
+    <link rel="alternate" hreflang="si" href={currentCanonical} />
+    <link rel="alternate" hreflang="x-default" href={currentCanonical} />
 
     {/* 👑 CORE SEO TAGS (භාවිතා වෙන්නේ එක පාරක් පමණි) */}
     <title>{calculatedTitle}</title>
