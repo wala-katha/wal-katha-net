@@ -7,10 +7,22 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import { markdownify } from "@/lib/utils/textConverter";
 ---
 
-{/* 👑 GLOSSY 3D GLASSMORPHISM FOOTER WRAPPER */}
+{/* 👑 GLOSSY 3D GLASSMORPHISM FOOTER WRAPPER
+    🎯 2026-07 W3C VALIDATOR FIX ("The contentinfo role is unnecessary
+    for element footer"): the explicit role="contentinfo" attribute
+    has been removed. Per the HTML5/ARIA-in-HTML spec, a <footer>
+    element that is not a descendant of an <article>, <aside>,
+    <main>, <nav>, or <section> already carries an IMPLICIT
+    "contentinfo" landmark role automatically — this footer is a
+    direct child of <body> (via Base.astro), so it already qualifies.
+    Declaring role="contentinfo" explicitly is therefore fully
+    redundant per the Nu Html Checker's ARIA-in-HTML conformance
+    rules. Removing the attribute changes nothing for assistive
+    technology (the same implicit landmark role is still exposed by
+    every browser/AT combination) — this is a pure spec-conformance
+    fix with zero behavioral or visual regression. */}
 <footer 
   class="relative mt-12 py-12 overflow-hidden border-t border-white/[0.12] bg-gradient-to-b from-white/[0.04] to-white/[0.01] backdrop-blur-xl shadow-[inset_0_2px_4px_rgba(255,255,255,0.15),0_12px_40px_rgba(0,0,0,0.8)]"
-  role="contentinfo"
 >
   {/* ✨ REAL GLOSSY REFLECTION */}
   <div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.03] to-white/[0.05] pointer-events-none"></div>
