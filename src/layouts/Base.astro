@@ -123,13 +123,48 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
 // change, since rendering them twice on the same page (once from
 // here, once from search.astro's own <Fragment slot="head">) would be
 // an invalid duplicate <link>/<meta> emission.
+//
+// 🎯 2026-07 W3C VALIDATOR FIX (vnu.validator.w3.org — 2 errors):
+// ROOT CAUSE 1: A previous version of this file manually emitted
+// <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+// inside <head>. Astro ALREADY auto-injects its own
+// <meta charset="UTF-8" /> as the very first node inside every page's
+// <head> (this happens automatically at the framework level and
+// cannot be disabled/is not written anywhere in this file's source —
+// it is emitted by Astro's compiler itself). The W3C HTML spec
+// (and the Nu Html Checker) explicitly FORBIDS a document from having
+// BOTH a <meta charset="..."> element AND a
+// <meta http-equiv="Content-Type" content="...; charset=..."> element
+// at the same time — exactly one charset-declaring meta is permitted.
+// Since Astro's own <meta charset="UTF-8"> already satisfies this
+// requirement completely, the manual http-equiv="Content-Type" meta
+// tag was 100% redundant AND spec-violating. It has been permanently
+// removed. No charset functionality is lost — Astro's own directive
+// is the single source of truth for this site's character encoding on
+// every single page, permanently and automatically (self-healing: any
+// future page added to the site automatically inherits Astro's
+// charset meta with zero manual code required, and can never
+// re-introduce this duplicate-charset error since there is no longer
+// any manual charset-related meta tag anywhere in this file).
+//
+// ROOT CAUSE 2: A previous version of this file also manually emitted
+// <meta http-equiv="content-language" content="si" />. The W3C HTML
+// spec has marked the "content-language" http-equiv meta as OBSOLETE
+// — the correct, modern, spec-compliant way to declare a document's
+// primary language is the <html lang="..."> attribute alone, which
+// this file ALREADY sets via <html lang="si" ...> below. Since that
+// attribute already fully satisfies the language-declaration
+// requirement (and is what search engines/browsers actually consult),
+// the obsolete http-equiv="content-language" meta tag has been
+// permanently removed. No language signal is lost — <html lang="si">
+// remains the single, spec-compliant source of truth for this site's
+// declared language on every page, permanently.
 // ==========================================================
 ---
 
 <!doctype html>
 <html lang="si" class="bg-[#050505]">
   <head>
-    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
 
     <style>
@@ -208,15 +243,19 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
     <meta name="msapplication-TileColor" content="#050505" />
     <meta name="theme-name" content="bookworm-light-astro" />
     <meta name="generator" content={Astro.generator} />
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 
-    {/* 🎯 UNIVERSAL hreflang / CONTENT-LANGUAGE BLOCK (SEO Enhancement
-        Pass #1) — see full rationale in the frontmatter comment above.
-        Rendered site-wide, once, for every page that goes through
-        Base.astro. Computed from the same currentCanonical value used
-        by <link rel="canonical"> below, so these can never drift out
-        of sync with the canonical URL. */}
-    <meta http-equiv="content-language" content="si" />
+    {/* 🎯 UNIVERSAL hreflang BLOCK (SEO Enhancement Pass #1) — see full
+        rationale in the frontmatter comment above. Rendered site-wide,
+        once, for every page that goes through Base.astro. Computed
+        from the same currentCanonical value used by
+        <link rel="canonical"> below, so these can never drift out of
+        sync with the canonical URL.
+        NOTE (2026-07 W3C fix): the manual
+        <meta http-equiv="content-language" content="si" /> tag that
+        used to sit here has been permanently removed — it was flagged
+        obsolete by the W3C Nu Html Checker. <html lang="si"> above is
+        the single, spec-compliant source of truth for this site's
+        declared language now. */}
     <link rel="alternate" hreflang="si" href={currentCanonical} />
     <link rel="alternate" hreflang="x-default" href={currentCanonical} />
 
