@@ -1,0 +1,153 @@
+---
+import Posts from "@/components/Posts.astro";
+import Base from "@/layouts/Base.astro";
+import config from "@/config/config.json";
+import Pagination from "@/layouts/components/Pagination.astro";
+import { getSinglePage } from "@/lib/contentParser.astro";
+import { getTaxonomy } from "@/lib/taxonomyParser.astro";
+import { sortByDate } from "@/lib/utils/sortFunctions";
+import taxonomyFilter from "@/lib/utils/taxonomyFilter";
+import { humanize } from "@/lib/utils/textConverter";
+
+// 🎯 2026 TAG PAGINATION (Page 2+): tags/[tag].astro handles page 1 for
+// every tag (/tags/{tag}/); this file generates every subsequent page
+// (/tags/{tag}/page/2/, /page/3/, etc.) as fully static routes at build
+// time. Same nested-dynamic-route pattern as
+// categories/[category]/page/[slug].astro.
+export async function getStaticPaths() {
+  const tags = await getTaxonomy("posts", "tags");
+  if (!tags || tags.length === 0) return [];
+
+  const posts = await getSinglePage("posts");
+  const paginationLimit = config?.settings?.pagination || 6;
+
+  const paths: { params: { tag: string; slug: string } }[] = [];
+
+  for (const tag of tags) {
+    const filterByTags = taxonomyFilter(posts || [], "tags", tag);
+    const totalPages = Math.ceil((filterByTags?.length || 0) / paginationLimit);
+
+    // Page 1 already exists at /tags/{tag}/ (handled by the sibling
+    // [tag].astro file) — this file only ever generates page 2 and
+    // beyond, so the loop starts at i = 2.
+    if (totalPages >= 2) {
+      for (let i = 2; i <= totalPages; i++) {
+        paths.push({
+          params: { tag, slug: i.toString() },
+        });
+      }
+    }
+  }
+
+  return paths;
+}
+
+const { tag, slug } = Astro.params;
+
+const posts = await getSinglePage("posts");
+const filterByTags = taxonomyFilter(posts || [], "tags", tag);
+const sortedPosts = sortByDate(filterByTags);
+
+const paginationLimit = config?.settings?.pagination || 6;
+const totalPages = Math.ceil((sortedPosts?.length || 0) / paginationLimit);
+
+let currentPage = slug ? Number(slug) : 2;
+if (isNaN(currentPage) || currentPage < 2) {
+  currentPage = 2;
+}
+if (currentPage > totalPages && totalPages > 0) {
+  currentPage = totalPages;
+}
+
+const indexOfLastPost = currentPage * paginationLimit;
+const indexOfFirstPost = indexOfLastPost - paginationLimit;
+const currentPosts = sortedPosts && sortedPosts.length > 0 ? sortedPosts.slice(indexOfFirstPost, indexOfLastPost) : [];
+
+const title = humanize(tag || "");
+
+// 📈 SEO — page-number-aware title/description, same convention as
+// categories/[category]/page/[slug].astro
+const metaTitle = `${title} - ටැගය (පිටුව ${currentPage}) | ${config?.site?.title || "Wala Katha"}`;
+const postCount = sortedPosts?.length || 0;
+const metaDescription = `${title} ටැගය (Tag) යටතේ ඇති සියලුම බ්ලොග් ලිපි, නවතම රසවත් සිංහල වල් කතා සහ වැල කතා${postCount > 0 ? ` (ලිපි ${postCount}ක්)` : ""} වල ${currentPage} වන පිටුව මෙතැනින් නොමිලේ කියවා ගන්න.`;
+
+const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
+const tagBaseUrl = `${base_url}/tags/${tag}/`;
+const tagsIndexUrl = `${base_url}/tags/`;
+const canonicalUrl = `${tagBaseUrl}page/${currentPage}/`;
+
+// ⚡ GOOGLE BOT PAGINATION HINTS
+const prevUrl = currentPage === 2 ? tagBaseUrl : `${tagBaseUrl}page/${currentPage - 1}/`;
+const nextUrl = currentPage < totalPages ? `${tagBaseUrl}page/${currentPage + 1}/` : null;
+
+// 🚀 BREADCRUMB SCHEMA — includes "Page N" item
+const breadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": base_url },
+    { "@type": "ListItem", "position": 2, "name": "Tags", "item": tagsIndexUrl },
+    { "@type": "ListItem", "position": 3, "name": title, "item": tagBaseUrl },
+    { "@type": "ListItem", "position": 4, "name": `Page ${currentPage}`, "item": canonicalUrl }
+  ]
+};
+
+// 🎯 ItemList Schema — scoped to currentPosts only
+const itemListSchema = currentPosts.length > 0 ? {
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": `${title} - Wala Katha (Page ${currentPage})`,
+  "numberOfItems": currentPosts.length,
+  "itemListElement": currentPosts.map((post, index) => ({
+    "@type": "ListItem",
+    "position": index + 1,
+    "url": `${base_url}/blog/${post.id}/`,
+    "name": post.data.title
+  }))
+} : null;
+---
+
+<Base
+  title={title}
+  meta_title={metaTitle}
+  description={metaDescription}
+  canonical={canonicalUrl}
+>
+  <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
+  {itemListSchema && (
+    <script type="application/ld+json" set:html={JSON.stringify(itemListSchema)} />
+  )}
+
+  <Fragment slot="head">
+    {prevUrl && <link rel="prev" href={prevUrl} />}
+    {nextUrl && <link rel="next" href={nextUrl} />}
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+  </Fragment>
+
+  <div class="section">
+    <div class="container">
+
+      <p class="text-center text-2xl mb-4">Showing Posts From</p>
+      <h1 class="h2 mb-16 text-center text-primary">{title}</h1>
+
+      {currentPosts && currentPosts.length > 0 ? (
+        <Posts posts={currentPosts} fluid={false} />
+      ) : (
+        <div class="py-12 text-center opacity-60">
+          <p>මෙම ටැගය යටතේ ලිපි කිසිවෙකු හමුනොවීය.</p>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div class="mt-12 flex justify-center">
+          <Pagination
+            section={`tags/${tag}`}
+            currentPage={currentPage}
+            totalPages={totalPages}
+          />
+        </div>
+      )}
+
+    </div>
+  </div>
+</Base>
