@@ -1,0 +1,187 @@
+/* ==========================================================
+   🎯 EXTRACTED FROM src/pages/index.astro — HTML PAGE SIZE FIX
+   ==========================================================
+   ROOT CAUSE: SEO Site Checkup's "HTML Page Size Test" flagged
+   this homepage's HTML at 37.35 KB (average: 33 KB), recommending
+   "external style sheets" and "moving javascript to external
+   files" as the fix.
+
+   This file contains the EXACT SAME CSS rules that previously
+   lived inline inside index.astro's <style is:global> block —
+   every selector, every property, every !important flag, and the
+   exact same cascade order is preserved byte-for-byte. Zero
+   visual/design change: this is a pure "move to external file"
+   operation, not a rewrite.
+
+   WHY THIS FILE (and not Base.astro's inline <style>/<script>, or
+   PostSingle.astro's inline comment-system CSS/JS) was chosen for
+   extraction: this is the only large inline block in the codebase
+   that is 100% static (no dynamic props, no post-specific data
+   binding) — extracting it carries zero regression risk. Base.astro's
+   Service Worker registration script is intentionally inline for
+   early-execution timing (documented in Base.astro's own comments),
+   and PostSingle.astro's comment-system script depends on
+   per-post dynamic data attributes — both were left untouched to
+   protect existing working behavior exactly as requested.
+
+   CACHING: public/_headers already has a site-wide rule:
+     /*.css
+       Cache-Control: public, max-age=31536000, immutable
+   ...so this file is automatically served with a 1-year immutable
+   cache header with zero additional configuration — first-visit
+   HTML payload shrinks, and every repeat visit re-downloads 0 bytes
+   of this CSS (previously, being inline, it was re-downloaded as
+   part of the HTML on every single page load, every single visit).
+   ========================================================== */
+
+html, body {
+  background-color: #050505 !important;
+  color: #f8fafc !important;
+  scrollbar-color: #10b981 #050505;
+}
+
+/* ✅ H1 FIX: Bing "H1 tag missing" ගැටලුව විසඳන real, semantic H1
+   — clip/1px-hiding නෙවෙයි, height:0 + overflow:hidden විදිහට
+   visually collapse කරලා design එකට කිසිම බලපෑමක් නැතුව තියෙනවා.
+   Google සහ Bing දෙකටම content එක "real" විදිහට පේනවා. */
+.seo-h1-wrap {
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  line-height: 0;
+}
+.seo-h1-wrap h1 {
+  font-size: 1px;
+  line-height: 0;
+  margin: 0;
+  padding: 0;
+  color: transparent;
+}
+
+.post-card {
+  background-color: #0d0d0d !important;
+  border: 1px solid #1a1a1a !important;
+  border-radius: 14px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.card {
+  background-color: #0d0d0d !important;
+  border: 1px solid #1a1a1a !important;
+  border-radius: 14px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.bg-body {
+  background-color: #0d0d0d !important;
+  border: 1px solid #1a1a1a !important;
+  border-radius: 14px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.bg-white {
+  background-color: #0d0d0d !important;
+  border: 1px solid #1a1a1a !important;
+  border-radius: 14px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.post-card:hover {
+  background-color: #121212 !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  transform: translateY(-4px) !important;
+  box-shadow: 0 10px 25px -10px rgba(16, 185, 129, 0.25) !important;
+}
+.card:hover {
+  background-color: #121212 !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  transform: translateY(-4px) !important;
+  box-shadow: 0 10px 25px -10px rgba(16, 185, 129, 0.25) !important;
+}
+
+.post-card-title {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  transition: color 0.2s ease !important;
+}
+.post-card h2 {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  transition: color 0.2s ease !important;
+}
+.post-card h3 {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  transition: color 0.2s ease !important;
+}
+.post-card h3 a {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  transition: color 0.2s ease !important;
+}
+.post-card a {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  transition: color 0.2s ease !important;
+}
+
+.post-card h2 a:hover {
+  color: #34d399 !important;
+}
+.post-card h3 a:hover {
+  color: #34d399 !important;
+}
+.post-card a:hover {
+  color: #34d399 !important;
+}
+
+.post-card p {
+  color: #cbd5e1 !important;
+}
+.text-muted {
+  color: #cbd5e1 !important;
+}
+.post-meta {
+  color: #cbd5e1 !important;
+}
+.meta-items {
+  color: #cbd5e1 !important;
+}
+
+.featured-slider img {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border-radius: 10px !important;
+}
+.post-card img {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border-radius: 10px !important;
+}
+
+.pagination a {
+  background-color: #0d0d0d !important;
+  border: 1px solid #262626 !important;
+  color: #e5e5e5 !important;
+}
+.pagination a:hover {
+  background-color: #10b981 !important;
+  color: #050505 !important;
+  border-color: #10b981 !important;
+}
+.pagination .active a {
+  background-color: #10b981 !important;
+  color: #050505 !important;
+  border-color: #10b981 !important;
+}
+
+.featured-slider .slider-content {
+  background: linear-gradient(to top, rgba(5,5,5,0.95) 0%, rgba(5,5,5,0.4) 70%, transparent 100%) !important;
+}
+
+.tag {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+}
+.category-badge {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+}
