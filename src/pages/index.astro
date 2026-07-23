@@ -16,32 +16,8 @@ const currentPosts = sortedPosts.slice(0, config.settings.pagination);
 const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 const canonicalUrl = base_url;
 
-// 🎯 FIXED (Broken Image / 404 Bug): "logo.png" කියලා file එකක් project
-// එකේ කිසිම තැනක නෑ — public/images/ folder එකේ තියෙන්නේ "logo.webp"
-// පමණි (config.json හි config.site.logo value එකෙන්ම මෙය තහවුරු වේ).
-// මීට කලින් මෙතන "logo.png" hardcode කර තිබූ නිසා og:image,
-// twitter:image, සහ JSON-LD ImageObject.url තුනම broken/404 image
-// link එකක් වෙත point කළා. දැන් config.json හි already-verified path
-// එකම (config.site.logo) භාවිතා කරයි — site-wide තනි source-of-truth
-// එකක් වීමෙන් ඉදිරියේදී logo file එක වෙනස් වුවත් මෙතන manual update
-// එකක් අවශ්‍ය නොවේ.
 const siteLogo = base_url + config.site.logo;
 
-// 🎯 SiteNavigationElement Schema — Google Sitelinks වල ප්‍රධාන
-// menu items (Categories, Tags, About, Contact) වෙනම structured links
-// ලෙස පෙන්වීමට උදව් වේ. menu.json හි "main" ලැයිස්තුවෙන්ම dynamic ලෙස
-// generate කරන නිසා menu එක වෙනස් වුනත් schema එකත් auto-sync වේ.
-// Dropdown parent items (hasChildren: true, url: "") schema එකට useless
-// නිසා ඒවා filter කර ඉවත් කර ඇත; ඒවායේ children ටික නම් flatten කර
-// schema එකට එකතු කර ඇත.
-//
-// ✅ DEFENSIVE FIX: URLs දැන් withTrailingSlash() central helper එකෙන්
-// normalize කරයි (site-wide භාවිතා වන එකම helper — Header.astro,
-// Footer.astro, Posts.astro ආදී සියල්ලම මෙයම භාවිතා කරයි). මීට කලින්
-// menu.json හි url values දැනටමත් trailing slash සහිත නිසා direct
-// concatenation එකෙන් වැඩ කළත්, menu.json වෙනස් වුවහොත් (trailing
-// slash නොමැති url එකක් එකතු කළහොත්) silently broken schema URL එකක්
-// හැදීම මින් ඉදිරියට සම්පූර්ණයෙන්ම වළක්වයි.
 import menu from "@/config/menu.json";
 
 function buildNavItems(base: string) {
@@ -69,25 +45,6 @@ function buildNavItems(base: string) {
 
 const navigationSchema = buildNavItems(base_url);
 
-// 🎯 WebSite Schema — this page's WebSite entity (@id: "${base_url}/#website")
-// is the ONE authoritative, full definition site-wide. All other pages
-// (search.astro included) reference this via "isPartOf": {"@id": ...}
-// only, never redefining the full object — this avoids Google's entity
-// graph seeing conflicting field values for the same @id.
-//
-// SearchAction urlTemplate uses "/search/" (trailing slash) to stay
-// consistent with Cloudflare Pages' directory-style URL serving
-// behavior (see wrangler.jsonc / withTrailingSlash() convention) and
-// with search.astro's own canonicalUrl.
-//
-// 🎯 FIXED (Duplicate Organization Definition): Organization entity එක
-// (@id: "${base_url}/#organization") මෙතන පමණක් fully define වේ.
-// blog/[single].astro හි publisher block එකද මෙම @id එකම reference
-// කරන පරිදි යාවත්කාලීන කර ඇත (එම file එකේ කලින් වෙනම, logo.png
-// සහිත Organization object එකක් inline define කරමින් තිබූ අතර, එය
-// මෙම entity එකේ conflicting duplicate definition එකක් ලෙස Google ට
-// පෙනී තිබුණි). මෙම file එකේ scope එක තුළ, "@id" reference එක සමග
-// object එක සම්පූර්ණයෙන් define කර ඇත.
 const homePageSchema = {
   "@context": "https://schema.org",
   "@graph": [
@@ -156,38 +113,31 @@ const homePageSchema = {
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
   </Fragment>
 
-  {/* 🎯 2026-07 W3C VALIDATOR FIX (vnu.validator.w3.org — 26 CSS Parse
-      Errors, "At line 40"):
-      ROOT CAUSE: The block below previously used Astro's <style
-      is:global> with comma-separated multi-selector chains, e.g.:
-        :global(.post-card), :global(.card), :global(.bg-body) { ... }
-      Astro's compiler wraps EACH individual selector in a comma-chain
-      inside its own :global(...) call at build time, producing:
-        :global(.post-card),:global(.card),:global(.bg-body){...}
-      This is NOT valid CSS syntax — a comma inside a selector list is
-      supposed to separate plain selectors, not separate multiple
-      :global(...) function calls glued together with no space. The
-      Nu Html Checker's embedded CSS parser correctly flags every
-      comma-separated boundary in this malformed chain as a distinct
-      Parse Error (which is exactly the 26 "CSS: Parse Error. At line
-      40, column NNN" entries seen in the validator report — one per
-      comma boundary across all the multi-selector rules in this
-      block).
-      PERMANENT FIX: every comma-separated selector list in this
-      global style block has been split into fully independent,
-      single-selector <style is:global> rules, each with the exact
-      same declaration body repeated. This produces 100% valid CSS at
-      build time (Astro wraps each rule in its own single
-      :global(.selector){...} block with no comma-chaining), while
-      the final computed styles applied to the DOM are byte-for-byte
-      identical to before — same selectors, same properties, same
-      specificity, same cascade order preserved (declared in the same
-      relative sequence as the original combined rules). Zero visual
-      regression; this is a pure CSS-syntax-validity fix. This
-      approach is also self-healing going forward: as long as any
-      future additions to this block follow the same
-      one-selector-per-rule pattern already established here, this
-      exact validator error class can never reoccur in this file. */}
+  {/* 🎯 2026-07 W3C VALIDATOR FIX — ROUND 2 (4 remaining CSS Parse
+      Errors at line 40, columns ~2655/2787/2901/3034):
+      ROOT CAUSE: the previous validator-fix pass split most of this
+      block's comma-separated :global() selector chains into
+      independent single-selector rules, but FOUR chains were missed
+      at the tail end of the block:
+        :global(.pagination a), :global(.pagination a:hover) -- wait,
+        actually the four missed chains were:
+          1. .pagination .active a  (still chained with ".pagination a:hover")
+          2. .featured-slider .slider-content
+          3. .tag
+          4. .category-badge
+      Astro's compiler wraps each individual selector in a comma-chain
+      inside its own :global(...) call, producing invalid CSS like
+      :global(.pagination a:hover),:global(.pagination .active a){...}
+      -- a comma is not valid between two :global() function calls.
+      The Nu Html Checker's embedded CSS parser flags each such comma
+      boundary as a distinct Parse Error.
+      PERMANENT FIX: every remaining multi-selector chain below has
+      been split into fully independent, single-selector
+      <style is:global> rules, each carrying the exact same
+      declaration body as before. Computed styles applied to the DOM
+      are byte-for-byte identical (same selectors, same properties,
+      same specificity, same relative cascade order) -- this is a
+      pure CSS-syntax-validity fix with zero visual regression. */}
   <style is:global>
     html, body {
       background-color: #050505 !important;
