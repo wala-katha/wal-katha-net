@@ -2,6 +2,7 @@
 import Posts from "@/components/Posts.astro";
 import Base from "@/layouts/Base.astro";
 import config from "@/config/config.json";
+import Pagination from "@/layouts/components/Pagination.astro";
 import { getSinglePage } from "@/lib/contentParser.astro";
 import { getTaxonomy } from "@/lib/taxonomyParser.astro";
 import { sortByDate } from "@/lib/utils/sortFunctions";
@@ -27,6 +28,24 @@ const posts = await getSinglePage("posts");
 const filterByCategory = taxonomyFilter(posts || [], "categories", category);
 const sortedPosts = sortByDate(filterByCategory);
 
+// 🎯 2026 CATEGORY PAGINATION FIX (Core Web Vitals + SEO Depth):
+// මීට කලින් sortedPosts array එකම (කොපමණ posts තිබුනත්) සම්පූර්ණයෙන්ම
+// කෙලින්ම <Posts> component එකට pass කරමින් තිබුණි — post count 50+
+// වුනොත් page load size එක අනවශ්‍ය ලෙස ලොකු වී, LCP/Core Web Vitals
+// scores වලට negative impact එකක් ඇති කරන අතර, Google crawl budget
+// එකද අනවශ්‍ය ලෙස වැය කරයි. Site-wide already-established pagination
+// pattern එකම (page/[slug].astro, authors/page/[slug].astro) මෙතනටත්
+// apply කර ඇත — config.settings.pagination (6) limit එකම භාවිතා කරයි,
+// කිසිම අලුත් config value එකක් අවශ්‍ය නොවීය.
+//
+// Page 1 මෙම file එකෙන්ම (/categories/{category}/) serve වේ; Page 2+
+// සඳහා අලුතින් සාදන ලද categories/[category]/page/[slug].astro handle
+// කරයි. Category page 1කින්ම totalPages/currentPage logic එක share
+// කිරීමට, මෙම file එකද "currentPage = 1" ලෙසම සලකයි.
+const paginationLimit = config?.settings?.pagination || 6;
+const totalPages = Math.ceil((sortedPosts?.length || 0) / paginationLimit);
+const currentPosts = sortedPosts.slice(0, paginationLimit);
+
 const title = humanize(category || "");
 
 // 📈 SEO ප්‍රශස්තකරණය: සෙවුම් යන්ත්‍ර සඳහා නිවැරදි විස්තර සහ පිරිසිදු ලින්ක්ස්
@@ -49,6 +68,12 @@ const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 // logic, so we add the slash here too to keep both in sync.
 const canonicalUrl = `${base_url}/categories/${category}/`;
 const categoriesIndexUrl = `${base_url}/categories/`;
+
+// 🎯 PAGINATION SEO LINK TAGS: page 1 (this file) is always the first
+// page, so "prev" is never set here; "next" only appears when more than
+// one page of results exists. Same pattern as page/[slug].astro and
+// authors/page/[slug].astro for site-wide consistency.
+const nextUrl = totalPages > 1 ? `${canonicalUrl}page/2/` : null;
 
 // 🚀 GOOGLE SEO BREADCRUMB SCHEMA: සෙවුම් යන්ත්‍ර වලට කැටගරි ව්‍යුහය වටහා දීමට (JSON-LD)
 const breadcrumbSchema = {
@@ -75,6 +100,27 @@ const breadcrumbSchema = {
     }
   ]
 };
+
+// 🎯 2026 ItemList SCHEMA (Google Structured Data — Listing Pages):
+// Google ගේ documentation එකට අනුව, post/article listing pages
+// (category archives, tag archives, blog index pages) වලට "ItemList"
+// structured data එකතු කිරීම Google ට "මේ page එකේ තියෙන්නේ items list
+// එකක්" කියලා explicit signal එකක් දෙයි — Rich Results/Sitelinks සඳහා
+// eligibility වැඩි කරයි. currentPosts (මෙම page එකේ display වන posts
+// විතරක්) පාවිච්චි කරයි, sortedPosts සම්පූර්ණ array එක නොවේ — schema
+// එකයි visible content එකයි කවදාවත් desync නොවෙන්න.
+const itemListSchema = currentPosts.length > 0 ? {
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": `${title} - Wala Katha`,
+  "numberOfItems": currentPosts.length,
+  "itemListElement": currentPosts.map((post, index) => ({
+    "@type": "ListItem",
+    "position": index + 1,
+    "url": `${base_url}/blog/${post.id}/`,
+    "name": post.data.title
+  }))
+} : null;
 ---
 
 <Base 
@@ -84,6 +130,16 @@ const breadcrumbSchema = {
 >
   {/* Google Breadcrumb Snippet එක ඇතුළත් කිරීම */}
   <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
+
+  {/* 🎯 ItemList Schema — listing page එකේ posts array එක structured data ලෙස */}
+  {itemListSchema && (
+    <script type="application/ld+json" set:html={JSON.stringify(itemListSchema)} />
+  )}
+
+  {/* ⚡ GOOGLE BOT PAGINATION HINT: page 2+ තියෙනවා නම් rel="next" tag එක */}
+  <Fragment slot="head">
+    {nextUrl && <link rel="next" href={nextUrl} />}
+  </Fragment>
 
   {/* 100% Original Section Layout Structure */}
   <section class="section">
@@ -96,12 +152,24 @@ const breadcrumbSchema = {
       </div>
       
       {/* Posts List Component (Original) */}
-      {sortedPosts && sortedPosts.length > 0 ? (
-        <Posts posts={sortedPosts} />
+      {currentPosts && currentPosts.length > 0 ? (
+        <Posts posts={currentPosts} />
       ) : (
         // Original Style එක වෙනස් නොකර දත්ත නොමැති විට පෙන්වන කොටස
         <div class="py-12 text-center opacity-60">
           <p>මෙම ප්‍රවර්ගය යටතේ ලිපි කිසිවෙකු හමුනොවීය.</p>
+        </div>
+      )}
+
+      {/* 🎯 CATEGORY PAGINATION UI: totalPages > 1 නම් විතරයි render වේ
+          (Pagination.astro component එකේම internal check එකක්) */}
+      {totalPages > 1 && (
+        <div class="mt-12">
+          <Pagination
+            section={`categories/${category}`}
+            currentPage={1}
+            totalPages={totalPages}
+          />
         </div>
       )}
       
