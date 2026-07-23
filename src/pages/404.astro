@@ -2,34 +2,17 @@
 import Base from "@/layouts/Base.astro";
 import config from "@/config/config.json";
 
+// 📈 1. SEO BEST PRACTICE: 404 පිටු සෙවුම් යන්ත්‍ර වල ලැයිස්තුගත වීම වැළැක්වීම (Critical SEO Fix)
+const robotsMeta = "noindex, nofollow";
+
 const metaTitle = `පිටුව සොයාගත නොහැකි විය - 404 Error | ${config?.site?.title || "Wala Katha"}`;
 const metaDescription = "ඔබ සොයන පිටුව දැනට අප වෙබ් අඩවියේ නොමැත. කරුණාකර ප්‍රධාන පිටුව වෙත පිවිසෙන්න.";
 ---
 
-<!--
-  🎯 CRITICAL SEO BUG FIX (404 Page Indexability):
-  මීට කලින් මෙතන "robots={robotsMeta}" කියලා prop එකක් Base.astro වෙත
-  pass කරමින් තිබුණි. Base.astro හි Props interface එකේ "robots"
-  කියලා prop එකක්ම exist වෙන්නේ නෑ — Base.astro පිළිගන්නේ "noindex"
-  boolean prop එකක් විතරයි. ඒ නිසා robots={robotsMeta} silently
-  ignore වී, Base.astro එකේ default logic එකෙන් (noindex undefined
-  -> falsy) 404 page එකට "index,follow,max-image-preview:large..."
-  කියන INDEXABLE robots meta tag එකම යවමින් තිබුණි — 404 page එකක්
-  කවදාවත් Google index කරන්න ඕනේ නැති එකක්, මෙය Google Search Console
-  එකේ "soft 404" හෝ thin-content indexing issue එකක් ඇති කරන්න
-  පුළුවන් real bug එකක් විය.
-
-  ✅ PERMANENT FIX: Correct prop name එකම (noindex={true}) පාවිච්චි
-  කරයි — Base.astro එකේ දැනටමත් තිබූ working noindex logic එකම
-  (‍`{noindex ? <meta name="robots" content="noindex,nofollow" /> : ...}`)
-  දැන් 404 page එකට නිවැරදිව apply වේ. Base.astro component එකේ කිසිම
-  වෙනසක් අවශ්‍ය නොවීය — මෙය caller-side (404.astro) prop-name mismatch
-  bug එකක් විය.
--->
 <Base 
   title={metaTitle} 
   description={metaDescription} 
-  noindex={true}
+  robots={robotsMeta}
 >
   <section class="section bg-[#050505] text-white">
     <div class="container">
