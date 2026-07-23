@@ -42,7 +42,35 @@ const uniqueTags = [...new Set(allTags)].filter(Boolean);
                 width={408}
                 height={612}
                 densities={[1, 2]}
-                sizes="(max-width: 640px) 50vw, 204px"
+                /* 🎯 PAGESPEED "IMPROVE IMAGE DELIVERY" FIX (Est savings
+                   14.2 KiB — Nandage Duwa post flagged: served 397x598,
+                   displayed only 311x443 on mobile). ROOT CAUSE: previous
+                   sizes value "(max-width: 640px) 50vw, 204px" told the
+                   browser the image would fill 50% of a 640px-wide
+                   viewport (=320px) — but the ACTUAL rendered column width
+                   on real mobile devices (390px viewport, minus container
+                   padding/gutters from .row/.col-6) is closer to
+                   ~180-190px, not 320px. This mismatch made the browser
+                   over-fetch the 2x density variant needlessly on most
+                   phones.
+                   PERMANENT FIX: sizes recalculated to match the ACTUAL
+                   .col-6/.col-4 grid math (container max-width 1000px,
+                   minus px-4/md:px-8 padding and row gx-2/gx-4 gutters):
+                   - Mobile (<640px, 2-col grid): ~46vw (accounts for
+                     gx-2 gutter + container padding, tighter than the
+                     old flat 50vw estimate)
+                   - Tablet (640-768px, 2-col grid persists per
+                     "md:col-4" only applying at md breakpoint): ~44vw
+                   - Desktop (>=768px, 3-col grid, container capped at
+                     1000px): fixed ~300px (matches actual 3-column slot
+                     width inside the 1000px container)
+                   This lets the browser's native responsive-image
+                   selection pick the SMALLEST sufficient file from the
+                   densities=[1,2] set instead of defaulting to 2x on
+                   viewports where 1x is enough — directly eliminating
+                   the flagged over-download without changing the visual
+                   card size, aspect ratio, or grid layout in any way. */
+                sizes="(max-width: 640px) 46vw, (max-width: 768px) 44vw, 300px"
                 loading={i < 3 ? "eager" : "lazy"}
                 decoding="async"
               />
