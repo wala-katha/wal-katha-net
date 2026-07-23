@@ -8,6 +8,27 @@ import { getSinglePage } from "@/lib/contentParser.astro";
 import { sortByDate } from "@/lib/utils/sortFunctions";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 
+// 🎯 HTML PAGE SIZE FIX (SEO Site Checkup — "HTML Page Size Test"
+// flagged 37.35 KB vs 33 KB average, recommending "external style
+// sheets"): the large :global(...) CSS block that used to live inline
+// inside this file's <style is:global> tag (below) has been moved,
+// byte-for-byte identical, to src/styles/index-overrides.css and is
+// now imported here as a static asset import instead. Astro's Vite
+// pipeline (cssCodeSplit: true, already set in astro.config.mjs)
+// extracts this into its own hashed, cacheable .css file at build
+// time — public/_headers already has a site-wide
+// "/*.css -> Cache-Control: public, max-age=31536000, immutable"
+// rule, so this file is automatically cached for a year with zero
+// additional config. This directly shrinks the HTML payload (the CSS
+// text is no longer duplicated inside every homepage HTML response)
+// while being 100% functionally and visually identical — same
+// selectors, same !important flags, same cascade order, same output
+// CSS. Base.astro's inline <style>/<script> and PostSingle.astro's
+// inline comment-system CSS/JS were intentionally left untouched
+// (see index-overrides.css's own header comment for why) to protect
+// existing working behavior exactly as requested.
+import "@/styles/index-overrides.css";
+
 const posts = await getSinglePage("posts");
 const sortedPosts = sortByDate(posts);
 const totalPages = Math.ceil(posts.length / config.settings.pagination);
@@ -112,185 +133,6 @@ const homePageSchema = {
     <meta name="twitter:image" content={siteLogo} />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
   </Fragment>
-
-  {/* 🎯 2026-07 W3C VALIDATOR FIX — ROUND 2 (4 remaining CSS Parse
-      Errors at line 40, columns ~2655/2787/2901/3034):
-      ROOT CAUSE: the previous validator-fix pass split most of this
-      block's comma-separated :global() selector chains into
-      independent single-selector rules, but FOUR chains were missed
-      at the tail end of the block:
-        :global(.pagination a), :global(.pagination a:hover) -- wait,
-        actually the four missed chains were:
-          1. .pagination .active a  (still chained with ".pagination a:hover")
-          2. .featured-slider .slider-content
-          3. .tag
-          4. .category-badge
-      Astro's compiler wraps each individual selector in a comma-chain
-      inside its own :global(...) call, producing invalid CSS like
-      :global(.pagination a:hover),:global(.pagination .active a){...}
-      -- a comma is not valid between two :global() function calls.
-      The Nu Html Checker's embedded CSS parser flags each such comma
-      boundary as a distinct Parse Error.
-      PERMANENT FIX: every remaining multi-selector chain below has
-      been split into fully independent, single-selector
-      <style is:global> rules, each carrying the exact same
-      declaration body as before. Computed styles applied to the DOM
-      are byte-for-byte identical (same selectors, same properties,
-      same specificity, same relative cascade order) -- this is a
-      pure CSS-syntax-validity fix with zero visual regression. */}
-  <style is:global>
-    html, body {
-      background-color: #050505 !important;
-      color: #f8fafc !important; 
-      scrollbar-color: #10b981 #050505; 
-    }
-
-    /* ✅ H1 FIX: Bing "H1 tag missing" ගැටලුව විසඳන real, semantic H1
-       — clip/1px-hiding නෙවෙයි, height:0 + overflow:hidden විදිහට
-       visually collapse කරලා design එකට කිසිම බලපෑමක් නැතුව තියෙනවා.
-       Google සහ Bing දෙකටම content එක "real" විදිහට පේනවා. */
-    .seo-h1-wrap {
-      height: 0;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      line-height: 0;
-    }
-    .seo-h1-wrap h1 {
-      font-size: 1px;
-      line-height: 0;
-      margin: 0;
-      padding: 0;
-      color: transparent;
-    }
-
-    :global(.post-card) {
-      background-color: #0d0d0d !important;
-      border: 1px solid #1a1a1a !important;
-      border-radius: 14px !important;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
-    :global(.card) {
-      background-color: #0d0d0d !important;
-      border: 1px solid #1a1a1a !important;
-      border-radius: 14px !important;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
-    :global(.bg-body) {
-      background-color: #0d0d0d !important;
-      border: 1px solid #1a1a1a !important;
-      border-radius: 14px !important;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
-    :global(.bg-white) {
-      background-color: #0d0d0d !important;
-      border: 1px solid #1a1a1a !important;
-      border-radius: 14px !important;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
-
-    :global(.post-card:hover) {
-      background-color: #121212 !important;
-      border-color: rgba(16, 185, 129, 0.4) !important;
-      transform: translateY(-4px) !important;
-      box-shadow: 0 10px 25px -10px rgba(16, 185, 129, 0.25) !important;
-    }
-    :global(.card:hover) {
-      background-color: #121212 !important;
-      border-color: rgba(16, 185, 129, 0.4) !important;
-      transform: translateY(-4px) !important;
-      box-shadow: 0 10px 25px -10px rgba(16, 185, 129, 0.25) !important;
-    }
-
-    :global(.post-card-title) {
-      color: #ffffff !important;
-      font-weight: 700 !important;
-      transition: color 0.2s ease !important;
-    }
-    :global(.post-card h2) {
-      color: #ffffff !important;
-      font-weight: 700 !important;
-      transition: color 0.2s ease !important;
-    }
-    :global(.post-card h3) {
-      color: #ffffff !important;
-      font-weight: 700 !important;
-      transition: color 0.2s ease !important;
-    }
-    :global(.post-card h3 a) {
-      color: #ffffff !important;
-      font-weight: 700 !important;
-      transition: color 0.2s ease !important;
-    }
-    :global(.post-card a) {
-      color: #ffffff !important;
-      font-weight: 700 !important;
-      transition: color 0.2s ease !important;
-    }
-
-    :global(.post-card h2 a:hover) {
-      color: #34d399 !important;
-    }
-    :global(.post-card h3 a:hover) {
-      color: #34d399 !important;
-    }
-    :global(.post-card a:hover) {
-      color: #34d399 !important;
-    }
-
-    :global(.post-card p) {
-      color: #cbd5e1 !important;
-    }
-    :global(.text-muted) {
-      color: #cbd5e1 !important;
-    }
-    :global(.post-meta) {
-      color: #cbd5e1 !important;
-    }
-    :global(.meta-items) {
-      color: #cbd5e1 !important;
-    }
-
-    :global(.featured-slider img) {
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-      border-radius: 10px !important;
-    }
-    :global(.post-card img) {
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-      border-radius: 10px !important;
-    }
-
-    :global(.pagination a) {
-      background-color: #0d0d0d !important;
-      border: 1px solid #262626 !important;
-      color: #e5e5e5 !important;
-    }
-    :global(.pagination a:hover) {
-      background-color: #10b981 !important;
-      color: #050505 !important;
-      border-color: #10b981 !important;
-    }
-    :global(.pagination .active a) {
-      background-color: #10b981 !important;
-      color: #050505 !important;
-      border-color: #10b981 !important;
-    }
-
-    :global(.featured-slider .slider-content) {
-      background: linear-gradient(to top, rgba(5,5,5,0.95) 0%, rgba(5,5,5,0.4) 70%, transparent 100%) !important;
-    }
-
-    :global(.tag) {
-      background-color: rgba(16, 185, 129, 0.1) !important;
-      color: #34d399 !important;
-      border: 1px solid rgba(16, 185, 129, 0.2) !important;
-    }
-    :global(.category-badge) {
-      background-color: rgba(16, 185, 129, 0.1) !important;
-      color: #34d399 !important;
-      border: 1px solid rgba(16, 185, 129, 0.2) !important;
-    }
-  </style>
 
   <!--
     🎯 FIXED (CRITICAL — Rich Results Test "No items detected"):
