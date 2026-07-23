@@ -2,6 +2,7 @@
 import Posts from "@/components/Posts.astro";
 import Base from "@/layouts/Base.astro";
 import config from "@/config/config.json"; // SEO සඳහා Config ගොනුව සම්බන්ධ කළා
+import Pagination from "@/layouts/components/Pagination.astro";
 import { getSinglePage } from "@/lib/contentParser.astro";
 import { getTaxonomy } from "@/lib/taxonomyParser.astro";
 import { sortByDate } from "@/lib/utils/sortFunctions";
@@ -27,6 +28,16 @@ const posts = await getSinglePage("posts");
 // 🛠️ CRITICAL DATA PROTECTION: posts දත්ත හිස් නම්සිදුවන සයිට් ක්‍රෑෂ් (Crash) වැළැක්වීම
 const filterByTags = taxonomyFilter(posts || [], "tags", tag);
 const sortedPosts = sortByDate(filterByTags);
+
+// 🎯 2026 TAG PAGINATION FIX (Core Web Vitals + SEO Depth): categories/
+// [category].astro එකේම root-cause fix එකම pattern — tag pages වලටත්
+// posts count 6ට වඩා වැඩි නම් page load size එක අනවශ්‍ය ලෙස ලොකු වීම
+// වළක්වයි. config.settings.pagination (6) limit එකම භාවිතා කරයි. Page
+// 1 මෙම file එකෙන්ම serve වේ; Page 2+ සඳහා අලුතින් සාදන ලද
+// tags/[tag]/page/[slug].astro handle කරයි.
+const paginationLimit = config?.settings?.pagination || 6;
+const totalPages = Math.ceil((sortedPosts?.length || 0) / paginationLimit);
+const currentPosts = sortedPosts.slice(0, paginationLimit);
 
 const title = humanize(tag || "");
 
@@ -57,6 +68,9 @@ const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 const canonicalUrl = `${base_url}/tags/${tag}/`;
 const tagsIndexUrl = `${base_url}/tags/`;
 
+// 🎯 PAGINATION SEO LINK TAG: same convention as categories/[category].astro
+const nextUrl = totalPages > 1 ? `${canonicalUrl}page/2/` : null;
+
 // 🚀 GOOGLE SEO BREADCRUMB SCHEMA: සෙවුම් යන්ත්‍ර වලට ටැග් ව්‍යුහය වටහා දීමට (JSON-LD)
 const breadcrumbSchema = {
   "@context": "https://schema.org",
@@ -82,6 +96,20 @@ const breadcrumbSchema = {
     }
   ]
 };
+
+// 🎯 2026 ItemList SCHEMA — categories/[category].astro pattern එකම
+const itemListSchema = currentPosts.length > 0 ? {
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": `${title} - Wala Katha`,
+  "numberOfItems": currentPosts.length,
+  "itemListElement": currentPosts.map((post, index) => ({
+    "@type": "ListItem",
+    "position": index + 1,
+    "url": `${base_url}/blog/${post.id}/`,
+    "name": post.data.title
+  }))
+} : null;
 ---
 
 <Base 
@@ -92,6 +120,16 @@ const breadcrumbSchema = {
 >
   {/* Google Breadcrumb Snippet එක ඇතුළත් කිරීම (SEO Booster) */}
   <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
+
+  {/* 🎯 ItemList Schema — listing page එකේ posts array එක structured data ලෙස */}
+  {itemListSchema && (
+    <script type="application/ld+json" set:html={JSON.stringify(itemListSchema)} />
+  )}
+
+  {/* ⚡ GOOGLE BOT PAGINATION HINT: page 2+ තියෙනවා නම් rel="next" tag එක */}
+  <Fragment slot="head">
+    {nextUrl && <link rel="next" href={nextUrl} />}
+  </Fragment>
 
   {/* 100% Original Section Layout Structure */}
   <div class="section">
@@ -104,12 +142,23 @@ const breadcrumbSchema = {
       <h1 class="h2 mb-16 text-center text-primary">{title}</h1>
       
       {/* Posts List Component with Original Props */}
-      {sortedPosts && sortedPosts.length > 0 ? (
-        <Posts posts={sortedPosts} fluid={false} />
+      {currentPosts && currentPosts.length > 0 ? (
+        <Posts posts={currentPosts} fluid={false} />
       ) : (
         // Original Style එක වෙනස් නොකර දත්ත නොමැති විට පෙන්වන කොටස
         <div class="py-12 text-center opacity-60">
           <p>මෙම ටැගය යටතේ ලිපි කිසිවෙකු හමුනොවීය.</p>
+        </div>
+      )}
+
+      {/* 🎯 TAG PAGINATION UI */}
+      {totalPages > 1 && (
+        <div class="mt-12 flex justify-center">
+          <Pagination
+            section={`tags/${tag}`}
+            currentPage={1}
+            totalPages={totalPages}
+          />
         </div>
       )}
       
