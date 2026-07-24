@@ -50,6 +50,88 @@ const webpageSchema = {
     }
   }
 };
+
+// ==========================================================
+// 🎯 NEW (SEO Enhancement Pass #2): FAQPage Schema — conditional,
+// scoped ONLY to the "copyright-credit-policy" page.
+//
+// WHY THIS PAGE SPECIFICALLY: src/content/pages/copyright-credit-policy.md
+// already contains a genuine, well-formed FAQ section using semantic
+// <details><summary> accordion markup (5 question/answer pairs under
+// a "නිතර අසන ප්‍රශ්න (FAQ)" heading). This is exactly the kind of
+// on-page content Google's FAQPage structured-data guidelines require
+// — the schema MUST match visible on-page content verbatim, it cannot
+// introduce new questions/answers that aren't already shown to users.
+//
+// WHY HARDCODED HERE INSTEAD OF PARSED FROM MARKDOWN: parsing the
+// raw HTML <details> blocks out of the rendered markdown body at
+// build time would require an HTML-parsing dependency and fragile
+// regex/DOM-walking logic — a single content edit to the .md file's
+// wording could silently desync the schema from the page. Instead,
+// the exact question text (verbatim from the .md file's <summary>
+// tags) is reproduced here, and the exact same file remains the
+// single source of truth for the actual displayed answer text. If
+// the .md file's FAQ wording changes in the future, this schema
+// block must be updated to match — this is intentionally a manual
+// sync point (documented here) rather than an automated one, since
+// automating it would trade a small maintenance step for a much
+// larger and harder-to-debug parsing dependency.
+//
+// SAFETY: this schema ONLY renders when page.id matches this exact
+// slug — every other page routed through [regular].astro (about,
+// privacy-policy, elements) is completely unaffected, receives zero
+// new schema, and its output is byte-for-byte identical to before.
+// ==========================================================
+const isCopyrightPolicyPage = page.id === "copyright-credit-policy";
+
+const faqPageSchema = isCopyrightPolicyPage
+  ? {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "මගේ නිර්මාණයක් මගේ අවසරයකින් තොරව මෙහි පළකර ඇතිනම් මා කළ යුත්තේ කුමක්ද?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "කිසිදු කලබලයක් හෝ අපහසුතාවයක් ඇති කරගත යුතු නැත. කරුණාකර walakatha.net@gmail.com යන අපගේ නිල ඊමේල් ලිපිනයට අදාළ කතාවේ සබැඳිය (URL) සහ ඔබ එහි මුල් රචකයා බව සනාථ කළ හැකි කෙටි සාක්ෂි අප වෙත එවන්න. ඔබගේ අයිතිය තහවුරු වූ විගස අප ක්‍රියාත්මක වන්නෙමු."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "කතාව මගේම කියා සනාථ කිරීමට මා විසින් ඉදිරිපත් කළ හැකි වෙනත් සාක්ෂි මොනවාද?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "ඔබ එම නිර්මාණයේ මුල් අයිතිකරු බව තහවුරු කිරීමට පහත ඕනෑම සාක්ෂියක් අප වෙත ඉදිරිපත් කළ හැක: ඔබ මීට පෙර එම කතාව නිල වශයෙන් පළකළ බ්ලොග් අඩවියක හෝ Facebook සමූහයක/පිටුවක සබැඳියාවක්, ඔබ කතාව ලියූ මුල් Word/Notepad/Text ෆයිල් එකෙහි නිර්මාණය වූ දිනය සහ විස්තර පෙනෙන සේ ලබාගත් Screenshot එකක්, හෝ සමාජ මාධ්‍ය ජාලාවල ඔබ එම නමින්ම නිර්මාණ පළකරන බව පෙන්විය හැකි ඔබගේ නිල Profile එකෙහි සබැඳියාවක්."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "ඔබගේ ඉල්ලීමක් ඉටු කිරීමට අප කොපමණ කාලයක් ලබා ගන්නවාද?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "ඔබගේ ඊමේල් පණිවිඩය අප වෙත ලැබුණු සැනින් ක්‍රියාත්මක වන අපගේ කණ්ඩායම, ඔබගේ ඉල්ලීමේ ස්වභාවය අනුව අදාළ කතාව සයිට් එකෙන් සම්පූර්ණයෙන්ම ඉවත් කිරීම හෝ රචකයාගේ නම නිවැරදි කිරීම පැය 24ත් 48ත් අතර කාලයක් ඇතුළත අනිවාර්යයෙන්ම සිදු කරනු ලබයි."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "අන්තර්ගතයන් ඉවත් කරන්නේ නැතුව මගේ නම සහ මගේ සයිට් එකේ ලින්ක් එක දාන්න පුළුවන්ද?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "ඔව්, ඉතාමත් සතුටින් එය සිදු කර දිය හැක. ඔබට ඔබගේ නිර්මාණය අපගේ සයිට් එක හරහා තවත් දහස් ගණනක් පාඨකයන් වෙත ළඟා වීමට අවශ්‍ය නම්, මුල් රචකයා ලෙස ඔබගේ නම, Facebook Profile එක හෝ ඔබගේ වෙබ් අඩවි සබැඳියාව (Backlink) ඉතා කැපී පෙනෙන ලෙස ඇතුළත් කර දීමට අප කටයුතු සූදානම් කර දෙන්නෙමු."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "මෙහි පළවන කතා වෙනත් වාණිජමය අරමුණු සඳහා පාවිච්චි කරනු ලබනවාද?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "නැත. අප වෙබ් අඩවියේ පළවන කිසිදු කතාවක් හෝ නවකතාවක් මුදලට විකිණීමක් හෝ වෙනත් බාහිර වාණිජමය ප්‍රකාශන (Commercial Publications) සඳහා කිසිසේත්ම පාවිච්චි කරනු නොලැබේ. මේවා තෙවන පාර්ශවයන්ගෙන් ආරක්ෂා කිරීමටද අප බැඳී සිටිමු."
+          }
+        }
+      ]
+    }
+  : null;
 ---
 
 <Base
@@ -62,6 +144,13 @@ const webpageSchema = {
 >
   {/* Google Structured Data / Rich Snippet එක ඇතුළත් කිරීම */}
   <script type="application/ld+json" set:html={JSON.stringify(webpageSchema)} />
+
+  {/* 🎯 NEW: FAQPage Schema — copyright-credit-policy page එකට පමණක්
+      conditionally render වේ. අනිත් සියලුම pages (about, privacy-policy,
+      elements) මින් සම්පූර්ණයෙන්ම නොවෙනස්ව පවතී. */}
+  {faqPageSchema && (
+    <script type="application/ld+json" set:html={JSON.stringify(faqPageSchema)} />
+  )}
 
   {/* 100% Original Section Layout structure */}
   <section class="section">
