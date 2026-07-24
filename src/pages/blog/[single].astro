@@ -23,7 +23,7 @@ if (!post || !post.data) {
   return Astro.redirect("/404");
 }
 
-const { title, meta_title, image, description, date, authors } = post.data;
+const { title, meta_title, image, description, date, authors, tags } = post.data;
 
 const parsedDate = date ? new Date(date) : null;
 const safeDateISO = parsedDate && isValid(parsedDate) ? parsedDate.toISOString() : new Date().toISOString();
@@ -95,6 +95,24 @@ const imageObject = image
     }
   : undefined;
 
+// ==========================================================
+// 🎯 NEW (SEO Enhancement Pass #2): "keywords" field for Article/
+// NewsArticle schema.
+//
+// WHY: Google's structured-data documentation lists "keywords" as a
+// recommended (though not required) NewsArticle/Article property —
+// it gives search engines an explicit, machine-readable topic signal
+// distinct from the free-text headline/description, which can aid
+// topical relevance matching for News/Discover surfaces. This site
+// already computes a tags array from the same post frontmatter used
+// by <meta name="keywords"> in PostSingle.astro (tags?.join(", ")) —
+// reusing that exact same source of truth here guarantees the schema
+// keywords and the visible <meta name="keywords"> tag (already
+// rendered by PostSingle.astro) can never drift out of sync, since
+// both are derived from the identical post.data.tags array.
+// ==========================================================
+const keywordsString = Array.isArray(tags) && tags.length > 0 ? tags.join(", ") : undefined;
+
 // 🎯 FIXED (Duplicate/Conflicting Organization Entity — Cross-File
 // Consistency): මීට කලින් මෙතන "publisher" field එක වෙනම, inline
 // Organization object එකක් (@id කිසිවක් නැතුව, broken "logo.png" path
@@ -126,7 +144,8 @@ const articleSchema = {
     "@type": "WebSite",
     "@id": `${base_url}/#website`
   },
-  "wordCount": wordCount
+  "wordCount": wordCount,
+  "keywords": keywordsString
 };
 ---
 
