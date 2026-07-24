@@ -50,6 +50,36 @@ const authorName = allAuthors.find((a) =>
 // error එකක් හෝ UI glitch එකක් ඇති නොකරයි.
 const hasUpdatedDate = updated && date && new Date(updated).getTime() !== new Date(date).getTime();
 
+// 🎯 NEW (SEO Enhancement Pass #2): og:image:type MIME-type detection —
+// same helper logic as Base.astro's detectImageMimeType(), duplicated
+// here in this file's own scope since PostSingle.astro renders its own
+// independent set of OG/Twitter meta tags (isArticle=true bypasses
+// Base.astro's default meta block entirely — see Base.astro's
+// {!isArticle && (...)} guard). Kept as a local, self-contained function
+// rather than a shared import to avoid introducing a new cross-file
+// utility module for a single three-line helper; if a third usage site
+// appears in the future, extracting this into src/lib/utils/ would be
+// the natural next step.
+function detectImageMimeType(url: string): string {
+  const ext = url.split(".").pop()?.toLowerCase().split("?")[0] ?? "";
+  switch (ext) {
+    case "webp":
+      return "image/webp";
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "gif":
+      return "image/gif";
+    case "svg":
+      return "image/svg+xml";
+    default:
+      return "image/webp";
+  }
+}
+const postImageMimeType = image ? detectImageMimeType(`${siteUrl}${image}`) : undefined;
+
 // 🎯 BREADCRUMB DATA — single source of truth used by BOTH the JSON-LD
 // schema below AND the visible <nav> UI further down. Building one array
 // here and rendering it twice (script + nav) guarantees the visible trail
@@ -88,6 +118,10 @@ const breadcrumbSchema = JSON.stringify({
 {image && <meta property="og:image:alt" content={title} />}
 {image && <meta property="og:image:width" content="1200" />}
 {image && <meta property="og:image:height" content="630" />}
+{/* 🎯 NEW (SEO Enhancement Pass #2): og:image:type — see rationale in
+    Base.astro's identical addition. Article pages previously had
+    width/height but no MIME type declared. */}
+{image && postImageMimeType && <meta property="og:image:type" content={postImageMimeType} />}
 <meta property="og:locale" content="si_LK" />
 <meta property="og:site_name" content="Wala Katha" />
 {date && <meta property="article:published_time" content={new Date(date).toISOString()} />}
