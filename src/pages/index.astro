@@ -66,6 +66,31 @@ function buildNavItems(base: string) {
 
 const navigationSchema = buildNavItems(base_url);
 
+// 🎯 SEO FIX #1 — "Increase length of Title Tag" (SEOptimizer Medium
+// Priority): The previous title "Wala Katha - Sinhala Wal Katha &
+// Wela Katha" was only 44 characters — below the ~50-60 character
+// range SEO auditing tools (SEOptimizer, Ahrefs, Google) recommend
+// for a fully-utilized, keyword-rich <title> tag. This constant is
+// now the SINGLE SOURCE OF TRUTH for the homepage title, reused
+// identically across <title>/meta_title (via Base.astro props),
+// og:title, and twitter:title below — guaranteeing all three can
+// never drift out of sync with each other while extending length to
+// 58 characters (within the safe non-truncating SERP range).
+const homeTitle = "Wala Katha - Sinhala Wal Katha & Wela Katha Stories 2026";
+
+// 🎯 SEO FIX #2 — "Use your main keywords across the important HTML
+// Tags" (SEOptimizer Medium Priority): the homepage's hidden SEO H1
+// (see .seo-h1-wrap below, height:0/visually collapsed — zero design
+// impact, same technique already used site-wide for Bing's "H1 tag
+// missing" compliance) previously repeated the same two keyword
+// phrases already present in the <title> tag verbatim. Search engines
+// value keyword variation/coverage across heading levels rather than
+// exact duplication of the title tag. This constant introduces two
+// ADDITIONAL keyword variants ("Wela Katha", "Aluth Wal Katha") that
+// were not previously present in the H1, broadening topical coverage
+// without keyword-stuffing (still a single, natural-reading sentence).
+const homeH1 = "Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha, Wela Katha & Aluth Wal Katha Stories";
+
 const homePageSchema = {
   "@context": "https://schema.org",
   "@graph": [
@@ -113,8 +138,8 @@ const homePageSchema = {
 ---
 
 <Base 
-  title="Wala Katha - Sinhala Wal Katha & Wela Katha"
-  meta_title="Wala Katha - Sinhala Wal Katha & Wela Katha"
+  title={homeTitle}
+  meta_title={homeTitle}
   description="Wala Katha: 2026 අලුත් සිංහල වල් කතා, වැල කතා, Aluth Sinhala wala katha stories එකතුව දිනපතා කියවන්න. Best daily updated Sinhala wela katha collection."
   canonical={canonicalUrl}
   image={siteLogo}
@@ -123,12 +148,12 @@ const homePageSchema = {
 
   <Fragment slot="head">
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha & Wela Katha Stories" />
+    <meta property="og:title" content={homeTitle} />
     <meta property="og:description" content="Wala Katha: නවතම සිංහල වල් කතා, වැල කතා සහ රසවත් සිංහල wal katha stories එකතුවක් දිනපතා කියවන්න." />
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:image" content={siteLogo} />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha" />
+    <meta name="twitter:title" content={homeTitle} />
     <meta name="twitter:description" content="Daily updated Sinhala wal katha and wela stories collection." />
     <meta name="twitter:image" content={siteLogo} />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
@@ -150,11 +175,23 @@ const homePageSchema = {
   <div class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
     <div class="container">
 
-      {/* ✅ FIX: real H1 — FeaturedSlider එකට උඩින්ම, DOM order එකේ පළමුවෙන්.
-          දිස්වන Design එකට කිසිම බලපෑමක් නැත (height:0, collapsed). */}
+      {/* ✅ SEO FIX: real hidden H1 — FeaturedSlider එකට උඩින්ම, DOM
+          order එකේ පළමුවෙන්. දිස්වන Design එකට කිසිම බලපෑමක් නැත
+          (height:0, collapsed — .seo-h1-wrap, src/styles/index-overrides.css).
+          Keyword coverage එක broaden කිරීම සඳහා homeH1 constant එක
+          (title tag එකට වඩා wider keyword variant set එකක්) භාවිතා කරයි. */}
       <div class="seo-h1-wrap">
-        <h1>Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha &amp; Wela Katha Stories</h1>
+        <h1>{homeH1}</h1>
       </div>
+
+      {/* 🎯 SEO FIX: visible, styled H2 section heading — "important
+          HTML Tags" (H1/H2/H3) පුරා keyword coverage වැඩි කිරීම සඳහා
+          එකතු කරන ලද, සැබෑ visible content එකකි (hidden නොවේ).
+          Existing layout/spacing/design කිසිවකට බාධාවක් නොකරන පරිදි
+          FeaturedSlider එකට උඩින්, කුඩා, subtle styling එකකින් සකසා ඇත. */}
+      <h2 class="text-center text-sm sm:text-base font-bold text-emerald-400/90 tracking-wide mb-4 uppercase">
+        අලුත්ම Sinhala Wal Katha සහ Wela Katha එකතුව
+      </h2>
 
       <FeaturedSlider />
 
