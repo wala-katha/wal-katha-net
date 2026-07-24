@@ -85,21 +85,15 @@ const finalImageUrl = image
 // ✅ Home page පමණයි slider preload කරනවා
 const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
 
-// ==========================================================
-// 🎯 RESTORED (SEO Enhancement Pass #2 — was present in a stale nested
-// repo copy at wal-katha-net/src/layouts/Base.astro but MISSING from
-// this canonical file that Cloudflare Pages actually deploys):
-// og:image:type / twitter:image dimension auto-detection.
-//
-// Determines the correct MIME type from the final image URL's file
-// extension so Facebook/Twitter/LinkedIn crawlers can reliably parse
-// the image regardless of format (webp, jpg, png). Without this, some
-// social crawlers (notably older Facebook scraper versions) skip
-// rendering a preview image entirely if they cannot confidently
-// determine its MIME type from the URL alone. Purely additive: derived
-// at build-time from the same finalImageUrl already computed above,
-// zero new props, zero risk to existing image logic.
-// ==========================================================
+// 🎯 NEW (SEO Enhancement Pass #2): og:image:type / twitter image dimension
+// auto-detection. Determines the correct MIME type from the final image
+// URL's file extension so Facebook/Twitter/LinkedIn crawlers can reliably
+// parse the image regardless of format (webp, jpg, png) — this was
+// previously omitted, leaving crawlers to guess the MIME type, which can
+// cause some platforms (older Facebook scrapers in particular) to skip
+// rendering the preview image entirely for non-jpg formats. Purely
+// additive: derived at build-time from the same finalImageUrl already
+// computed above, zero new props, zero risk to existing image logic.
 function detectImageMimeType(url: string): string {
   const ext = url.split(".").pop()?.toLowerCase().split("?")[0] ?? "";
   switch (ext) {
@@ -121,8 +115,8 @@ function detectImageMimeType(url: string): string {
 const finalImageMimeType = detectImageMimeType(finalImageUrl);
 
 // ==========================================================
-// 🎯 UNIVERSAL hreflang / CONTENT-LANGUAGE INJECTION (SEO Enhancement
-// Pass #1: hreflang & Content-Language Consistency)
+// 🎯 UNIVERSAL hreflang / CONTENT-LANGUAGE INJECTION (NEW —
+// SEO Enhancement Pass #1: hreflang & Content-Language Consistency)
 //
 // ROOT CAUSE THIS SOLVES: previously, "content-language" meta +
 // "hreflang" self-referencing <link> tags existed ONLY inside
@@ -176,7 +170,11 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
 // tag was 100% redundant AND spec-violating. It has been permanently
 // removed. No charset functionality is lost — Astro's own directive
 // is the single source of truth for this site's character encoding on
-// every single page, permanently and automatically.
+// every single page, permanently and automatically (self-healing: any
+// future page added to the site automatically inherits Astro's
+// charset meta with zero manual code required, and can never
+// re-introduce this duplicate-charset error since there is no longer
+// any manual charset-related meta tag anywhere in this file).
 //
 // ROOT CAUSE 2: A previous version of this file also manually emitted
 // <meta http-equiv="content-language" content="si" />. The W3C HTML
@@ -318,7 +316,7 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         <meta name="twitter:title" content={calculatedTitle} />
         <meta name="twitter:description" content={calculatedDescription} />
 
-        {/* 🎯 RESTORED (SEO Enhancement Pass #2): twitter:image dimensions —
+        {/* 🎯 NEW (SEO Enhancement Pass #2): twitter:image dimensions —
             previously PostSingle.astro (article pages) had these, but
             default/non-article pages (home, about, contact, categories,
             tags, search, 404) never emitted them. Twitter/X's card
@@ -337,7 +335,7 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
     <meta property="og:image:secure_url" content={finalImageUrl} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    {/* 🎯 RESTORED (SEO Enhancement Pass #2): og:image:type — auto-detected
+    {/* 🎯 NEW (SEO Enhancement Pass #2): og:image:type — auto-detected
         MIME type from the final image URL's extension (see
         detectImageMimeType() in the frontmatter above). Some social
         crawlers (notably older Facebook scraper versions) skip
@@ -368,7 +366,7 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         එකේදී Chrome ට low-confidence, simple dialog එකක් පෙන්නන්න
         සිද්ධ වුනා. Blog post එකට navigate කරනකොට (2 වෙනි navigation),
         SW එක දැනටමත් "controlling" state එකේ තියෙන නිසා richer dialog
-        එක පෙන්නුනා.
+        එක පෙන්නුවා.
 
         ✅ PERMANENT FIX: Registration script එක <head> එකට, ඉතාම
         ඉක්මනින්ම (blocking network request එකක් නොවන "register()"
@@ -407,17 +405,27 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
             });
         }
 
+        // 🎯 ASAP TRIGGER: "load" event එකට කලින්ම, script tag එක
+        // parse වෙන ගමන්ම register() call කරනවා. register() call එක
+        // itself non-blocking (Promise-based) නිසා, main content
+        // render/paint එකට කිසිම delay එකක් හෝ blocking side-effect
+        // එකක් ඇති නොකරයි — Network Information API/Fetch handler
+        // setup එක background thread එකක (Service Worker thread)
+        // සිදු වෙනවා.
         doRegister();
 
+        // 🎯 View Transitions (ClientRouter) client-side navigation
+        // සඳහාත් register logic එකම attach කරනවා — browser එකෙන්ම
+        // existing registration එකක් තියෙනවා නම් silently no-op වෙනවා
+        // (duplicate registration නෑ), නමුත් යම් හෙයකින් පළමු
+        // registration එක fail වුනා නම් (offline first-load ආදී)
+        // ඊළඟ page navigation එකේදී retry වෙන්නත් මේක උදව් වෙනවා.
         document.addEventListener("astro:page-load", doRegister);
       })();
     </script>
 
     {/* ==========================================================
-        🎯 RESTORED: CORE WEB VITALS MONITORING (SEO Enhancement Pass #2)
-        (was present in the stale nested wal-katha-net/ copy, MISSING
-        from this canonical file — this is why real-user LCP/CLS/INP
-        data was never actually visible to anyone monitoring this site)
+        🎯 NEW: CORE WEB VITALS MONITORING (SEO Enhancement Pass #2)
 
         WHY: Core Web Vitals (LCP, CLS, INP) are a confirmed Google
         ranking factor. Without any client-side measurement, there is
@@ -429,22 +437,22 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         ~15 lines of vanilla JS) to capture LCP, CLS, and INP as they
         occur, then logs them to the console in development and
         (if Google Tag Manager is enabled per config.json) pushes them
-        into the existing dataLayer so they surface in GA4/GTM reports
-        the site may already have configured — reusing the SAME
-        gtm.dataLayer array that astro-gtm-lite (already an active
-        dependency, see astro.config.mjs) creates, rather than
+        into the existing dataLayer so they surface in GA4/GTM
+        reports the site may already have configured — reusing the
+        SAME gtm.dataLayer array that astro-gtm-lite (already an
+        active dependency, see astro.config.mjs) creates, rather than
         introducing a second, competing analytics mechanism.
 
         SAFE-BY-DEFAULT: if config.google_tag_manager.enable is false
         (the current default in config.json), this script simply
-        console.logs the metrics locally and does nothing else — zero
-        network calls, zero external services contacted, fully inert
-        on production until GTM is turned on.
+        console.logs the metrics locally and does nothing else —
+        zero network calls, zero external services contacted, fully
+        inert on production until GTM is turned on.
 
-        PERFORMANCE: this script is deferred (attached after the
-        "load" event fires, not before) so it can never compete with
-        or delay LCP/FCP itself — instrumentation code must never be
-        the thing that harms the metrics it measures.
+        PERFORMANCE: this script is deferred (`is:inline` + attached
+        after the "load" event fires, not before) so it can never
+        compete with or delay LCP/FCP itself — instrumentation code
+        must never be the thing that harms the metrics it measures.
        ========================================================== */}
     <script is:inline define:vars={{ gtmEnabled: config.google_tag_manager.enable }}>
       (function initWebVitalsMonitoring() {
@@ -494,46 +502,6 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         });
       })();
     </script>
-
-    {/* ==========================================================
-        🎯 NEW (SEO Enhancement — Free Real-User Monitoring, Gap #7):
-        CLOUDFLARE WEB ANALYTICS BEACON.
-
-        WHY: this site's own Content-Security-Policy (public/_headers)
-        already explicitly whitelists static.cloudflareinsights.com in
-        both script-src and connect-src — meaning the intent to use
-        Cloudflare Web Analytics was already in place, but the actual
-        beacon script tag that would load it was never added anywhere.
-        That left a "permission granted, feature never turned on" gap:
-        zero real-user monitoring data (page views, Core Web Vitals
-        aggregated across all visitors, top pages, referrers) despite
-        this being a completely free, cookie-less, GDPR-friendly
-        Cloudflare feature with no separate dependency to install.
-
-        SETUP REQUIRED (one-time, cannot be done from code alone):
-        1. Cloudflare dashboard → Analytics & Logs → Web Analytics
-        2. "Add a site" → select walakatha.net → Cloudflare generates
-           a unique token
-        3. Replace "YOUR_CF_BEACON_TOKEN_HERE" below with that token
-
-        SAFE-BY-DEFAULT: with the placeholder token left in place, the
-        beacon script simply fails a single background network request
-        with zero visible effect on the site (no console errors visible
-        to users, no layout/functionality impact) — so this can be
-        merged immediately and activated later without a second deploy,
-        just a config value swap once the real token is obtained.
-
-        PERFORMANCE: Cloudflare's beacon.min.js is famously tiny
-        (~5.5KB), asynchronous by default, and served from Cloudflare's
-        own edge (typically the fastest possible origin for a Cloudflare
-        Pages-hosted site) — negligible impact on any Core Web Vitals
-        metric, including the ones the script above is measuring.
-       ========================================================== */}
-    <script
-      defer
-      src="https://static.cloudflareinsights.com/beacon.min.js"
-      data-cf-beacon='{"token": "YOUR_CF_BEACON_TOKEN_HERE"}'
-    ></script>
 
     <ClientRouter />
   </head>
