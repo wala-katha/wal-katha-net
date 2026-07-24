@@ -95,8 +95,7 @@ const imageObject = image
     }
   : undefined;
 
-// ==========================================================
-// 🎯 NEW (SEO Enhancement Pass #2): "keywords" field for Article/
+// 🎯 NEW (SEO Enhancement Pass #3): "keywords" field for Article/
 // NewsArticle schema.
 //
 // WHY: Google's structured-data documentation lists "keywords" as a
@@ -110,8 +109,32 @@ const imageObject = image
 // keywords and the visible <meta name="keywords"> tag (already
 // rendered by PostSingle.astro) can never drift out of sync, since
 // both are derived from the identical post.data.tags array.
-// ==========================================================
 const keywordsString = Array.isArray(tags) && tags.length > 0 ? tags.join(", ") : undefined;
+
+// 🎯 NEW (SEO Enhancement Pass #3): "inLanguage" field.
+// WHY: schema.org's inLanguage property lets search engines confirm
+// the article's content language directly from structured data,
+// without relying solely on the <html lang="si"> attribute or
+// hreflang tags. This is a recommended field for NewsArticle per
+// Google's own News SEO guidance, and was previously present only on
+// the search page's SearchResultsPage schema — every actual content
+// (Article) page had this gap. "si" matches the site-wide <html
+// lang="si"> declaration in Base.astro, so this stays in permanent
+// sync with the rest of the site's language signaling.
+const articleLanguage = "si";
+
+// 🎯 NEW (SEO Enhancement Pass #3): "potentialAction": "ReadAction".
+// WHY: Google's Article/NewsArticle structured-data reference lists
+// "potentialAction" with a ReadAction as a recognized way to signal
+// the primary user action available on the page (reading the full
+// article at its canonical URL). This is a minor completeness
+// addition alongside the existing mainEntityOfPage — it does not
+// replace or duplicate mainEntityOfPage, it supplements it with an
+// explicit action-oriented signal some rich-result surfaces look for.
+const readActionSchema = {
+  "@type": "ReadAction",
+  "target": [canonicalUrl]
+};
 
 // 🎯 FIXED (Duplicate/Conflicting Organization Entity — Cross-File
 // Consistency): මීට කලින් මෙතන "publisher" field එක වෙනම, inline
@@ -130,6 +153,7 @@ const articleSchema = {
   "image": imageObject,
   "datePublished": safeDateISO,
   "dateModified": safeDateISO,
+  "inLanguage": articleLanguage,
   "author": {
     "@type": "Person",
     "name": authorName,
@@ -145,7 +169,8 @@ const articleSchema = {
     "@id": `${base_url}/#website`
   },
   "wordCount": wordCount,
-  "keywords": keywordsString
+  "keywords": keywordsString,
+  "potentialAction": readActionSchema
 };
 ---
 
