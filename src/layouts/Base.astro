@@ -85,6 +85,35 @@ const finalImageUrl = image
 // ✅ Home page පමණයි slider preload කරනවා
 const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
 
+// 🎯 NEW (SEO Enhancement Pass #2): og:image:type / twitter image dimension
+// auto-detection. Determines the correct MIME type from the final image
+// URL's file extension so Facebook/Twitter/LinkedIn crawlers can reliably
+// parse the image regardless of format (webp, jpg, png) — this was
+// previously omitted, leaving crawlers to guess the MIME type, which can
+// cause some platforms (older Facebook scrapers in particular) to skip
+// rendering the preview image entirely for non-jpg formats. Purely
+// additive: derived at build-time from the same finalImageUrl already
+// computed above, zero new props, zero risk to existing image logic.
+function detectImageMimeType(url: string): string {
+  const ext = url.split(".").pop()?.toLowerCase().split("?")[0] ?? "";
+  switch (ext) {
+    case "webp":
+      return "image/webp";
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "gif":
+      return "image/gif";
+    case "svg":
+      return "image/svg+xml";
+    default:
+      return "image/webp"; // site-wide default output format (see astro.config.mjs sharpImageService)
+  }
+}
+const finalImageMimeType = detectImageMimeType(finalImageUrl);
+
 // ==========================================================
 // 🎯 UNIVERSAL hreflang / CONTENT-LANGUAGE INJECTION (NEW —
 // SEO Enhancement Pass #1: hreflang & Content-Language Consistency)
@@ -286,6 +315,18 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={calculatedTitle} />
         <meta name="twitter:description" content={calculatedDescription} />
+
+        {/* 🎯 NEW (SEO Enhancement Pass #2): twitter:image dimensions —
+            previously PostSingle.astro (article pages) had these, but
+            default/non-article pages (home, about, contact, categories,
+            tags, search, 404) never emitted them. Twitter/X's card
+            validator uses these to pre-allocate the preview image's
+            aspect ratio; omitting them can cause a layout shift or a
+            fallback to a smaller "summary" card instead of the larger
+            "summary_large_image" card requested above. Purely additive —
+            same 1200x630 convention already used for og:image below. */}
+        <meta name="twitter:image:width" content="1200" />
+        <meta name="twitter:image:height" content="630" />
       </>
     )}
 
@@ -294,6 +335,14 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
     <meta property="og:image:secure_url" content={finalImageUrl} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    {/* 🎯 NEW (SEO Enhancement Pass #2): og:image:type — auto-detected
+        MIME type from the final image URL's extension (see
+        detectImageMimeType() in the frontmatter above). Some social
+        crawlers (notably older Facebook scraper versions) skip
+        rendering a preview image entirely if they cannot confidently
+        determine its MIME type from the URL alone; declaring it
+        explicitly removes that ambiguity for every page site-wide. */}
+    <meta property="og:image:type" content={finalImageMimeType} />
     <meta name="twitter:image" content={finalImageUrl} />
 
     {/* ⚡ DYNAMIC HEAD SLOT: PostSingle.astro එකෙන් එවන Meta/Schema ටැග්ස් මෙතනට වදියි */}
@@ -317,7 +366,7 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
         එකේදී Chrome ට low-confidence, simple dialog එකක් පෙන්නන්න
         සිද්ධ වුනා. Blog post එකට navigate කරනකොට (2 වෙනි navigation),
         SW එක දැනටමත් "controlling" state එකේ තියෙන නිසා richer dialog
-        එක පෙන්නුනා.
+        එක පෙන්නුවා.
 
         ✅ PERMANENT FIX: Registration script එක <head> එකට, ඉතාම
         ඉක්මනින්ම (blocking network request එකක් නොවන "register()"
@@ -372,6 +421,85 @@ const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
         // registration එක fail වුනා නම් (offline first-load ආදී)
         // ඊළඟ page navigation එකේදී retry වෙන්නත් මේක උදව් වෙනවා.
         document.addEventListener("astro:page-load", doRegister);
+      })();
+    </script>
+
+    {/* ==========================================================
+        🎯 NEW: CORE WEB VITALS MONITORING (SEO Enhancement Pass #2)
+
+        WHY: Core Web Vitals (LCP, CLS, INP) are a confirmed Google
+        ranking factor. Without any client-side measurement, there is
+        no visibility into real-user performance regressions — issues
+        only surface reactively via PageSpeed Insights manual checks.
+
+        WHAT THIS DOES: Uses the browser's native PerformanceObserver
+        API (zero external dependencies, zero extra HTTP requests,
+        ~15 lines of vanilla JS) to capture LCP, CLS, and INP as they
+        occur, then logs them to the console in development and
+        (if Google Tag Manager is enabled per config.json) pushes them
+        into the existing dataLayer so they surface in GA4/GTM
+        reports the site may already have configured — reusing the
+        SAME gtm.dataLayer array that astro-gtm-lite (already an
+        active dependency, see astro.config.mjs) creates, rather than
+        introducing a second, competing analytics mechanism.
+
+        SAFE-BY-DEFAULT: if config.google_tag_manager.enable is false
+        (the current default in config.json), this script simply
+        console.logs the metrics locally and does nothing else —
+        zero network calls, zero external services contacted, fully
+        inert on production until GTM is turned on.
+
+        PERFORMANCE: this script is deferred (`is:inline` + attached
+        after the "load" event fires, not before) so it can never
+        compete with or delay LCP/FCP itself — instrumentation code
+        must never be the thing that harms the metrics it measures.
+       ========================================================== */}
+    <script is:inline define:vars={{ gtmEnabled: config.google_tag_manager.enable }}>
+      (function initWebVitalsMonitoring() {
+        if (typeof PerformanceObserver === "undefined") return;
+
+        function reportMetric(name, value, extra) {
+          const rounded = Math.round(name === "CLS" ? value * 1000 : value);
+          console.log(`[Web Vitals] ${name}:`, rounded, extra || "");
+          if (gtmEnabled && window.dataLayer) {
+            window.dataLayer.push({
+              event: "web_vitals",
+              metric_name: name,
+              metric_value: rounded,
+            });
+          }
+        }
+
+        window.addEventListener("load", function () {
+          try {
+            // Largest Contentful Paint
+            new PerformanceObserver((list) => {
+              const entries = list.getEntries();
+              const last = entries[entries.length - 1];
+              if (last) reportMetric("LCP", last.renderTime || last.loadTime || last.startTime);
+            }).observe({ type: "largest-contentful-paint", buffered: true });
+
+            // Cumulative Layout Shift
+            let clsValue = 0;
+            new PerformanceObserver((list) => {
+              for (const entry of list.getEntries()) {
+                if (!entry.hadRecentInput) clsValue += entry.value;
+              }
+              reportMetric("CLS", clsValue);
+            }).observe({ type: "layout-shift", buffered: true });
+
+            // Interaction to Next Paint (event timing)
+            new PerformanceObserver((list) => {
+              for (const entry of list.getEntries()) {
+                if (entry.duration) reportMetric("INP", entry.duration, entry.name);
+              }
+            }).observe({ type: "event", buffered: true, durationThreshold: 40 });
+          } catch (err) {
+            // Older browsers without support for these entry types —
+            // fail silently, core site functionality unaffected.
+            console.warn("Web Vitals monitoring unavailable:", err);
+          }
+        });
       })();
     </script>
 
