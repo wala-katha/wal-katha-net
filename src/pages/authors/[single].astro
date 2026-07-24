@@ -49,6 +49,33 @@ const currentPosts = sortPostsByDate.filter((post) => {
     .includes(slugify(authorTitle));
 });
 
+// ==========================================================
+// 🎯 NEW (SEO Enhancement Pass #2): "knowsAbout" E-E-A-T signal.
+//
+// WHY: Google's E-E-A-T (Experience, Expertise, Authoritativeness,
+// Trust) guidance recommends that Person schema entities include
+// topical-expertise signals where genuinely applicable. Rather than
+// inventing generic/unrelated topics, this derives "knowsAbout" from
+// the ACTUAL categories the author's own published posts fall under
+// — i.e. real, verifiable topical association based on this author's
+// real content on this site, computed from currentPosts (already
+// filtered above to only this author's posts). This is the same
+// principle applied by getTaxonomyWithCount in taxonomyParser.astro
+// (deriving structured signals from real post categories) rather than
+// a new, separate data source.
+//
+// SAFETY: if an author has zero posts (a newly added author profile
+// with no content yet), this safely resolves to an empty array, and
+// the "knowsAbout" field is simply omitted from the schema below
+// (conditionally spread) — no empty-array/undefined-value schema
+// pollution for authors without posts yet.
+// ==========================================================
+const authorKnowsAbout = [
+  ...new Set(
+    currentPosts.flatMap((post) => post.data.categories || []).map((cat) => humanize(cat))
+  ),
+];
+
 // 📈 SEO ප්‍රශස්තකරණය: Canonical URL එක Trailing Slashes බග් එක නැතිව පිරිසිදුව සැකසීම
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
 
@@ -97,7 +124,8 @@ const schemaMarkup = {
     "image": image ? (image.startsWith("http") ? image : `${base_url}${image}`) : undefined,
     "url": canonicalUrl,
     "jobTitle": "Content Creator",
-    ...(socialLinks.length > 0 ? { "sameAs": socialLinks } : {})
+    ...(socialLinks.length > 0 ? { "sameAs": socialLinks } : {}),
+    ...(authorKnowsAbout.length > 0 ? { "knowsAbout": authorKnowsAbout } : {})
   }
 };
 ---
