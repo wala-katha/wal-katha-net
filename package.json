@@ -1,6 +1,6 @@
 {
   "name": "wala-katha",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "license": "MIT",
   "type": "module",
   "packageManager": "yarn@1.22.22",
@@ -20,7 +20,7 @@
     "@astrojs/rss": "^4.0.12",
     "@astrojs/sitemap": "3.7.2",
     "@justinribeiro/lite-youtube": "^1.9.0",
-    "astro": "7.1.0",
+    "astro": "6.1.9",
     "astro-auto-import": "^0.5.1",
     "astro-gtm-lite": "^1.0.1",
     "date-fns": "^4.1.0",
