@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    ignore:
+      # astro core package එකේ MAJOR version upgrades auto-PR නොකිරීමට —
+      # @astrojs/mdx වගේ peer-dependency-tight plugins astro major
+      # version එකකට කලින් update නොවුනොත් build එක crash වේ. Minor/patch
+      # updates ලැබෙනවා, major එකක් පමණක් manual review කරලා,
+      # @astrojs/* plugins සියල්ලම compatible දැයි check කරලා විතරක්
+      # upgrade කරන්න.
+      - dependency-name: "astro"
+        update-types: ["version-update:semver-major"]
