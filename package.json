@@ -16,6 +16,9 @@
     "deploy:cf-workers": "yarn build && wrangler deploy",
     "preview:cf-workers": "yarn build && wrangler dev"
   },
+  "resolutions": {
+    "undici": "^7.28.0"
+  },
   "dependencies": {
     "@astrojs/check": "^0.9.6",
     "@astrojs/mdx": "^7.0.3",
@@ -47,10 +50,5 @@
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
     "wrangler": "^4.84.1"
-  },
-  "resolutions": {
-    "undici": "^7.28.0",
-    "wrangler/**/undici": "^7.28.0",
-    "wrangler/miniflare/undici": "^7.28.0"
   }
 }
