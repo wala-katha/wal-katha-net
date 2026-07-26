@@ -1,22 +1,34 @@
 {
   /**
-   * Cloudflare Workers — Static Assets deployment
-   * Deploy:  npm run deploy:cf-workers
-   * Preview: npm run preview:cf-workers
+   * ⚠️ NOT THE ACTIVE DEPLOYMENT PATH — CONFIRMED (2026-07):
+   * This site's live production deployment is Cloudflare PAGES via
+   * Git integration (auto-deploy on GitHub push). This wrangler.jsonc
+   * file, and the "deploy:cf-workers" / "preview:cf-workers" scripts
+   * in package.json, are OPTIONAL manual tooling for Cloudflare
+   * Workers (wrangler deploy) — a completely separate deployment
+   * mechanism that is NOT used for the live site.
    *
-   * html_handling: "drop-trailing-slash" — Astro config එකේ
-   * trailingSlash: "never" (config.json trailing_slash: false) සමග
-   * 100% align කරන්න මෙය අත්‍යවශ්‍යයි. මෙය නැතිනම් Cloudflare default
-   * behavior එක "auto-trailing-slash" බවට පත්වී, "/authors" වගේ
-   * trailing-slash-නැති URL එකක් "/authors/" ට 308 redirect කරයි —
-   * ඒත් canonical tag එකේ තියෙන්නේ trailing slash නැති version එක නිසා
-   * "Canonical points to redirect" SEO error එක හට ගනී.
+   * Per Cloudflare's own documentation
+   * (developers.cloudflare.com/workers/static-assets/routing/),
+   * "assets.html_handling" below ONLY affects requests served via
+   * `wrangler deploy` (Workers Static Assets). It has ZERO effect on
+   * the actual Cloudflare Pages Git-integration deployment that
+   * serves www.walakatha.net.
+   *
+   * "html_handling": "force-trailing-slash" is set here purely for
+   * CONSISTENCY / self-healing purposes: if this repo is ever manually
+   * deployed via `yarn deploy:cf-workers` for testing, it will 308
+   * redirect no-trailing-slash directory URLs to their trailing-slash
+   * version — matching Cloudflare Pages' real, non-configurable
+   * behavior exactly. This prevents a future contributor from being
+   * confused by inconsistent redirect behavior between the two
+   * deployment paths, even though only Pages is actually used.
    */
   "name": "walakatha",
   "compatibility_date": "2026-03-01",
   "assets": {
     "directory": "./dist",
     "not_found_handling": "404-page",
-    "html_handling": "drop-trailing-slash"
+    "html_handling": "force-trailing-slash"
   }
 }
