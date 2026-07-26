@@ -21,7 +21,13 @@ const { title, description, meta_title, image } = entry.data;
 const targetEmail = "walkatha.com@gmail.com";
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
-const canonicalUrl = `${base_url}/contact`;
+// 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY FIX (2026-07):
+// කලින් trailing slash එකක් නොතිබූ නිසා <link rel="canonical">
+// tag එකයි (Base.astro's ensureTrailingSlash() එකෙන් auto-slashed)
+// JSON-LD contactPageSchema.url එකයි අතර mismatch එකක් තිබුණි.
+// Confirmed Cloudflare Pages Git-integration behavior එකට අනුව
+// මෙතනින්ම explicit ලෙස trailing slash එකතු කර, දෙකම sync කරයි.
+const canonicalUrl = `${base_url}/contact/`;
 
 // ✅ FIXED (Ahrefs "Meta description too short"): පරණ fallback string එක
 // 73 characters විතරයි (Ahrefs ~110 char minimum threshold එකට අඩුයි).
