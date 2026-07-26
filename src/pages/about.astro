@@ -19,7 +19,16 @@ const { title, meta_title, description, image, what_i_do } = entry.data;
 
 // 📈 2. SEO ප්‍රශස්තකරණය: පිරිසිදු Canonical URL එකක් සැකසීම
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
-const canonicalUrl = `${base_url}/about`;
+
+// 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY FIX (2026-07):
+// මීට කලින් "canonicalUrl" එකට trailing slash එකක් නොතිබූ නිසා,
+// Base.astro හි ensureTrailingSlash() එකෙන් <link rel="canonical">
+// tag එකට "/" එකතු වුවත්, පහත JSON-LD aboutPageSchema.url field
+// එකට එය apply වුයේ නැත — schema URL එකයි canonical tag එකයි
+// අතර mismatch එකක් ඇති කළ හැක. Confirmed Cloudflare Pages
+// Git-integration deployment එකට අනුව, trailing slash එක මෙතනින්ම
+// explicit ලෙස එකතු කර, දෙකම permanent ලෙස sync කර ඇත.
+const canonicalUrl = `${base_url}/about/`;
 
 // ✅ FIXED (Ahrefs "Meta description too short"): පරණ fallback string එක
 // 68 characters විතරයි (Ahrefs ~110 char minimum threshold එකට හෙන
@@ -82,11 +91,9 @@ const aboutPageSchema = {
             <Content />
           </div>
           
-          {/* 🎯 FIXED (Ahrefs "3xx redirect" inlink issue): href="/contact" trailing
-              slash එකක් නැතුව hardcoded කර තිබූ නිසා, Cloudflare Pages විසින්
-              /contact -> /contact/ ලෙස 308 redirect කරමින් තිබුණි. සයිට් එකේ
-              අනිත් සියලුම components වල දැනටමත් පාවිච්චි කරන withTrailingSlash()
-              helper එකම මෙතනටත් යොදා, 0-redirect-hop link එකක් බවට හැරවීම. */}
+          {/* href="/contact" -> withTrailingSlash() හරහා "/contact/" ට
+              resolve වේ — Cloudflare Pages එකේ 0-redirect-hop link
+              එකක් ලෙසම සහතික කරයි (site-wide pattern එකම). */}
           <a href={withTrailingSlash("/contact")} class="btn btn-primary text-white py-2 mt-6 inline-block">
             Get In Touch
           </a>
