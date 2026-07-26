@@ -3,7 +3,7 @@
     "title": "Wala Katha",
     "base_url": "https://www.walakatha.net",
     "base_path": "/",
-    "trailing_slash": false,
+    "trailing_slash": true,
     "favicon": "/images/favicon.webp",
     "logo": "/images/logo.webp",
     "logo_width": "300",
