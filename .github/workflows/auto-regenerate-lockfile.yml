@@ -79,10 +79,37 @@ jobs:
             echo "PKGDIFF_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Remove stale lockfile and node_modules
-        run: rm -rf node_modules yarn.lock
+      # 🎯 FIXED (CRITICAL — "Found incompatible Markdown processor" build
+      # failure, Root Cause): මීට කලින් මෙතන "rm -rf node_modules
+      # yarn.lock" ලෙස yarn.lock එකද සම්පූර්ණයෙන්ම delete කර තිබුණි.
+      # මෙය "existing lockfile එකක් නොමැතිව සම්පූර්ණ fresh dependency
+      # resolution" එකකට යොමු කරයි — package.json හි ඇති සෑම දිශාවකම
+      # "^" (caret range) dependencies (astro-auto-import ඇතුළුව) සඳහා
+      # yarn විසින් LATEST-matching-semver transitive versions
+      # ස්වයංක්‍රීයව select කරයි, ඒවා production lockfile එකේ දැනටමත්
+      # pin කර ඇති (working, tested) versions නොවේ. මෙයින්
+      # astro-auto-import ට අවශ්‍ය remark/unified processor version
+      # එක, astro core එක expect කරන version එකට incompatible විදිහට
+      # bump වී, "yarn build" step එකේදීම "astro:config:setup" hook
+      # එක crash විය.
+      #
+      # ✅ PERMANENT ROOT-CAUSE FIX: "yarn.lock" ෆයිල් එක තවදුරටත්
+      # delete නොකරයි — "node_modules" එක පමණක් ඉවත් කරයි. Yarn 1.x,
+      # existing yarn.lock එකක් තියෙනකොට "yarn install" run කළහොත්,
+      # ඒ ලොක්-ෆයිල් එකේ දැනටමත් pin කර ඇති (compatible, tested)
+      # සියලුම dependency versions PRESERVE කරගෙන, "package.json" හි
+      # ඇත්තටම වෙනස් වූ (added/removed/version-bumped) entries
+      # පමණක් resolve කර, lockfile එක INCREMENTALLY update කරයි —
+      # unrelated transitive dependencies (astro-auto-import ඇතුළු)
+      # කිසිවක් අහම්බෙන් shift වී incompatible versions වලට
+      # පනින්නේ නැත. මෙය self-healing permanent solution එකකි:
+      # අනාගතයේ package.json වෙනස් වුනත්, මෙම workflow එකෙන්ම කිසිදු
+      # unrelated dependency drift regression එකක් නැවත ඇති නොවේ,
+      # මොකද full-resolution wipe එකම (root cause) සදහටම ඉවත් කර ඇත.
+      - name: Remove stale node_modules (preserve yarn.lock as resolution baseline)
+        run: rm -rf node_modules
 
-      - name: Fresh yarn install (regenerates yarn.lock from current package.json)
+      - name: Fresh yarn install (updates yarn.lock incrementally for package.json changes only)
         run: yarn install
 
       - name: Verify production build succeeds (BLOCKING safety gate)
@@ -104,27 +131,6 @@ jobs:
 
       - name: Commit regenerated yarn.lock
         if: steps.changes.outputs.has_changes == 'true'
-        # 🎯 FIXED (YAML Syntax Error — Line 107 Root Cause):
-        # මීට කලින් මෙතන "run: git commit -m \"fix: regenerate...\""
-        # ලෙස SINGLE-LINE plain scalar එකක් ලෙස ලියා තිබුණි. YAML spec
-        # එකට අනුව, quote-නොකළ (plain scalar) value එකක් ඇතුළේ
-        # ": " (colon + space) තිබ්බොත් parser එකට එය අලුත් key:value
-        # pair එකක ආරම්භයක් ලෙස වැරදියට හැඳින ගැනීමට සලස්වයි — මෙතන
-        # commit message එකේ "fix: regenerate..." කොටසේ තිබූ
-        # "fix:" + space එකෙන් හරියටම මෙය සිදු විය (GitHub Actions
-        # "Invalid workflow file... error in your yaml syntax on line
-        # 107" ලෙස පෙන්වූයේ මේ නිසාය).
-        #
-        # ස්ථිර (self-healing) විසඳුම: "run: |" (Block Scalar) බවට
-        # මාරු කිරීම. Block scalar එකක් තුළ colon, quotes, parentheses
-        # වැනි කිසිම special character එකක් YAML parsing එකට බලපාන්නේ
-        # නැත — commit message එකේ අනාගතයේ තවත් colon/quote සහිත වචන
-        # එකතු කළත් (උදා: "feat: add X, fix: Y"), මෙම block-scalar
-        # ආකෘතිය කවදාවත් නැවත මෙම syntax error එක ඇති කරන්නේ නැත.
-        # File එකේ අනිකුත් සියලුම run steps (Configure git identity,
-        # Create working branch ආදී) දැනටමත් මෙම "|" pattern එකම
-        # භාවිතා කරයි — මෙය එම established, site-wide convention එකටම
-        # consistency ලෙස align කරයි.
         run: |
           git commit -m "fix: regenerate yarn.lock after package.json change (auto-verified via yarn build)"
 
