@@ -119,16 +119,26 @@ const organizationSameAs = (social?.main || [])
 const homeTitle = "Wala Katha - Sinhala Wal Katha & Wela Katha Stories 2026";
 
 // 🎯 SEO FIX #2 — "Use your main keywords across the important HTML
-// Tags" (SEOptimizer Medium Priority): the homepage's hidden SEO H1
-// (see .seo-h1-wrap below, height:0/visually collapsed — zero design
-// impact, same technique already used site-wide for Bing's "H1 tag
-// missing" compliance) previously repeated the same two keyword
-// phrases already present in the <title> tag verbatim. Search engines
-// value keyword variation/coverage across heading levels rather than
-// exact duplication of the title tag. This constant introduces two
-// ADDITIONAL keyword variants ("Wela Katha", "Aluth Wal Katha") that
-// were not previously present in the H1, broadening topical coverage
-// without keyword-stuffing (still a single, natural-reading sentence).
+// Tags" (SEOptimizer Medium Priority): the homepage's H1 heading
+// previously repeated the same two keyword phrases already present in
+// the <title> tag verbatim. Search engines value keyword variation/
+// coverage across heading levels rather than exact duplication of the
+// title tag. This constant introduces two ADDITIONAL keyword variants
+// ("Wela Katha", "Aluth Wal Katha") that were not previously present
+// in the title, broadening topical coverage without keyword-stuffing
+// (still a single, natural-reading sentence).
+//
+// 🎯 SEO FIX #3 (2026-07 — Hidden-Text Risk Removal): this text was
+// PREVIOUSLY rendered inside a visually-collapsed (.seo-h1-wrap,
+// height:0/font-size:1px/color:transparent) <h1>, while a SEPARATE,
+// visible <h2 id="speakable-home-heading"> carried different text
+// just below it. Per Google Search Essentials, CSS-hiding text purely
+// to stuff keywords search engines can read but users can't is
+// classified as a hidden-text technique — a real ranking/manual-action
+// risk regardless of original intent. The fix (see the single visible
+// <h1> below, in the template) merges these into ONE real, fully
+// visible H1 that carries this exact keyword-rich text, styled
+// identically to the old H2 so the on-page appearance is unchanged.
 const homeH1 = "Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha, Wela Katha & Aluth Wal Katha Stories";
 
 const homePageSchema = {
@@ -220,29 +230,22 @@ const homePageSchema = {
   <div class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
     <div class="container">
 
-      {/* ✅ SEO FIX: real hidden H1 — FeaturedSlider එකට උඩින්ම, DOM
-          order එකේ පළමුවෙන්. දිස්වන Design එකට කිසිම බලපෑමක් නැත
-          (height:0, collapsed — .seo-h1-wrap, src/styles/index-overrides.css).
-          Keyword coverage එක broaden කිරීම සඳහා homeH1 constant එක
-          (title tag එකට වඩා wider keyword variant set එකක්) භාවිතා කරයි. */}
-      <div class="seo-h1-wrap">
-        <h1>{homeH1}</h1>
-      </div>
-
-      {/* 🎯 SEO FIX: visible, styled H2 section heading — "important
-          HTML Tags" (H1/H2/H3) පුරා keyword coverage වැඩි කිරීම සඳහා
-          එකතු කරන ලද, සැබෑ visible content එකකි (hidden නොවේ).
-          Existing layout/spacing/design කිසිවකට බාධාවක් නොකරන පරිදි
-          FeaturedSlider එකට උඩින්, කුඩා, subtle styling එකකින් සකසා ඇත.
-          🎯 AI VISIBILITY UPGRADE: id="speakable-home-heading" එකතු
-          කර ඇත — homePageSchema's CollectionPage entry තුළ ඇති
-          "speakable" SpeakableSpecification එකට point කරන, REAL,
-          visible (non-hidden) DOM node එකක් ලෙස. Google/voice
-          assistants/AI answer engines වලට මෙම page එකේ ප්‍රධාන
-          content-summary heading එක ලෙස identify කර ගත හැක. */}
-      <h2 id="speakable-home-heading" class="text-center text-sm sm:text-base font-bold text-emerald-400/90 tracking-wide mb-4 uppercase">
-        අලුත්ම Sinhala Wal Katha සහ Wela Katha එකතුව
-      </h2>
+      {/* ✅ SEO FIX (2026-07 — Hidden-Text Risk Removal): මීට කලින්
+          තිබූ .seo-h1-wrap (height:0, font-size:1px, color:transparent)
+          H1 එක Google Search Essentials guidelines අනුව "hidden text"
+          technique එකක් ලෙස සැලකෙන අවදානමක් තිබූ බැවින් සම්පූර්ණයෙන්ම
+          ඉවත් කර ඇත, එය සමගම වෙනම තිබූ visible H2 එකද මෙයට ඒකාබද්ධ කර
+          ඇත — දැන් H1 tag එකම page එකේ එකම, සැබවින්ම පෙනෙන (visible)
+          heading එක ලෙස render වේ (duplicate heading දෙකක් නොව එකක්
+          පමණි). Design/layout/spacing කිසිවක් වෙනස් නොවේ — කලින් H2
+          එකට තිබූ Tailwind classes සියල්ලම මෙම H1 එකටම එලෙසම යොදා ඇත.
+          id="speakable-home-heading" එකද පවතී — homePageSchema හි
+          CollectionPage entry තුළ ඇති "speakable"
+          SpeakableSpecification එකට මෙම real, visible DOM node එකම
+          point කරයි (schema selector එකට කිසිදු බලපෑමක් නැත). */}
+      <h1 id="speakable-home-heading" class="text-center text-sm sm:text-base font-bold text-emerald-400/90 tracking-wide mb-4 uppercase">
+        {homeH1}
+      </h1>
 
       <FeaturedSlider />
 
