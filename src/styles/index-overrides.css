@@ -5,14 +5,12 @@
    this homepage's HTML at 37.35 KB (average: 33 KB), recommending
    "external style sheets" and "moving javascript to external
    files" as the fix.
-
    This file contains the EXACT SAME CSS rules that previously
    lived inline inside index.astro's <style is:global> block —
    every selector, every property, every !important flag, and the
    exact same cascade order is preserved byte-for-byte. Zero
    visual/design change: this is a pure "move to external file"
    operation, not a rewrite.
-
    WHY THIS FILE (and not Base.astro's inline <style>/<script>, or
    PostSingle.astro's inline comment-system CSS/JS) was chosen for
    extraction: this is the only large inline block in the codebase
@@ -23,7 +21,6 @@
    and PostSingle.astro's comment-system script depends on
    per-post dynamic data attributes — both were left untouched to
    protect existing working behavior exactly as requested.
-
    CACHING: public/_headers already has a site-wide rule:
      /*.css
        Cache-Control: public, max-age=31536000, immutable
@@ -32,33 +29,24 @@
    HTML payload shrinks, and every repeat visit re-downloads 0 bytes
    of this CSS (previously, being inline, it was re-downloaded as
    part of the HTML on every single page load, every single visit).
-   ========================================================== */
 
+   🎯 UPDATED (2026-07 — Hidden-Text Risk Removal): the ".seo-h1-wrap"
+   / ".seo-h1-wrap h1" rules that previously lived here (height:0,
+   font-size:1px, color:transparent) have been PERMANENTLY REMOVED.
+   That class is no longer referenced anywhere in index.astro — the
+   H1 it used to hide is now rendered as a normal, fully visible
+   heading directly (see index.astro's template). Per Google Search
+   Essentials, visually-collapsing text purely so search engines can
+   read keywords users can't see is a hidden-text technique and a
+   real ranking/manual-action risk; removing the CSS rule alongside
+   removing its only usage guarantees this technique can never
+   silently reappear on this page in the future.
+   ========================================================== */
 html, body {
   background-color: #050505 !important;
   color: #f8fafc !important;
   scrollbar-color: #10b981 #050505;
 }
-
-/* ✅ H1 FIX: Bing "H1 tag missing" ගැටලුව විසඳන real, semantic H1
-   — clip/1px-hiding නෙවෙයි, height:0 + overflow:hidden විදිහට
-   visually collapse කරලා design එකට කිසිම බලපෑමක් නැතුව තියෙනවා.
-   Google සහ Bing දෙකටම content එක "real" විදිහට පේනවා. */
-.seo-h1-wrap {
-  height: 0;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  line-height: 0;
-}
-.seo-h1-wrap h1 {
-  font-size: 1px;
-  line-height: 0;
-  margin: 0;
-  padding: 0;
-  color: transparent;
-}
-
 .post-card {
   background-color: #0d0d0d !important;
   border: 1px solid #1a1a1a !important;
@@ -83,7 +71,6 @@ html, body {
   border-radius: 14px !important;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
-
 .post-card:hover {
   background-color: #121212 !important;
   border-color: rgba(16, 185, 129, 0.4) !important;
@@ -96,7 +83,6 @@ html, body {
   transform: translateY(-4px) !important;
   box-shadow: 0 10px 25px -10px rgba(16, 185, 129, 0.25) !important;
 }
-
 .post-card-title {
   color: #ffffff !important;
   font-weight: 700 !important;
@@ -122,7 +108,6 @@ html, body {
   font-weight: 700 !important;
   transition: color 0.2s ease !important;
 }
-
 .post-card h2 a:hover {
   color: #34d399 !important;
 }
@@ -132,7 +117,6 @@ html, body {
 .post-card a:hover {
   color: #34d399 !important;
 }
-
 .post-card p {
   color: #cbd5e1 !important;
 }
@@ -145,7 +129,6 @@ html, body {
 .meta-items {
   color: #cbd5e1 !important;
 }
-
 .featured-slider img {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   border-radius: 10px !important;
@@ -154,7 +137,6 @@ html, body {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   border-radius: 10px !important;
 }
-
 .pagination a {
   background-color: #0d0d0d !important;
   border: 1px solid #262626 !important;
@@ -170,11 +152,9 @@ html, body {
   color: #050505 !important;
   border-color: #10b981 !important;
 }
-
 .featured-slider .slider-content {
   background: linear-gradient(to top, rgba(5,5,5,0.95) 0%, rgba(5,5,5,0.4) 70%, transparent 100%) !important;
 }
-
 .tag {
   background-color: rgba(16, 185, 129, 0.1) !important;
   color: #34d399 !important;
