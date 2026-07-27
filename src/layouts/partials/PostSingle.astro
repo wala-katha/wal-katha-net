@@ -231,7 +231,7 @@ const breadcrumbSchema = JSON.stringify({
 
           {/* FULL BREADCRUMB NAV — always in DOM, always crawlable.
               breadcrumbItems array එකම (schema එකට use කරන) reuse කරන
-              නිසා, schema එකයි UI එකයි කවදාවත් desync වෙන්නේ නෑ. */}
+              නිසා, schema එකයි UI එකයි කවදාවත් desync නොවෙන්න. */}
           <nav
             id="breadcrumb-content"
             aria-label="Breadcrumb"
@@ -253,7 +253,7 @@ const breadcrumbSchema = JSON.stringify({
                         {crumb.name}
                       </span>
                     ) : (
-                      <a
+                      
                         href={
                           i === 0
                             ? "/"
@@ -277,7 +277,28 @@ const breadcrumbSchema = JSON.stringify({
 
     <article class="row justify-center">
       <div class="md:col-10 text-center">
-        <h1 set:html={markdownify(title)} class="h2 text-[#F8F8FF] font-black drop-shadow-md" />
+        {/* 🎯 GOOGLE "SPEAKABLE" SCHEMA FIX: id="speakable-headline"
+            එකතු කරන ලද්දේ, blog/[single].astro හි JSON-LD
+            "speakable.cssSelector" array එක මෙම exact H1 element එකටම
+            point කිරීමට. Design/CSS classes කිසිවක් වෙනස් වී නැත —
+            id attribute එකක් පමණක් එකතු කර ඇත. */}
+        <h1 id="speakable-headline" set:html={markdownify(title)} class="h2 text-[#F8F8FF] font-black drop-shadow-md" />
+
+        {/* 🎯 GOOGLE "SPEAKABLE" SCHEMA FIX: post description එක DOM
+            එකේ crawlable/selectable content එකක් ලෙස තිබිය යුතු බැවින්
+            (schema cssSelector එකකට point කළ හැක්කේ actual DOM එකේ
+            පවතින content එකකට පමණි — meta tags වලට schema selector
+            එකකින් point කළ නොහැක), site එකේ දැනටමත් ස්ථාපිත
+            visually-hidden SEO content pattern එකම (index.astro's
+            .seo-h1-wrap, search.astro's .seo-visually-hidden)
+            අනුගමනය කරමින්, "sr-only" (Tailwind built-in utility)
+            paragraph එකක් ලෙස description එක එකතු කර ඇත. මෙය visual
+            design එකට කිසිදු බලපෑමක් ඇති නොකරයි (screen-reader/crawler
+            ට පමණක් accessible), නමුත් Google Rich Results Test එකට
+            "speakable" content එක DOM එකේ තහවුරු කරගැනීමට ඉඩ සලසයි. */}
+        <p id="speakable-summary" class="speakable-summary sr-only">
+          {description ?? title}
+        </p>
 
         <ul class="mt-4 flex flex-wrap items-center justify-center text-[#F8F8FF]/90">
           <li class="mx-3">
@@ -286,7 +307,7 @@ const breadcrumbSchema = JSON.stringify({
                 authors.map((a: string) => slugify(a)).includes(slugify(author.data.title))
               )
               .map((author) => (
-                <a
+                
                   href={withTrailingSlash(`/authors/${slugify(author.id)}`)}
                   class="flex items-center hover:text-primary font-bold text-[#F8F8FF]"
                 >
@@ -331,7 +352,7 @@ const breadcrumbSchema = JSON.stringify({
             <ul>
               {categories.map((category: string, i: number) => (
                 <li class="inline-block">
-                  <a
+                  
                     href={withTrailingSlash(`/categories/${slugify(category)}`)}
                     class="mr-2 hover:text-primary font-bold bg-white/10 px-2 py-0.5 rounded text-[#F8F8FF]"
                   >
@@ -368,7 +389,7 @@ const breadcrumbSchema = JSON.stringify({
           <ul class="mr-4 mb-4 space-x-3">
             {tags.map((tag: string) => (
               <li class="inline-block">
-                <a
+                
                   href={withTrailingSlash(`/tags/${slugify(tag)}`)}
                   class="block rounded-lg bg-[#FFCC00] border border-[#FFCC00] px-4 py-2 font-black text-[#010203] text-sm hover:bg-[#E6B800] transition duration-300"
                 >
