@@ -104,7 +104,29 @@ jobs:
 
       - name: Commit regenerated yarn.lock
         if: steps.changes.outputs.has_changes == 'true'
-        run: git commit -m "fix: regenerate yarn.lock after package.json change (auto-verified via yarn build)"
+        # 🎯 FIXED (YAML Syntax Error — Line 107 Root Cause):
+        # මීට කලින් මෙතන "run: git commit -m \"fix: regenerate...\""
+        # ලෙස SINGLE-LINE plain scalar එකක් ලෙස ලියා තිබුණි. YAML spec
+        # එකට අනුව, quote-නොකළ (plain scalar) value එකක් ඇතුළේ
+        # ": " (colon + space) තිබ්බොත් parser එකට එය අලුත් key:value
+        # pair එකක ආරම්භයක් ලෙස වැරදියට හැඳින ගැනීමට සලස්වයි — මෙතන
+        # commit message එකේ "fix: regenerate..." කොටසේ තිබූ
+        # "fix:" + space එකෙන් හරියටම මෙය සිදු විය (GitHub Actions
+        # "Invalid workflow file... error in your yaml syntax on line
+        # 107" ලෙස පෙන්වූයේ මේ නිසාය).
+        #
+        # ස්ථිර (self-healing) විසඳුම: "run: |" (Block Scalar) බවට
+        # මාරු කිරීම. Block scalar එකක් තුළ colon, quotes, parentheses
+        # වැනි කිසිම special character එකක් YAML parsing එකට බලපාන්නේ
+        # නැත — commit message එකේ අනාගතයේ තවත් colon/quote සහිත වචන
+        # එකතු කළත් (උදා: "feat: add X, fix: Y"), මෙම block-scalar
+        # ආකෘතිය කවදාවත් නැවත මෙම syntax error එක ඇති කරන්නේ නැත.
+        # File එකේ අනිකුත් සියලුම run steps (Configure git identity,
+        # Create working branch ආදී) දැනටමත් මෙම "|" pattern එකම
+        # භාවිතා කරයි — මෙය එම established, site-wide convention එකටම
+        # consistency ලෙස align කරයි.
+        run: |
+          git commit -m "fix: regenerate yarn.lock after package.json change (auto-verified via yarn build)"
 
       - name: Push working branch
         if: steps.changes.outputs.has_changes == 'true'
