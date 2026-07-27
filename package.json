@@ -13,14 +13,11 @@
     "preview": "astro preview",
     "format": "prettier -w .",
     "check": "astro check",
-    "deploy:cf-workers": "yarn build && wrangler deploy",
-    "preview:cf-workers": "yarn build && wrangler dev"
+    "deploy:cf-workers": "yarn build && npx wrangler@latest deploy",
+    "preview:cf-workers": "yarn build && npx wrangler@latest dev"
   },
   "resolutions": {
-    "undici": "^7.28.0",
-    "sharp": "0.35.0",
-    "ws": "^8.21.0",
-    "esbuild": "^0.28.1"
+    "undici": "^7.28.0"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.6",
@@ -51,7 +48,6 @@
     "prettier-plugin-tailwindcss": "^0.7.2",
     "sharp": "0.35.0",
     "tailwindcss": "^4.2.4",
-    "typescript": "^6.0.3",
-    "wrangler": "^4.84.1"
+    "typescript": "^6.0.3"
   }
 }
