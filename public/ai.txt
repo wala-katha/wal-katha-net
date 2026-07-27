@@ -1,0 +1,46 @@
+# ai.txt — AI Content Usage Policy for walakatha.net
+# Format: informal, human + machine-readable manifest.
+# See also: /llms.txt (AI-readable site summary), /robots.txt (crawler rules)
+
+Site: Wala Katha
+URL: https://www.walakatha.net
+Content-Type: Fictional creative writing (Sinhala-language short stories, "wal katha" genre)
+Audience: Adults (18+) only
+Language: si (Sinhala)
+
+## Permitted AI Use
+
+- Summarization, indexing, and citation with a visible link back to the
+  original source URL on walakatha.net.
+- Answer-engine snippets (AI Overviews, chat-based assistants) may quote
+  short excerpts with attribution to walakatha.net.
+
+## Not Permitted
+
+- Reproducing full story text verbatim without attribution.
+- Presenting this content as factual, journalistic, or biographical.
+- Training-data use that strips attribution metadata, where the
+  underlying platform's own policy requires attribution preservation.
+
+## Content Ownership & Takedown
+
+Individual stories on this site may have been submitted by, or
+attributed to, third-party original authors. Full ownership, credit,
+and takedown-request process is documented at:
+https://www.walakatha.net/copyright-credit-policy/
+
+Contact for AI-related content questions, credit corrections, or
+removal requests:
+Email: walakatha.net@gmail.com
+
+## Machine-Readable Summary
+
+homepage: https://www.walakatha.net/
+sitemap: https://www.walakatha.net/sitemap-index.xml
+news_sitemap: https://www.walakatha.net/news-sitemap.xml
+rss: https://www.walakatha.net/rss.xml
+llms_txt: https://www.walakatha.net/llms.txt
+robots_txt: https://www.walakatha.net/robots.txt
+license_policy: https://www.walakatha.net/copyright-credit-policy/
+privacy_policy: https://www.walakatha.net/privacy-policy/
+last_updated: 2026-07-27
