@@ -138,8 +138,17 @@ const itemListSchema = currentPosts.length > 0 ? {
       {/* 100% Original Sub-heading */}
       <p class="text-center text-2xl mb-4">Showing Posts From</p>
       
-      {/* 100% Original Main Tag Heading */}
-      <h1 class="h2 mb-16 text-center text-primary">{title}</h1>
+      {/* 100% Original Main Tag Heading
+          🎯 KEYWORD-DISTRIBUTION FIX: H1 එක කලින් bare tag name එකක්
+          විතරයි (උදා: "Akka Katha"). දැන් brand + topical keyword
+          variation (Sinhala Wal Katha / Wala Katha) H1 එකටම natural
+          ලෙස ඇතුළත් කර ඇත, සහ intro paragraph එකකින් keyword coverage
+          එක broaden කර ඇත. Visual size/color/spacing පවතින .h2
+          .text-primary classes එලෙසම — no design regression. */}
+      <h1 class="h2 !mb-4 text-center text-primary">{title} - Sinhala Wal Katha | Wala Katha</h1>
+      <p class="text-center text-sm text-text/70 mb-16 max-w-xl mx-auto leading-relaxed">
+        {title} ටැගය යටතේ ඇති නවතම සිංහල වල් කතා සහ වැල කතා (Wela Katha) එකතුව මෙතැනින් නොමිලේ කියවන්න.
+      </p>
       
       {/* Posts List Component with Original Props */}
       {currentPosts && currentPosts.length > 0 ? (
