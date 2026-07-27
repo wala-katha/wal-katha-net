@@ -124,7 +124,8 @@ const itemListSchema = currentPosts.length > 0 ? {
 ---
 
 <Base 
-  title={metaTitle} 
+  title={title}
+  meta_title={metaTitle}
   description={metaDescription} 
   canonical={canonicalUrl}
 >
@@ -145,10 +146,19 @@ const itemListSchema = currentPosts.length > 0 ? {
   <section class="section">
     <div class="container text-center">
       
-      {/* 100% Original Category Heading Style */}
+      {/* 100% Original Category Heading Style
+          🎯 KEYWORD-DISTRIBUTION FIX: H1 එක කලින් bare category name
+          එකක් විතරයි (උදා: "Amma Wala Katha"). දැන් brand + topical
+          keyword variation (Sinhala Wal Katha / Wala Katha) H1 එකටම
+          natural ලෙස ඇතුළත් කර ඇත — <title> tag එකේ තියෙන keyword
+          richness එකම H1 එකටත් "distribute" වේ. Visual size/spacing
+          කිසිවක් වෙනස් නොවේ (.page-heading h2 classes එලෙසම). */}
       <div class="mb-12">
         <p class="text-text uppercase font-semibold tracking-wider text-sm mb-2">Category</p>
-        <h1 class="page-heading h2">{title}</h1>
+        <h1 class="page-heading !mb-4 h2">{title} - සිංහල Wal Katha | Wala Katha</h1>
+        <p class="max-w-2xl mx-auto text-sm text-text/70 leading-relaxed">
+          {title} ප්‍රවර්ගයේ නවතම සිංහල වල් කතා (Sinhala Wal Katha) සහ වැල කතා (Wela Katha) එකතුව මෙතැනින් නොමිලේ කියවන්න.
+        </p>
       </div>
       
       {/* Posts List Component (Original) */}
