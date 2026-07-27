@@ -29,6 +29,12 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
 // existing working behavior exactly as requested.
 import "@/styles/index-overrides.css";
 
+// 🎯 AI VISIBILITY UPGRADE (2026-07): social.json imported so the
+// Organization JSON-LD entity below can safely compute a "sameAs"
+// array — see organizationSameAs comment further down for the
+// safety logic (placeholder base-domain links are filtered out).
+import social from "@/config/social.json";
+
 const posts = await getSinglePage("posts");
 const sortedPosts = sortByDate(posts);
 const totalPages = Math.ceil(posts.length / config.settings.pagination);
@@ -65,6 +71,40 @@ function buildNavItems(base: string) {
 }
 
 const navigationSchema = buildNavItems(base_url);
+
+// 🎯 AI VISIBILITY UPGRADE (2026-07): Organization "sameAs" array.
+//
+// WHY: schema.org's "sameAs" property is a core AI/entity-graph
+// authority signal — it lets Google's Knowledge Graph AND generative
+// AI systems (AI Overviews, ChatGPT, Perplexity, Claude) confirm that
+// this Organization entity is the SAME real-world entity referenced
+// on other platforms, increasing confidence when citing or summarizing
+// this site.
+//
+// SAFETY FILTER (why this isn't a blind Object.values() dump):
+// config/social.json currently contains PLACEHOLDER links (e.g.
+// "https://www.facebook.com/" — the generic Facebook homepage, not a
+// page-specific profile URL). Injecting a generic base-domain URL as
+// "sameAs" would be inaccurate structured data (it doesn't actually
+// identify THIS entity) and could reduce trust in the entire schema
+// block rather than help it. This filter only accepts links whose
+// URL path is more than just "/" (i.e., a real page/profile path).
+//
+// SELF-HEALING: once real, page-specific social profile URLs are
+// added to config/social.json in the future, they automatically pass
+// this filter and appear in "sameAs" with zero code changes required
+// — no other file needs to be touched.
+const organizationSameAs = (social?.main || [])
+  .map((s: any) => s?.link)
+  .filter((link: any): link is string => {
+    if (!link || typeof link !== "string") return false;
+    try {
+      const u = new URL(link);
+      return u.pathname.length > 1;
+    } catch {
+      return false;
+    }
+  });
 
 // 🎯 SEO FIX #1 — "Increase length of Title Tag" (SEOptimizer Medium
 // Priority): The previous title "Wala Katha - Sinhala Wal Katha &
@@ -121,7 +161,8 @@ const homePageSchema = {
         "@id": `${base_url}/#logo`,
         "url": siteLogo,
         "caption": "Wala Katha Logo"
-      }
+      },
+      ...(organizationSameAs.length > 0 ? { "sameAs": organizationSameAs } : {})
     },
     {
       "@type": "CollectionPage",
@@ -130,7 +171,11 @@ const homePageSchema = {
       "name": "Wala Katha - Sinhala Wal Katha & Wela Katha",
       "description": "Daily updated premium Sinhala wal katha, wala katha and wela stories collection.",
       "isPartOf": { "@id": `${base_url}/#website` },
-      "about": { "@type": "Thing", "name": "Sinhala Wal Katha Literature" }
+      "about": { "@type": "Thing", "name": "Sinhala Wal Katha Literature" },
+      "speakable": {
+        "@type": "SpeakableSpecification",
+        "cssSelector": ["#speakable-home-heading"]
+      }
     },
     ...navigationSchema
   ]
@@ -188,8 +233,14 @@ const homePageSchema = {
           HTML Tags" (H1/H2/H3) පුරා keyword coverage වැඩි කිරීම සඳහා
           එකතු කරන ලද, සැබෑ visible content එකකි (hidden නොවේ).
           Existing layout/spacing/design කිසිවකට බාධාවක් නොකරන පරිදි
-          FeaturedSlider එකට උඩින්, කුඩා, subtle styling එකකින් සකසා ඇත. */}
-      <h2 class="text-center text-sm sm:text-base font-bold text-emerald-400/90 tracking-wide mb-4 uppercase">
+          FeaturedSlider එකට උඩින්, කුඩා, subtle styling එකකින් සකසා ඇත.
+          🎯 AI VISIBILITY UPGRADE: id="speakable-home-heading" එකතු
+          කර ඇත — homePageSchema's CollectionPage entry තුළ ඇති
+          "speakable" SpeakableSpecification එකට point කරන, REAL,
+          visible (non-hidden) DOM node එකක් ලෙස. Google/voice
+          assistants/AI answer engines වලට මෙම page එකේ ප්‍රධාන
+          content-summary heading එක ලෙස identify කර ගත හැක. */}
+      <h2 id="speakable-home-heading" class="text-center text-sm sm:text-base font-bold text-emerald-400/90 tracking-wide mb-4 uppercase">
         අලුත්ම Sinhala Wal Katha සහ Wela Katha එකතුව
       </h2>
 
