@@ -133,6 +133,42 @@ const imageObject = image
 // ==========================================================
 const keywordsString = Array.isArray(tags) && tags.length > 0 ? tags.join(", ") : undefined;
 
+// ==========================================================
+// 🎯 NEW: "speakable" SpeakableSpecification (Google Assistant /
+// voice-search readiness).
+//
+// WHY: PostSingle.astro already renders two DOM elements specifically
+// built for this purpose (see PostSingle.astro's own comments at
+// id="speakable-headline" on the article <h1>, and
+// id="speakable-summary" on a visually-hidden (sr-only) <p> holding
+// the post description) — both were added in anticipation of this
+// schema field, but the field itself was never actually added here,
+// so Google's Rich Results Test showed no "Speakable" detection at
+// all despite the DOM already being ready for it.
+//
+// A schema.org "speakable" property can only point via cssSelector to
+// content that genuinely exists in the rendered DOM (Google explicitly
+// requires this — pointing at non-existent selectors, or selectors
+// that resolve to meta tags rather than visible/crawlable content,
+// fails validation). Both #speakable-headline and #speakable-summary
+// are real, crawlable DOM nodes (the sr-only class hides visually via
+// Tailwind's standard clip technique, not display:none/aria-hidden,
+// so it remains fully accessible to crawlers/screen readers) — so this
+// is a fully spec-compliant pairing.
+//
+// "url" is included per Google's own documented SpeakableSpecification
+// example (id="https://schema.org/SpeakableSpecification" is a fixed,
+// canonical value from the spec itself, not a per-page value) so
+// third-party consumers/validators that expect a fully-qualified
+// speakable block resolve correctly. canonicalUrl is reused as-is
+// (already trailing-slash-normalized above) to guarantee this can
+// never drift from mainEntityOfPage.@id.
+// ==========================================================
+const speakableSpecification = {
+  "@type": "SpeakableSpecification",
+  "cssSelector": ["#speakable-headline", "#speakable-summary"]
+};
+
 // 🎯 FIXED (Duplicate/Conflicting Organization Entity — Cross-File
 // Consistency): මීට කලින් මෙතන "publisher" field එක වෙනම, inline
 // Organization object එකක් (@id කිසිවක් නැතුව, broken "logo.png" path
@@ -165,7 +201,8 @@ const articleSchema = {
     "@id": `${base_url}/#website`
   },
   "wordCount": wordCount,
-  "keywords": keywordsString
+  "keywords": keywordsString,
+  "speakable": speakableSpecification
 };
 ---
 
