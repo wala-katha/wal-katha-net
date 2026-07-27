@@ -248,6 +248,103 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
       #main-content { min-height: 60vh; }
     </style>
 
+    <style>
+      /* ==========================================================
+         🛡️ CONTENT PROTECTION — SMOOTH SELECTION RESTRICTION
+         (Anti-Scraping, Site-Wide, SEO-SAFE)
+
+         🎯 WHY THIS IS 100% SAFE FOR INDEXING/RANKING:
+         "user-select" is a purely visual/interaction CSS property that
+         controls whether a HUMAN using a mouse/touch can highlight text
+         with a cursor. It has ZERO effect on:
+         - The raw HTML delivered to Googlebot/Bingbot/ClaudeBot/any
+           crawler (they read DOM text nodes directly via HTTP fetch +
+           HTML parsing, never via "click-and-drag selection").
+         - The accessibility tree used by screen readers (a11y APIs
+           read text content independent of user-select).
+         - robots.txt / meta robots / sitemap eligibility (unrelated
+           layers entirely).
+         This is fundamentally different from display:none / 
+         visibility:hidden / aria-hidden, which DO hide content from
+         crawlers — none of those techniques are used here. Content
+         remains 100% visible, readable, and indexable; only the
+         mouse-drag "highlight-then-copy" workflow used by scrapers is
+         made smooth-but-inconvenient.
+
+         🎯 SCOPE: Global default (body-level) with explicit opt-back-in
+         for every genuinely-interactive form field (input/textarea/
+         select/contenteditable) — so the Contact form, Comment box,
+         and Search bar remain 100% typeable/selectable/functional.
+      ========================================================== */
+      body {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+      input,
+      textarea,
+      select,
+      option,
+      [contenteditable="true"],
+      [contenteditable=""] {
+        -webkit-user-select: text !important;
+        -moz-user-select: text !important;
+        -ms-user-select: text !important;
+        user-select: text !important;
+      }
+      /* Images shouldn't be drag-out-able (common easy-scrape vector) */
+      img {
+        -webkit-user-drag: none;
+        user-drag: none;
+      }
+
+      /* 🎯 SMOOTH, NON-INTRUSIVE COPY-PROTECTION TOAST — same visual
+         language as PostSingle.astro's existing "comment-success-toast"
+         (dark card, teal accent, fade + slide transition) so it feels
+         like a native part of the site rather than a jarring alert(). */
+      #content-protection-toast {
+        position: fixed;
+        left: 50%;
+        bottom: 28px;
+        transform: translate(-50%, 16px);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        max-width: min(92vw, 420px);
+        background: #0c0d10;
+        border: 1px solid rgba(1, 173, 159, 0.35);
+        color: #F8F8FF;
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.4;
+        padding: 12px 18px;
+        border-radius: 999px;
+        box-shadow: 0 10px 34px rgba(0, 0, 0, 0.6);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+        text-align: left;
+        user-select: none;
+      }
+      #content-protection-toast.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+      #content-protection-toast .cp-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #01AD9F;
+        flex-shrink: 0;
+        box-shadow: 0 0 8px rgba(1, 173, 159, 0.7);
+      }
+      #content-protection-toast .cp-text {
+        flex: 1;
+      }
+    </style>
+
     <link rel="shortcut icon" href={config.site.favicon} />
 
     {/* 🎯 2026 PWA MANIFEST: "Add to Home Screen" installability සඳහා.
@@ -498,6 +595,145 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
             // Older browsers without support for these entry types —
             // fail silently, core site functionality unaffected.
             console.warn("Web Vitals monitoring unavailable:", err);
+          }
+        });
+      })();
+    </script>
+
+    {/* ==========================================================
+        🛡️ CONTENT PROTECTION — ANTI-SCRAPING BEHAVIOR LAYER
+        (Smooth Selection Restriction + Friendly Notice)
+
+        WHAT THIS DOES:
+        - Blocks the default browser "copy" action (Ctrl+C, right-click
+          → Copy, long-press → Copy on mobile) anywhere OUTSIDE form
+          fields, and shows a short, friendly, auto-fading toast
+          notice instead of a jarring native alert().
+        - Blocks the native right-click context menu outside form
+          fields (the #1 easy vector casual scrapers/visitors use to
+          "Save As" or "Inspect → Copy").
+        - Blocks dragging images out of the page (another easy-copy
+          vector for images).
+        - selectstart is prevented as a defensive fallback for older
+          mobile WebViews that don't fully respect the CSS
+          user-select:none rule declared above.
+
+        WHAT THIS DELIBERATELY DOES NOT DO (by design):
+        - Does NOT touch input/textarea/select/contenteditable targets
+          — Contact form, Comment box, and Search bar remain 100%
+          normal (typing, native text selection/copy/paste all work).
+        - Does NOT attempt to block browser DevTools or "View Page
+          Source" — this is technically impossible to reliably block,
+          and real scraping bots fetch raw HTML via HTTP directly
+          (never through a rendered browser+mouse), so blocking
+          DevTools would add user friction for zero actual anti-scrape
+          benefit. This layer targets the casual "select-and-copy"
+          human workflow, not automated bot fetching (robots.txt /
+          IndexNow / crawler rules already govern that layer).
+        - Does NOT run more than once per short window — a 2.2s
+          throttle prevents the notice from spamming if a person
+          repeatedly right-clicks/tries to copy.
+
+        SELF-HEALING: the toast element is created on-demand via
+        JavaScript (not a static DOM node), so it can never end up in
+        a broken/missing state across Astro View Transitions
+        (ClientRouter) page swaps — every time it's needed, if it
+        isn't already in the live DOM, it's freshly created and
+        appended to <body>.
+
+        Listeners are registered once at document level (delegation),
+        which persists for the full SPA session regardless of
+        ClientRouter page swaps — no re-registration/cleanup needed,
+        since these are not tied to any specific page's DOM nodes.
+       ========================================================== */}
+    <script is:inline>
+      (function initContentProtection() {
+        let lastNoticeAt = 0;
+        const NOTICE_THROTTLE_MS = 2200;
+        const NOTICE_VISIBLE_MS = 2400;
+        const NOTICE_MESSAGE = "මෙම අන්තර්ගතය පිටපත් කිරීම වළක්වා ඇත 🔒";
+
+        function isEditableTarget(target) {
+          if (!target || !target.tagName) return false;
+          const tag = target.tagName.toLowerCase();
+          if (tag === "input" || tag === "textarea" || tag === "select" || tag === "option") return true;
+          if (target.isContentEditable) return true;
+          // Allow selection inside any element explicitly opted back in
+          if (target.closest && target.closest("[data-allow-select]")) return true;
+          return false;
+        }
+
+        function showProtectionNotice() {
+          const now = Date.now();
+          if (now - lastNoticeAt < NOTICE_THROTTLE_MS) return;
+          lastNoticeAt = now;
+
+          let toast = document.getElementById("content-protection-toast");
+          if (!toast) {
+            toast = document.createElement("div");
+            toast.id = "content-protection-toast";
+            toast.setAttribute("role", "status");
+            toast.setAttribute("aria-live", "polite");
+
+            const dot = document.createElement("span");
+            dot.className = "cp-dot";
+            dot.setAttribute("aria-hidden", "true");
+
+            const text = document.createElement("span");
+            text.className = "cp-text";
+
+            toast.appendChild(dot);
+            toast.appendChild(text);
+            document.body.appendChild(toast);
+          }
+
+          const textEl = toast.querySelector(".cp-text");
+          if (textEl) textEl.textContent = NOTICE_MESSAGE;
+
+          toast.classList.add("show");
+          clearTimeout(toast._cpHideTimer);
+          toast._cpHideTimer = setTimeout(() => {
+            toast.classList.remove("show");
+          }, NOTICE_VISIBLE_MS);
+        }
+
+        // Right-click / long-press context menu — main "Save As / Copy"
+        // vector outside form fields.
+        document.addEventListener("contextmenu", function (e) {
+          if (isEditableTarget(e.target)) return;
+          e.preventDefault();
+          showProtectionNotice();
+        });
+
+        // Ctrl+C / Cmd+C / right-click → Copy — all funnel through the
+        // native "copy" event regardless of trigger method.
+        document.addEventListener("copy", function (e) {
+          if (isEditableTarget(e.target)) return;
+          e.preventDefault();
+          showProtectionNotice();
+        });
+
+        // Cut is meaningless outside editable fields, block silently
+        // (no notice spam needed — copy/contextmenu already inform).
+        document.addEventListener("cut", function (e) {
+          if (isEditableTarget(e.target)) return;
+          e.preventDefault();
+        });
+
+        // Defensive fallback for browsers/WebViews that don't fully
+        // respect the CSS user-select:none rule declared above.
+        document.addEventListener("selectstart", function (e) {
+          if (isEditableTarget(e.target)) return;
+          e.preventDefault();
+        });
+
+        // Prevent dragging images out of the page (easy image-scrape
+        // vector). Scoped to <img> only — does not affect FeaturedSlider
+        // touch-swipe logic (that uses touchstart/touchend, not drag).
+        document.addEventListener("dragstart", function (e) {
+          const target = e.target;
+          if (target && target.tagName && target.tagName.toLowerCase() === "img") {
+            e.preventDefault();
           }
         });
       })();
