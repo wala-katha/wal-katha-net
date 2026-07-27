@@ -2,17 +2,15 @@
 import Base from "@/layouts/Base.astro";
 import config from "@/config/config.json";
 
-// 📈 1. SEO BEST PRACTICE: 404 පිටු සෙවුම් යන්ත්‍ර වල ලැයිස්තුගත වීම වැළැක්වීම (Critical SEO Fix)
-const robotsMeta = "noindex, nofollow";
-
 const metaTitle = `පිටුව සොයාගත නොහැකි විය - 404 Error | ${config?.site?.title || "Wala Katha"}`;
 const metaDescription = "ඔබ සොයන පිටුව දැනට අප වෙබ් අඩවියේ නොමැත. කරුණාකර ප්‍රධාන පිටුව වෙත පිවිසෙන්න.";
 ---
 
 <Base 
   title={metaTitle} 
+  meta_title={metaTitle}
   description={metaDescription} 
-  robots={robotsMeta}
+  noindex={true}
 >
   <section class="section bg-[#050505] text-white">
     <div class="container">
