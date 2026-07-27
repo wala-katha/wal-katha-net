@@ -1,0 +1,144 @@
+name: Auto-Regenerate yarn.lock (PR-Based, Triggered by package.json Changes)
+# 🎯 මෙම workflow එක ස්වයංක්‍රීයව trigger වෙන්නේ "package.json" file එක
+# main branch එකට push වුනු විට පමණි (dependency add/remove/version-bump
+# සිදුවුනු විට) — වෙනත් කිසිම commit එකකට (content edit, config change,
+# routing logic ආදී) මෙය කිසිසේත් run නොවේ. workflow_dispatch: {} එකෙන්
+# අවශ්‍ය නම් manually ලෙසත් future එකේදී run කරගත හැක.
+#
+# ⚠️ SAFETY DESIGN (auto-fix-url-issues.yml එකේම established pattern
+# එකම): main branch එකට කෙලින්ම කිසිම commit එකක් සිදු නොවේ. වෙනුවට:
+# 1) අලුත් branch එකක yarn.lock regenerate කරනවා
+# 2) yarn build එකෙන් "safety gate" එකක් ලෙස verify කරනවා (fail උනොත්
+#    PR එකක්ම create වෙන්නේ නෑ)
+# 3) Pull Request එකක් විවෘත කරනවා — ඔබ review කරලා merge කරන තුරු
+#    කිසිම වෙනසක් site එකට යන්නේ නෑ.
+#
+# 🛡️ INFINITE-LOOP GUARD: මෙම workflow එකෙන්ම push වෙන්නේ "yarn.lock"
+# එකට පමණි (branch එකකට, main එකට කෙලින්ම නොවේ) — "package.json" එකට
+# කිසිසේත් touch කරන්නේ නැති නිසා, මෙම workflow එකේම "paths: package.json"
+# trigger එකට කිසිවිටෙකත් ආපහු match වී, ආපහු ස්වයංක්‍රීයව run වීමක්
+# (infinite loop) සිදුවිය නොහැක.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+  workflow_dispatch: {}
+permissions:
+  contents: write
+  pull-requests: write
+# 🛡️ CONCURRENCY GUARD: package.json එකට කෙටි කාලයකදී push කිහිපයක්
+# සිදුවුවහොත් (rapid consecutive dependency edits), පරණ run එක cancel
+# කරලා අලුත්ම commit එකටම ගැලපෙන run එකක් පමණක් සිදුවේ — duplicate/
+# conflicting PR branches හැදීම වළක්වයි.
+concurrency:
+  group: auto-regenerate-lockfile
+  cancel-in-progress: true
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Configure git identity
+        run: |
+          git config user.name "wal-katha-lockfile-bot"
+          git config user.email "lockfile-bot@users.noreply.github.com"
+
+      - name: Enable corepack and activate Yarn 1.22.22
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+
+      - name: Create working branch
+        id: branch
+        run: |
+          BRANCH="autofix/yarn-lock-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          echo "branch_name=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Capture package.json diff summary (for PR description)
+        id: pkgdiff
+        run: |
+          echo "🔍 Detecting what changed in package.json (vs previous commit)..."
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            DIFF=$(git diff HEAD~1 HEAD -- package.json || echo "(diff unavailable)")
+          else
+            DIFF="(first commit — no previous package.json to diff against)"
+          fi
+          # GITHUB_OUTPUT multiline-safe ලෙස heredoc delimiter එකක් යොදා ගැනීම
+          {
+            echo "diff<<PKGDIFF_EOF"
+            echo "$DIFF"
+            echo "PKGDIFF_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Remove stale lockfile and node_modules
+        run: rm -rf node_modules yarn.lock
+
+      - name: Fresh yarn install (regenerates yarn.lock from current package.json)
+        run: yarn install
+
+      - name: Verify production build succeeds (BLOCKING safety gate)
+        # ⚠️ මෙම step එක fail උනොත් job එකම fail වේ — ඊට පහළින් ඇති
+        # commit/push/PR steps කිසිවක් run නොවේ. broken lockfile එකක්
+        # කවදාවත් PR එකක් ලෙසවත් propose නොවේ.
+        run: yarn build
+
+      - name: Check for actual yarn.lock changes
+        id: changes
+        run: |
+          git add yarn.lock
+          if git diff --staged --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "✅ package.json වෙනස් උනත්, yarn.lock එකේ real difference එකක් නෑ — commit/PR අවශ්‍ය නෑ."
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit regenerated yarn.lock
+        if: steps.changes.outputs.has_changes == 'true'
+        run: git commit -m "fix: regenerate yarn.lock after package.json change (auto-verified via yarn build)"
+
+      - name: Push working branch
+        if: steps.changes.outputs.has_changes == 'true'
+        run: git push origin "${{ steps.branch.outputs.branch_name }}"
+
+      - name: Open Pull Request
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pkgDiff = `${{ steps.pkgdiff.outputs.diff }}`;
+            const body = [
+              '## 🤖 Auto-Regenerated yarn.lock',
+              '',
+              'මෙම PR එක ස්වයංක්‍රීයව trigger වුනේ, `package.json` file එක `main` branch එකට push වුනු නිසාය (dependency add/remove/version-bump).',
+              '',
+              '### ✅ Merge කරන්න කලින් check කර ඇති දේ:',
+              '',
+              '- [x] **`yarn build` සාර්ථකව සම්පූර්ණ විය** — මෙම PR එක create වුනේම, build එක සාර්ථක වූ පසුවය (build fail උනා නම් මෙම PR එකම create වන්නේ නැත).',
+              '- [ ] `yarn.lock` හි dependency versions ටික manually review කරන්න (විශේෂයෙන් major version bumps).',
+              '- [ ] Merge කිරීමෙන් පසු Cloudflare Pages deployment preview එක verify කරන්න.',
+              '',
+              '### 📦 package.json හි වූ වෙනස (trigger එකට හේතුව):',
+              '```diff',
+              pkgDiff || '(vෙනස subtitle available නොවීය)',
+              '```',
+              '',
+              '_මෙම PR එක ස්වයංක්‍රීයව scan-and-propose කරන bot එකකින් සාදන ලදී. Direct commit කිසිවක් main branch එකට සිදු වී නැත._'
+            ].join('\n');
+            await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🤖 Auto: Regenerate yarn.lock (package.json changed)',
+              head: '${{ steps.branch.outputs.branch_name }}',
+              base: 'main',
+              body: body,
+            });
