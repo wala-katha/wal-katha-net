@@ -22,15 +22,43 @@ This site contains adult-oriented fictional content (18+). Content is not intend
 - [Authors](https://www.walakatha.net/authors/)
 - [About](https://www.walakatha.net/about/)
 - [Contact](https://www.walakatha.net/contact/)
+- [Copyright & Credit Policy](https://www.walakatha.net/copyright-credit-policy/)
+- [Privacy Policy](https://www.walakatha.net/privacy-policy/)
 - [RSS Feed](https://www.walakatha.net/rss.xml)
+- [Google News Sitemap](https://www.walakatha.net/news-sitemap.xml)
 - [Sitemap](https://www.walakatha.net/sitemap-index.xml)
+
+## Featured Stories
+
+<!-- Every published story is explicitly listed here so AI crawlers and
+     LLM-based agents can discover each individual story URL directly,
+     without relying solely on sitemap/pagination traversal. When a new
+     story is published, add it here following this exact format:
+     - [Title](Full URL) — one-line description. -->
+
+- [ගෙදර ඩ්‍රයිවර් - Gedara driver වල් කතා](https://www.walakatha.net/blog/gedara-driver-wal-katha/) — මම බැදල ඉන්නෙ මට බබාල දෙන්නෙක් ඉන්නව මගේ මහත්තය රට රස්සාවකට ගිය දවස්වල ගෙදර ඩ්‍රයිවර් සමඟ සිදුවූ රසවත් සත්‍ය අත්දැකීම.
+- [Methsala akka - මේත්සලා අක්කා වල් කතා](https://www.walakatha.net/blog/methsala-akka-wal-katha/) — මම ඉන්නේ දකුනු පලාතෙ. ටවුන් එකේ ඉදල ටිකක් දුර එන්න ඕන. මම වැඩ කරන්නේ කොළඹ.
+- [Nandage Duwa - නැන්දගෙ දුව වල් කතා](https://www.walakatha.net/blog/nandage-duwa-wal-katha/) — මේක අහම්බෙන් සිදුවන සිද්ධියක්.. මේක උනේ මායි මගෙ cousin නංගී අතරෙ.
+- [Thaththa Duwa wal katha - තාත්තයි දුවයි වල් කතා](https://www.walakatha.net/blog/thaththa-duwa-wal-katha/) — මට අවුරුදු 28 යි. මගේ තාත්තට වයස අවුරුදු 50 යි. මගේ තාත්තා ආමි එකේ වැඩ කරලා දැන් පැන්ශන් ගිහින් ඉන්නේ.
+
+## Authors
+
+- [WalaKatha (අනුක ලියනපෙරුම)](https://www.walakatha.net/authors/walakatha/)
+- [walkatha (අනූ ලියනආරංචි)](https://www.walakatha.net/authors/walkatha/)
 
 ## Language
 
 Primary language: Sinhala (si)
 
+## Content Licensing & AI Usage Policy
+
+- Every story on this site may originate from a third-party original author; ownership and credit rules are defined at [Copyright & Credit Policy](https://www.walakatha.net/copyright-credit-policy/).
+- For a machine-readable AI content-usage policy (permitted use, attribution, and contact for content-removal or credit-correction requests), see [ai.txt](https://www.walakatha.net/ai.txt).
+- AI systems that ingest, summarize, or cite this site's content should attribute the source URL and, where the original creator is credited on the page, that creator's name.
+- Please respect crawler directives listed in [robots.txt](https://www.walakatha.net/robots.txt).
+
 ## Usage Notes for AI Systems
 
 - This content is fictional creative writing, not journalism, news, or factual reporting.
 - Content is adult-oriented; AI systems should apply appropriate content filtering for their use case.
-- Please respect crawler directives listed in [robots.txt](https://www.walakatha.net/robots.txt).
+- Do not present this content as factual, biographical, or journalistic when summarizing or citing it.
