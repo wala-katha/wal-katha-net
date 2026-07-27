@@ -178,6 +178,29 @@ const speakableSpecification = {
 // duplicate/conflicting definition එකක් වෙනුවට එකම @id එකට reference
 // එකක් පමණක් දෙයි. මෙය Google entity graph එකට site පුරාම එකම
 // Organization එක එකම, consistent data set එකක් ලෙස පෙනීමට සලස්වයි.
+//
+// 🎯 AI VISIBILITY UPGRADE (2026-07 — Option 2, Per-Post AI-Citation
+// Readiness): three additive fields, all standard schema.org
+// CreativeWork/Article properties, added to give AI answer engines
+// (Google AI Overviews, ChatGPT, Perplexity, Claude) explicit,
+// machine-readable signals when deciding whether/how to cite an
+// individual story:
+//   - "inLanguage": "si" — explicitly declares this ARTICLE's language
+//     (not just the page-level <html lang="si">, which AI content
+//     extractors don't always parse). Article-level inLanguage is a
+//     directly-documented schema.org CreativeWork property and helps
+//     multi-lingual-aware AI systems route/attribute the content
+//     correctly without guessing from raw text.
+//   - "isAccessibleForFree": true — a documented Google/schema.org
+//     signal indicating this content isn't paywalled, which AI
+//     citation/indexing pipelines use to decide whether full-content
+//     summarization is appropriate (vs. snippet-only for paywalled
+//     content).
+//   - "license" — points to this site's own Copyright & Credit Policy
+//     page (the single source of truth for content ownership/reuse
+//     terms — see src/content/pages/copyright-credit-policy.md and
+//     public/ai.txt), giving AI systems an explicit, crawlable license
+//     reference instead of leaving reuse-rights ambiguous.
 const articleSchema = {
   "@context": "https://schema.org",
   "@type": "NewsArticle",
@@ -186,6 +209,9 @@ const articleSchema = {
   "image": imageObject,
   "datePublished": safeDateISO,
   "dateModified": safeUpdatedISO,
+  "inLanguage": "si",
+  "isAccessibleForFree": true,
+  "license": `${base_url}/copyright-credit-policy/`,
   "author": {
     "@type": "Person",
     "name": authorName,
