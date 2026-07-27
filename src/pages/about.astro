@@ -37,19 +37,35 @@ const canonicalUrl = `${base_url}/about/`;
 // ලෙස 110+ characters වන පරිදි යාවත්කාලීන කළා (defense-in-depth).
 const finalDescription = description || "අපේ වෙබ් අඩවිය සහ අපගේ සේවාවන් පිළිබඳ සියලු විස්තර, අපගේ අරමුණු සහ Wal Katha වෙබ් අඩවියේ කතාව මෙතැනින් සම්පූර්ණයෙන් කියවා දැනගන්න.";
 
-// 🚀 GOOGLE SEO ABOUTPAGE SCHEMA: සෙවුම් යන්ත්‍ර වලට වෙබ් අඩවියේ නිල අනන්‍යතාවය තහවුරු කිරීමට (JSON-LD)
+// 🎯 AI VISIBILITY FIX (2026-07 — Duplicate/Conflicting Organization
+// Entity, Cross-File Consistency):
+//
+// ROOT CAUSE: this schema previously defined a SECOND, standalone
+// Organization object inline (with a broken/stale "logo.png" path,
+// while the canonical Organization entity on index.astro correctly
+// uses "logo.webp"). Having two different Organization definitions
+// on the same domain — with mismatched logo URLs — confuses both
+// Google's Knowledge Graph AND generative AI systems trying to build
+// a consistent entity profile for this site, since they cannot tell
+// which definition is authoritative.
+//
+// PERMANENT FIX: mainEntity now references the SAME Organization
+// entity already fully defined once, with the correct logo.webp AND
+// (as of the index.astro AI-visibility upgrade) a "sameAs" array, at
+// "${base_url}/#organization" — via "@id" reference instead of a
+// duplicate inline definition. This guarantees the entity graph is
+// single-sourced and always internally consistent, no matter how many
+// pages reference the Organization. This is the same reference
+// pattern already used by blog/[single].astro and
+// authors/index.astro for the same reason.
 const aboutPageSchema = {
   "@context": "https://schema.org",
   "@type": "AboutPage",
   "name": title || "About Us",
   "description": finalDescription,
   "url": canonicalUrl,
-  "mainEntity": {
-    "@type": "Organization",
-    "name": config?.site?.title || "Wala Katha",
-    "url": base_url,
-    "logo": `${base_url}/images/logo.png`
-  }
+  "isPartOf": { "@id": `${base_url}/#website` },
+  "mainEntity": { "@id": `${base_url}/#organization` }
 };
 ---
 
