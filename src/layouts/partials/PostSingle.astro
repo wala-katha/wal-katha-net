@@ -203,7 +203,19 @@ const breadcrumbSchema = JSON.stringify({
 
         SELF-HEALING AUTO-COLLAPSE: expand කිරීමෙන් පසුවත්
         "scheduleAutoCollapse()" reusable function එක හරහා නැවත 5
-        තත්පරයකින් auto-collapse වීම permanent ලෙස recurring වේ. */}
+        තත්පරයකින් auto-collapse වීම permanent ලෙස recurring වේ.
+
+        🛠️ 2026-07 BUILD-FIX NOTE: breadcrumb link URL එක (href) මීට
+        කලින් "i === 0 ? '/' : withTrailingSlash(...)" ලෙස JSX
+        attribute එක ඇතුළේම multi-line ternary එකක් විදිහට inline
+        කර තිබුණි. Astro 7 හි අලුත් Rolldown-based compiler එක මේ
+        pattern එකෙන් සමහර විට "Expected ',' or '}' but found '==='"
+        parse error එකක් දෙන බව confirmed විය (production build
+        failure එකක් ලෙස). Root-cause fix එක ලෙස, මෙම calculation
+        එක JSX attribute එකෙන් එළියට ගෙන "crumbHref" නමින් variable
+        එකක් ලෙස .map() callback එක ඇතුළේම precompute කර ඇත — output/
+        behavior එකට කිසිදු වෙනසක් නැත, පමණක් compiler-safe syntax
+        pattern එකකට මාරු කර ඇත. */}
     <div id="breadcrumb-wrapper" class="row justify-center mt-0 mb-3">
       <div class="md:col-10 flex justify-center sm:justify-start">
         <div id="breadcrumb-shell" class="relative min-h-[42px] flex items-center">
@@ -241,6 +253,7 @@ const breadcrumbSchema = JSON.stringify({
             <ol class="list-none flex flex-wrap items-center gap-x-2 gap-y-1 m-0 p-0 text-[13px] sm:text-sm text-[#F8F8FF]/50 font-medium bg-white/[0.03] border border-white/[0.06] rounded-full px-4 py-2.5 w-fit max-w-full">
               {breadcrumbItems.map((crumb, i) => {
                 const isLast = i === breadcrumbItems.length - 1;
+                const crumbHref = i === 0 ? "/" : withTrailingSlash(`/categories/${slugify(categories?.[0] ?? "posts")}`);
                 return (
                   <li class="list-none flex items-center gap-2 min-w-0 m-0 p-0">
                     {i > 0 && (
@@ -255,11 +268,7 @@ const breadcrumbSchema = JSON.stringify({
                       </span>
                     ) : (
                       
-                        href={
-                          i === 0
-                            ? "/"
-                            : withTrailingSlash(`/categories/${slugify(categories?.[0] ?? "posts")}`)
-                        }
+                        href={crumbHref}
                         class="flex items-center gap-1.5 hover:text-emerald-400 transition-colors duration-200 truncate max-w-[100px] sm:max-w-none"
                       >
                         {i === 0 && <BiHomeAlt2 className="h-4 w-4 flex-shrink-0" aria-hidden="true" />}
@@ -329,11 +338,6 @@ const breadcrumbSchema = JSON.stringify({
             <BiCalendarEdit className="mr-1 h-5 w-5 text-[#01AD9F]" />
             {dateFormat(date)}
           </li>
-          {/* 🎯 2026 "LAST UPDATED" UI BADGE: publish date එකට වඩා
-              different "updated" date එකක් content.config.ts frontmatter
-              එකේ තියෙනවා නම් විතරක් පෙන්වයි. Existing posts (updated
-              field නැති) මේ badge එක render වෙන්නේම නෑ — layout එකට
-              කිසිම gap/spacing issue එකක් ඇති නොකරයි. */}
           {hasUpdatedDate && (
             <li class="mx-3 flex items-center flex-wrap font-semibold text-emerald-400">
               <BiCalendarEdit className="mr-1 h-5 w-5 text-emerald-400" />
@@ -341,9 +345,6 @@ const breadcrumbSchema = JSON.stringify({
               {dateFormat(updated)}
             </li>
           )}
-          {/* 🎯 2026 READING TIME BADGE: post header meta row එකේ,
-              existing date/category badges pattern එකටම සමාන styling
-              එකෙන් reading time එක පෙන්වයි. */}
           <li class="mx-3 flex items-center flex-wrap font-semibold text-[#F8F8FF]">
             <BiTime className="mr-1 h-5 w-5 text-[#01AD9F]" />
             {readingTime(post.body ?? "").toString()}
@@ -710,10 +711,6 @@ const breadcrumbSchema = JSON.stringify({
     box-shadow: -2px 2px 0px rgba(0,0,0,0.3), 0 32px 60px rgba(0,0,0,0.65), 0 0 0 1px rgba(1,173,159,0.3), inset 3px 0 0 rgba(1,173,159,0.4);
   }
 
-  /* 🎯 AUTO-COLLAPSING BREADCRUMB — SEO-SAFE STYLES
-     max-height + opacity transition එකක් පමණි — display:none කිසිවිටෙකත්
-     යොදා නැත, එබැවින් content එක DOM/accessibility tree එකෙන් කිසිවිටෙකත්
-     ඉවත් නොවේ (Googlebot/crawlers සම්පූර්ණ breadcrumb එකම දකී). */
   .breadcrumb-collapsible-content {
     max-height: 60px;
     opacity: 1;
@@ -734,10 +731,6 @@ const breadcrumbSchema = JSON.stringify({
     transform: rotate(-90deg);
   }
 
-  /* 🎯 Collapsed-state toggle button — subtle pulse-glow animation
-     to make it more noticeable/discoverable once breadcrumb auto-hides.
-     Animation is gentle (opacity/shadow only, no layout-affecting
-     transform), so it cannot cause any CLS or layout shift. */
   .breadcrumb-toggle-pulse {
     animation: breadcrumbTogglePulse 2.4s ease-in-out infinite;
   }
@@ -752,16 +745,6 @@ const breadcrumbSchema = JSON.stringify({
 </style>
 
 <script>
-  // 🎯 AUTO-COLLAPSING BREADCRUMB LOGIC — site-wide astro:page-load
-  // pattern එකම (Header.astro/comment system එකේම convention) භාවිතා
-  // කරයි, DOMContentLoaded නොව — Astro View Transitions (ClientRouter)
-  // සක්‍රීය නිසා SPA navigation කිහිපයකින් පසුවත් නිවැරදිව වැඩ කරයි.
-  //
-  // SELF-HEALING RECURSIVE TIMER: "scheduleAutoCollapse()" reusable
-  // function එකක් හරහා, collapse හෝ expand ඕනෑම action එකකින් පසු
-  // නැවත 5 තත්පරයේ timer එක ස්වයංක්‍රීයව reschedule වේ — collapse/
-  // expand cycle එක කොපමණ වාරයක් සිදු වුවත් (permanent, self-healing
-  // loop), සෑම expand එකකින් පසුවත් නැවත ස්වයංක්‍රීයව hide වේ.
   let breadcrumbAutoCollapseTimer: ReturnType<typeof setTimeout> | null = null;
 
   function initBreadcrumbToggle() {
@@ -771,7 +754,6 @@ const breadcrumbSchema = JSON.stringify({
 
     if (!shell || !toggleBtn || !content) return;
 
-    // Reset state on every page load (handles back/forward + SPA nav)
     shell.classList.remove("is-collapsed");
     toggleBtn.setAttribute("aria-expanded", "true");
 
@@ -792,36 +774,19 @@ const breadcrumbSchema = JSON.stringify({
       toggleBtn?.setAttribute("aria-expanded", "true");
     }
 
-    // 🎯 SELF-HEALING RECURSIVE SCHEDULER: collapse කිරීමට පෙර සෑම
-    // විටම පවතින timer එක clear කර, තත්පර 5කින් නැවත auto-collapse
-    // කිරීමට schedule කරයි. මෙය initial load එකේදීත්, expand click
-    // කිරීමෙන් පසුවත් එකම function එකෙන්ම call වන නිසා, cycle එක
-    // කොපමණ වාරයක් සිදු වුවත් (permanent loop) කිසිවිටෙකත් "එක් වරක්
-    // පමණක්" වැඩ කරන bug එකක් ඇති නොවේ.
     function scheduleAutoCollapse() {
       clearAutoCollapseTimer();
       breadcrumbAutoCollapseTimer = setTimeout(collapseBreadcrumb, 5000);
     }
 
-    // තත්පර 5කින් auto-collapse — පරිශීලකයාට URL/category path එක
-    // කියවීමට ප්‍රමාණවත් වේලාවක් දී, පසුව article content එකට වැඩි
-    // ඉඩක් සලසයි.
     scheduleAutoCollapse();
 
-    // Fresh listener (clone-replace pattern, site-wide comment system
-    // එකේම භාවිතා වන freshEl() convention එකට සමාන) — SPA navigation
-    // කිහිපයකින් පසු duplicate event listeners එකතු වීම වළක්වයි.
     const freshToggle = toggleBtn.cloneNode(true) as HTMLButtonElement;
     toggleBtn.parentNode?.replaceChild(freshToggle, toggleBtn);
 
     freshToggle.addEventListener("click", () => {
       if (shell.classList.contains("is-collapsed")) {
         expandBreadcrumb();
-        // 🎯 CRITICAL FIX: expand කළ පසු, නැවත ස්වයංක්‍රීයව 5
-        // තත්පරයකින් auto-collapse වීමට timer එක reschedule කරයි —
-        // මෙය නොකළොත් expand කළාට පස්සේ breadcrumb එක සදහටම open
-        // state එකේම රැඳී, "දිගහැරිය විටදිත් යම් තප්පර ගානකින්
-        // ස්වයංක්‍රීයව හැකිලිය යුතුයි" requirement එක ඉටු නොවේ.
         scheduleAutoCollapse();
       } else {
         collapseBreadcrumb();
@@ -832,8 +797,6 @@ const breadcrumbSchema = JSON.stringify({
 
   document.addEventListener("astro:page-load", initBreadcrumbToggle);
 
-  // Timer cleanup on page swap — Header.astro එකේම pattern එක,
-  // memory leak/stale-timer-firing-on-new-page වළක්වයි.
   document.addEventListener("astro:before-swap", () => {
     if (breadcrumbAutoCollapseTimer) {
       clearTimeout(breadcrumbAutoCollapseTimer);
