@@ -194,22 +194,15 @@ const breadcrumbSchema = JSON.stringify({
         reserve කර ඇති නිසා, collapse/expand animation එකෙන් ඉහළින්ම ඇති
         article title එක "jump" වීමක් (layout shift) සිදු නොවේ.
 
-        NAVIGATION SAFETY (2026-07 UPDATED — ClientRouter Removal):
-        Base.astro එකෙන් <ClientRouter /> ස්ථිරවම ඉවත් කර ඇති නිසා,
-        "astro:page-load" event එක තවදුරටත් fire වන්නේ නැත. පහත script
-        එක දැන් "astro:page-load" listener එකට අමතරව, 404.astro එකේම
-        established pattern එකම (document.readyState check +
-        DOMContentLoaded fallback) භාවිතා කරයි — traditional full-page
-        navigation (MPA) එකේදීත් මෙම breadcrumb toggle logic එක සෑම
-        post page එකකම නිවැරදිව initialize වීම සහතික කරමින්.
-        "astro:before-swap" cleanup listener එකද defensive/
-        forward-compatible code ලෙස තියාගෙන ඇත (දැන් fire වන්නේ නැත,
-        ඒත් listener එකක් register කිරීම කිසිදු error එකකට හේතු නොවේ,
-        අනාගතයේ SPA transitions නැවත එකතු කලොත් automatic ලෙස වැඩ කරයි).
+        NAVIGATION SAFETY: Astro View Transitions (ClientRouter) සක්‍රීය
+        site එකක් නිසා DOMContentLoaded නොව, site-wide already-established
+        pattern එකම (astro:page-load, Header.astro/PostSingle.astro comment
+        system එකේම pattern එක) භාවිතා කර ඇත — SPA navigation කිහිපයකින්
+        පසුවත් timer/toggle logic එක නිවැරදිව reset වී වැඩ කරයි.
 
         SELF-HEALING AUTO-COLLAPSE: expand කිරීමෙන් පසුවත්
-        "scheduleAutoCollapse()" reusable function එකක් හරහා, permanent
-        ලෙස recurring වේ. */}
+        "scheduleAutoCollapse()" reusable function එක හරහා නැවත 5
+        තත්පරයකින් auto-collapse වීම permanent ලෙස recurring වේ. */}
     <div id="breadcrumb-wrapper" class="row justify-center mt-0 mb-3">
       <div class="md:col-10 flex justify-center sm:justify-start">
         <div id="breadcrumb-shell" class="relative min-h-[42px] flex items-center">
@@ -260,7 +253,7 @@ const breadcrumbSchema = JSON.stringify({
                         {crumb.name}
                       </span>
                     ) : (
-                      
+                      <a
                         href={
                           i === 0
                             ? "/"
@@ -314,7 +307,7 @@ const breadcrumbSchema = JSON.stringify({
                 authors.map((a: string) => slugify(a)).includes(slugify(author.data.title))
               )
               .map((author) => (
-                
+                <a
                   href={withTrailingSlash(`/authors/${slugify(author.id)}`)}
                   class="flex items-center hover:text-primary font-bold text-[#F8F8FF]"
                 >
@@ -359,7 +352,7 @@ const breadcrumbSchema = JSON.stringify({
             <ul>
               {categories.map((category: string, i: number) => (
                 <li class="inline-block">
-                  
+                  <a
                     href={withTrailingSlash(`/categories/${slugify(category)}`)}
                     class="mr-2 hover:text-primary font-bold bg-white/10 px-2 py-0.5 rounded text-[#F8F8FF]"
                   >
@@ -396,7 +389,7 @@ const breadcrumbSchema = JSON.stringify({
           <ul class="mr-4 mb-4 space-x-3">
             {tags.map((tag: string) => (
               <li class="inline-block">
-                
+                <a
                   href={withTrailingSlash(`/tags/${slugify(tag)}`)}
                   class="block rounded-lg bg-[#FFCC00] border border-[#FFCC00] px-4 py-2 font-black text-[#010203] text-sm hover:bg-[#E6B800] transition duration-300"
                 >
@@ -749,12 +742,10 @@ const breadcrumbSchema = JSON.stringify({
 </style>
 
 <script>
-  // 🎯 AUTO-COLLAPSING BREADCRUMB LOGIC — 2026-07 UPDATED
-  // (ClientRouter Removal Cascade Safety): Base.astro එකෙන්
-  // <ClientRouter /> ස්ථිරවම ඉවත් කර ඇති නිසා, "astro:page-load" event
-  // එක තවදුරටත් fire වන්නේ නැත. පහත logic එකට 404.astro එකේම
-  // established pattern එකම (document.readyState check +
-  // DOMContentLoaded fallback) එකතු කර ඇත.
+  // 🎯 AUTO-COLLAPSING BREADCRUMB LOGIC — site-wide astro:page-load
+  // pattern එකම (Header.astro/comment system එකේම convention) භාවිතා
+  // කරයි, DOMContentLoaded නොව — Astro View Transitions (ClientRouter)
+  // සක්‍රීය නිසා SPA navigation කිහිපයකින් පසුවත් නිවැරදිව වැඩ කරයි.
   //
   // SELF-HEALING RECURSIVE TIMER: "scheduleAutoCollapse()" reusable
   // function එකක් හරහා, collapse හෝ expand ඕනෑම action එකකින් පසු
@@ -770,7 +761,7 @@ const breadcrumbSchema = JSON.stringify({
 
     if (!shell || !toggleBtn || !content) return;
 
-    // Reset state on every page load (handles back/forward navigation)
+    // Reset state on every page load (handles back/forward + SPA nav)
     shell.classList.remove("is-collapsed");
     toggleBtn.setAttribute("aria-expanded", "true");
 
@@ -808,8 +799,8 @@ const breadcrumbSchema = JSON.stringify({
     scheduleAutoCollapse();
 
     // Fresh listener (clone-replace pattern, site-wide comment system
-    // එකේම භාවිතා වන freshEl() convention එකට සමාන) — duplicate event
-    // listeners එකතු වීම වළක්වයි.
+    // එකේම භාවිතා වන freshEl() convention එකට සමාන) — SPA navigation
+    // කිහිපයකින් පසු duplicate event listeners එකතු වීම වළක්වයි.
     const freshToggle = toggleBtn.cloneNode(true) as HTMLButtonElement;
     toggleBtn.parentNode?.replaceChild(freshToggle, toggleBtn);
 
@@ -831,24 +822,8 @@ const breadcrumbSchema = JSON.stringify({
 
   document.addEventListener("astro:page-load", initBreadcrumbToggle);
 
-  // 🎯 2026-07 FIX (ClientRouter Removal Cascade Safety): <ClientRouter />
-  // Base.astro එකෙන් ඉවත් කර ඇති නිසා, "astro:page-load" event එක දැන්
-  // කිසිසේත් fire වන්නේ නැත. මීට කලින් මෙම listener එකම breadcrumb
-  // toggle එක initialize කිරීමට ONLY මාර්ගය වූයේ — fallback එකක් නොතිබූ
-  // නිසා, ClientRouter ඉවත් කිරීමෙන් පසු මෙය කිසිසේත් initialize
-  // නොවෙන්නට තිබුණි. 404.astro එකේම established pattern එකම (readyState
-  // check + DOMContentLoaded fallback) මෙතනට apply කර ඇත.
-  if (document.readyState === "complete" || document.readyState === "interactive") {
-    initBreadcrumbToggle();
-  } else {
-    document.addEventListener("DOMContentLoaded", initBreadcrumbToggle);
-  }
-
-  // Timer cleanup — "astro:before-swap" listener එක defensive/
-  // forward-compatible code ලෙස තියාගෙන ඇත (ClientRouter නැති නිසා
-  // මෙය දැන් fire වන්නේ නැත, ඒත් listener එකක් register කිරීම
-  // කිසිදු error එකකට හේතු නොවේ, අනාගතයේ SPA transitions නැවත
-  // එකතු කලොත් automatic ලෙස වැඩ කරයි).
+  // Timer cleanup on page swap — Header.astro එකේම pattern එක,
+  // memory leak/stale-timer-firing-on-new-page වළක්වයි.
   document.addEventListener("astro:before-swap", () => {
     if (breadcrumbAutoCollapseTimer) {
       clearTimeout(breadcrumbAutoCollapseTimer);
@@ -1135,17 +1110,4 @@ const breadcrumbSchema = JSON.stringify({
   }
 
   document.addEventListener("astro:page-load", initCommentSystem);
-
-  // 🎯 2026-07 FIX (ClientRouter Removal Cascade Safety): Base.astro
-  // එකෙන් <ClientRouter /> ඉවත් කර ඇති නිසා "astro:page-load" event එක
-  // දැන් fire වන්නේ නැත. Comment system එක initialize වීමට මීට කලින්
-  // මෙම listener එකම ONLY මාර්ගය වූයේ — 404.astro එකේම established
-  // pattern එකම (readyState check + DOMContentLoaded fallback) මෙතනට
-  // apply කර ඇත, comment system එක සෑම blog post එකකම දිගටම නිවැරදිව
-  // initialize වීම සහතික කරමින්.
-  if (document.readyState === "complete" || document.readyState === "interactive") {
-    initCommentSystem();
-  } else {
-    document.addEventListener("DOMContentLoaded", initCommentSystem);
-  }
 </script>
