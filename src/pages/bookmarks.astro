@@ -1,0 +1,141 @@
+---
+import Base from "@/layouts/Base.astro";
+import config from "@/config/config.json";
+
+const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
+const canonicalUrl = `${base_url}/bookmarks/`;
+const metaTitle = `මගේ බුක්මාක් කළ කතා | ${config?.site?.title || "Wala Katha"}`;
+const metaDescription = "ඔබ බුක්මාක් කර ඇති සියලුම වල් කතා මෙතැනින් නැවත පහසුවෙන් සොයාගෙන කියවන්න.";
+---
+
+<Base
+  title={metaTitle}
+  meta_title={metaTitle}
+  description={metaDescription}
+  canonical={canonicalUrl}
+  noindex={true}
+>
+  <section class="section bg-[#050505] min-h-screen text-slate-200 py-12">
+    <div class="container mx-auto px-4">
+      <h1 class="text-3xl md:text-4xl font-black text-white text-center mb-3">
+        මගේ <span class="text-emerald-400">බුක්මාක්</span> කළ කතා
+      </h1>
+      <p class="text-center text-sm text-slate-400 mb-10">
+        මෙම ලැයිස්තුව ඔබගේ device එකේ browser එකේ පමණක් save වේ — වෙනත් device එකකින් පෙනෙන්නේ නැත.
+      </p>
+
+      <div id="bookmarks-empty" class="hidden text-center py-16 bg-[#0d0d0d] border border-[#1a1a1a] rounded-2xl max-w-md mx-auto">
+        <p class="text-slate-400 font-medium">ඔබ තවම කිසිම කතාවක් බුක්මාක් කර නැත.</p>
+        <a href="/" class="inline-block mt-4 text-emerald-400 font-bold hover:underline">කතා බලන්න යන්න &rarr;</a>
+      </div>
+
+      <div id="bookmarks-list" class="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-4xl mx-auto"></div>
+
+      <div class="text-center mt-10 hidden" id="bookmarks-clear-wrap">
+        <button id="bookmarks-clear-btn" class="text-xs text-red-400/80 hover:text-red-400 border border-red-500/20 hover:border-red-500/50 rounded-full px-4 py-2 transition-colors">
+          සියල්ල ඉවත් කරන්න
+        </button>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<script>
+  const STORAGE_KEY = "wk-bookmarks";
+
+  interface BookmarkPost {
+    id: string;
+    title: string;
+    image?: string;
+    url: string;
+    savedAt: number;
+  }
+
+  function readBookmarks(): BookmarkPost[] {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeBookmarks(list: BookmarkPost[]) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    } catch {
+      // ignore — quota/private-mode failure, non-blocking
+    }
+  }
+
+  function renderBookmarks() {
+    const listEl = document.getElementById("bookmarks-list");
+    const emptyEl = document.getElementById("bookmarks-empty");
+    const clearWrap = document.getElementById("bookmarks-clear-wrap");
+    if (!listEl || !emptyEl || !clearWrap) return;
+
+    const bookmarks = readBookmarks().sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+    listEl.innerHTML = "";
+
+    if (bookmarks.length === 0) {
+      emptyEl.classList.remove("hidden");
+      clearWrap.classList.add("hidden");
+      return;
+    }
+
+    emptyEl.classList.add("hidden");
+    clearWrap.classList.remove("hidden");
+
+    bookmarks.forEach((b) => {
+      const card = document.createElement("div");
+      card.className = "bg-[#0d0d0d] border border-[#1a1a1a] rounded-xl overflow-hidden flex flex-col";
+
+      const link = document.createElement("a");
+      link.href = b.url;
+      link.className = "block";
+
+      if (b.image) {
+        const img = document.createElement("img");
+        img.src = b.image;
+        img.alt = b.title || "";
+        img.loading = "lazy";
+        img.className = "w-full aspect-[2/3] object-cover";
+        link.appendChild(img);
+      }
+
+      const titleEl = document.createElement("h2");
+      titleEl.className = "text-xs sm:text-sm font-bold text-white p-2 line-clamp-2";
+      titleEl.textContent = b.title || "";
+      link.appendChild(titleEl);
+      card.appendChild(link);
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "text-[10px] text-red-400/70 hover:text-red-400 px-2 pb-2 text-left";
+      removeBtn.textContent = "ඉවත් කරන්න";
+      removeBtn.addEventListener("click", () => {
+        const next = readBookmarks().filter((item) => item.id !== b.id);
+        writeBookmarks(next);
+        renderBookmarks();
+      });
+      card.appendChild(removeBtn);
+
+      listEl.appendChild(card);
+    });
+  }
+
+  function initBookmarksPage() {
+    renderBookmarks();
+    const clearBtn = document.getElementById("bookmarks-clear-btn");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        writeBookmarks([]);
+        renderBookmarks();
+      });
+    }
+  }
+
+  document.addEventListener("astro:page-load", initBookmarksPage);
+</script>
