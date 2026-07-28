@@ -1,5 +1,6 @@
 ---
 import Share from "@/components/Share.astro";
+import BookmarkButton from "@/components/BookmarkButton";
 import SimilarPosts from "@/layouts/components/SimilarPosts.astro";
 import { getSinglePage } from "@/lib/contentParser.astro";
 import dateFormat from "@/lib/utils/dateFormat";
@@ -253,7 +254,7 @@ const breadcrumbSchema = JSON.stringify({
                         {crumb.name}
                       </span>
                     ) : (
-                      <a
+                      
                         href={
                           i === 0
                             ? "/"
@@ -307,7 +308,7 @@ const breadcrumbSchema = JSON.stringify({
                 authors.map((a: string) => slugify(a)).includes(slugify(author.data.title))
               )
               .map((author) => (
-                <a
+                
                   href={withTrailingSlash(`/authors/${slugify(author.id)}`)}
                   class="flex items-center hover:text-primary font-bold text-[#F8F8FF]"
                 >
@@ -352,7 +353,7 @@ const breadcrumbSchema = JSON.stringify({
             <ul>
               {categories.map((category: string, i: number) => (
                 <li class="inline-block">
-                  <a
+                  
                     href={withTrailingSlash(`/categories/${slugify(category)}`)}
                     class="mr-2 hover:text-primary font-bold bg-white/10 px-2 py-0.5 rounded text-[#F8F8FF]"
                   >
@@ -389,7 +390,7 @@ const breadcrumbSchema = JSON.stringify({
           <ul class="mr-4 mb-4 space-x-3">
             {tags.map((tag: string) => (
               <li class="inline-block">
-                <a
+                
                   href={withTrailingSlash(`/tags/${slugify(tag)}`)}
                   class="block rounded-lg bg-[#FFCC00] border border-[#FFCC00] px-4 py-2 font-black text-[#010203] text-sm hover:bg-[#E6B800] transition duration-300"
                 >
@@ -398,12 +399,21 @@ const breadcrumbSchema = JSON.stringify({
               </li>
             ))}
           </ul>
-          <Share
-            className="social-share mb-4 text-[#F8F8FF]"
-            title={title}
-            description={description}
-            slug={post.id}
-          />
+          <div class="flex items-center gap-3 mb-4">
+            <BookmarkButton
+              client:load
+              postId={post.id}
+              title={title}
+              image={image}
+              url={postUrl}
+            />
+            <Share
+              className="social-share text-[#F8F8FF]"
+              title={title}
+              description={description}
+              slug={post.id}
+            />
+          </div>
         </div>
       </div>
     </article>
