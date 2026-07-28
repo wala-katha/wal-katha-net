@@ -101,6 +101,32 @@ const postGridImageSizes = "(max-width: 640px) 46vw, (max-width: 768px) 44vw, 30
 // self-healing for any future post images added to this same
 // component, since the fix lives at the single shared <Image> call
 // site used by every post-grid card site-wide.
+//
+// 🎯 2026-07 PAGESPEED "IMPROVE IMAGE DELIVERY" FOLLOW-UP FIX (Nandage
+// Duwa post flagged again: delivered 397x598 vs displayed-at-DPR2
+// requirement of only 326x464 — Est savings 12.3 KiB):
+//
+// ROOT CAUSE: `widths=[204, 408]` had only TWO buckets. A common
+// mobile phone (2-column grid, DPR2) needs an intrinsic width of
+// roughly 326px to satisfy its rendered CSS box at native pixel
+// density. Since 204 is smaller than that requirement, the browser is
+// FORCED to skip straight to 408 — the next available bucket — even
+// though 408 is far larger than the ~326 actually needed. This is a
+// classic "quantization gap": with only two width buckets spaced 2x
+// apart, any device whose real requirement falls in the middle
+// (between ~205px and ~407px) always over-fetches the larger file.
+//
+// PERMANENT FIX: a THIRD width bucket (336) has been inserted between
+// the existing two. 336 sits just above the ~326px real-world
+// requirement measured for this exact card size on common 2-column
+// mobile layouts (DPR2), so the browser can now select 336 instead of
+// jumping all the way to 408 — closing the quantization gap without
+// removing either of the original buckets (204 still serves smaller/
+// low-DPR phones, 408 still serves the 3-column desktop/tablet slot
+// exactly as before). This is purely additive: no existing srcset
+// candidate is removed, so no other viewport/DPR combination that
+// was already correctly served can regress.
+const postGridImageWidths = [204, 336, 408];
 ---
 
 <div class={`w-full ${className} bg-[#050505]`}>
@@ -121,7 +147,7 @@ const postGridImageSizes = "(max-width: 640px) 46vw, (max-width: 768px) 44vw, 30
                 alt={post.data.title}
                 width={408}
                 height={612}
-                widths={[204, 408]}
+                widths={postGridImageWidths}
                 sizes={postGridImageSizes}
                 loading={i < 3 ? "eager" : "lazy"}
                 decoding="async"
