@@ -188,6 +188,30 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
 // permanently removed. No language signal is lost — <html lang="si">
 // remains the single, spec-compliant source of truth for this site's
 // declared language on every page, permanently.
+//
+// 🎯 2026-07 PAGESPEED FORCED-REFLOW FIX (ClientRouter fallback mode):
+// ROOT CAUSE: <ClientRouter /> below previously used Astro's default
+// fallback behavior ("animate"). When a browser lacks native support
+// for the View Transitions API (older Safari, some Android WebViews),
+// Astro's ClientRouter simulates a transition by measuring DOM
+// geometry (offsetWidth/getBoundingClientRect-style calls) after style
+// invalidation — this is a textbook "forced synchronous reflow"
+// pattern, and PageSpeed Insights' "Forced reflow" audit flagged this
+// exact behavior at /_astro/ClientRouter.astro_ast....js (288ms total
+// reflow time observed).
+//
+// PERMANENT FIX: fallback="swap" tells ClientRouter to perform an
+// instant DOM swap (no animation, no geometry measurement) for
+// non-supporting browsers, while leaving native View Transitions API
+// browsers (Chrome, Edge, modern Safari) completely untouched — those
+// browsers already use GPU-accelerated CSS transitions, not JS-driven
+// reflow, so they see zero behavioral change. Critically, this does
+// NOT disable ClientRouter or remove it: the astro:page-load /
+// astro:before-swap event lifecycle that Header.astro,
+// FeaturedSlider.astro, Posts.astro, SimilarPosts.astro, and
+// PostSingle.astro all depend on continues to fire exactly as before,
+// so zero site functionality is affected — only the reflow-triggering
+// animation-simulation codepath is skipped.
 // ==========================================================
 ---
 
@@ -739,7 +763,7 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
       })();
     </script>
 
-    <ClientRouter />
+    <ClientRouter fallback="swap" />
   </head>
 
   <body class="bg-[#050505] text-[#f8fafc] min-h-screen flex flex-col antialiased selection:bg-emerald-500/30 selection:text-[#34d399] overflow-x-hidden" style="touch-action: pan-y; overscroll-behavior-x: none;">
