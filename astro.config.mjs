@@ -86,8 +86,40 @@ export default defineConfig({
   // output) can never silently drift apart if a future Astro major
   // version ever changes its default — self-healing against upstream
   // default changes.
+  //
+  // 🎯 NEW FIX (2026-07 — PageSpeed Insights "Render-blocking requests"
+  // audit, Est savings 300ms): ROOT CAUSE: Base.astro's global
+  // "@/styles/main.css" import (bundling base.css, components.css,
+  // navigation.css, buttons.css, safe.css, utilities.css, and Tailwind's
+  // compiled output) was being emitted as a separate hashed CSS file
+  // (e.g. "/_astro/Base.[hash].css", ~19.2 KiB) referenced via a
+  // render-blocking <link rel="stylesheet"> tag that Astro injects
+  // automatically into every page's <head>. Because this filename is
+  // build-time-hashed and injected by Astro itself (not authored
+  // manually anywhere in this codebase), it cannot be preloaded via a
+  // hardcoded <link rel="preload"> — the only correct, framework-level
+  // fix is Astro's own documented "build.inlineStylesheets" option.
+  //
+  // PERMANENT FIX: "inlineStylesheets: 'always'" forces Astro to emit
+  // this CSS as an inline <style> block directly inside the HTML
+  // document instead of a separate network request — this completely
+  // eliminates the render-blocking stylesheet request (and the
+  // corresponding entry in the Network Dependency Tree) for EVERY page
+  // site-wide, since every page shares the same Base.astro layout and
+  // therefore the same compiled CSS bundle.
+  //
+  // TRADE-OFF (documented, not hidden): this increases raw HTML
+  // document size by roughly the size of the CSS bundle. Cloudflare
+  // Pages serves all HTML responses with automatic gzip/brotli
+  // compression, so the real-world transferred-byte impact is smaller
+  // than the raw KiB figures suggest — and removing a full
+  // render-blocking round-trip (which directly delays LCP/FCP) is a
+  // stronger performance win than the added inline-CSS parse cost.
+  // Astro's own documentation recommends this exact option for exactly
+  // this Lighthouse/PageSpeed audit.
   build: {
     format: "directory",
+    inlineStylesheets: "always",
   },
   // 🎯 ASTRO 7 UPGRADE FIX: Astro 7.0 හි compressHTML default එක
   // JSX-style whitespace collapsing බවට වෙනස් වී ඇත (span/inline
@@ -185,4 +217,3 @@ export default defineConfig({
     shikiConfig: { theme: "one-dark-pro", wrap: true },
   },
 });
-
