@@ -1,4 +1,5 @@
 name: Smart Optimize Images (JPG/PNG to WebP + Frontmatter Auto-Update)
+
 # 🎯 FIXED (CRITICAL — Unnecessary CI Runs on Every Push):
 # ROOT CAUSE: "on.push.branches: [main]" had NO "paths" filter, so this
 # workflow fired on EVERY single commit to main — routing changes,
@@ -24,8 +25,10 @@ on:
       - "public/images/*.png"
       - ".github/workflows/optimize-images.yml"
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   optimize:
     runs-on: ubuntu-latest
@@ -33,15 +36,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Install Sharp in temp folder
         run: |
           mkdir -p /tmp/sharp-tool
           cd /tmp/sharp-tool
           npm init -y
           npm install sharp
+
       - name: Smart Optimize + Auto-Update Frontmatter
         run: |
           node --input-type=module << 'EOF'
@@ -51,37 +57,26 @@ jobs:
           import { readdirSync, existsSync, readFileSync, writeFileSync, statSync } from 'fs';
           import { join, dirname, basename } from 'path';
           import { createHash } from 'crypto';
+
           // ==========================================================
           // 🎯 SMART CONFIG — site එකේ ඇත්තටම display කරන actual pixel
           //    sizes එකට ගැලපෙන (2x retina සඳහා ටිකක් වැඩිය) maximum
           //    widths. Height දෙන්නේ නෑ — aspect ratio ස්වභාවිකව පවතී,
           //    crop/distort කිසිවක් සිදු නොවේ (proportional resize only).
-          //
-          //    🎯 NEW (2026-07 — PageSpeed "Improve image delivery" fix,
-          //    slide-2.webp flagged: 86.6 KiB delivered on mobile,
-          //    displayed at only ~11.7 KiB worth of pixels): the
-          //    "slider" folder has been REMOVED from this generic
-          //    single-output array and is now handled by its own
-          //    dedicated dual-output block further below (desktop
-          //    1200w master UNCHANGED + a new lightweight ~700w
-          //    "-mobile.webp" companion file). This was necessary
-          //    because FeaturedSlider.astro previously had ZERO
-          //    responsive srcset/picture logic at all — every device,
-          //    including small phones, always downloaded the full
-          //    1200px master. Posts/authors are untouched and still
-          //    use this single-output generic pipeline exactly as
-          //    before.
           // ==========================================================
           const folders = [
             { dir: 'public/images/posts',   maxWidth: 420,  type: 'post'   },
+            { dir: 'public/images/slider',  maxWidth: 1200, type: 'slider' },
             { dir: 'public/images/authors', maxWidth: 150,  type: 'author', square: true },
           ];
+
           const convertedMap = {};       // { "old-filename.jpg": "new-filename.webp" } — filename actually changed
           const forceVerifySet = new Set(); // Set of .webp OUTPUT paths whose SOURCE content changed but
                                              // filename stayed the same (already .webp-referenced everywhere) —
                                              // these still need every downstream reference double-checked.
           let skippedCount = 0;
           let processedCount = 0;
+
           // ==========================================================
           // 🎯 UNIVERSAL CONTENT-HASH GUARD (NEW — applies to EVERY
           //    single image processed by this workflow: post images,
@@ -120,19 +115,6 @@ jobs:
           //        run; fall through to the existing timestamp+
           //        dimension check as a secondary/cheap early-exit.
           //
-          //    ⚠️ IMPORTANT (2026-07 slider dual-output note): this
-          //    function has a SIDE EFFECT — it writes the updated hash
-          //    sidecar to disk the moment it detects a change. Calling
-          //    it TWICE for the same source file within the same run
-          //    (e.g. once for a "desktop" output decision and once for
-          //    a "mobile" output decision) would make the SECOND call
-          //    wrongly report "unchanged" even on a genuine content
-          //    change, because the sidecar was already updated by the
-          //    first call. The new slider block further below calls
-          //    this function EXACTLY ONCE per source file and reuses
-          //    the single boolean result for both its desktop and
-          //    mobile output decisions, to avoid this exact pitfall.
-          //
           //    This single mechanism now uniformly covers EVERY image
           //    in every folder + every root/logo/favicon/og-image/
           //    app-icon path — no per-image special-casing required,
@@ -144,9 +126,11 @@ jobs:
             const buf = readFileSync(filePath);
             return createHash('sha256').update(buf).digest('hex');
           }
+
           function hasSourceContentChanged(inputPath) {
             const hashSidecarPath = `${inputPath}.hash`;
             const currentHash = computeFileHash(inputPath);
+
             if (!existsSync(hashSidecarPath)) {
               // First time we've ever seen this source file (or the
               // sidecar was deleted) — treat conservatively as changed
@@ -154,13 +138,16 @@ jobs:
               writeFileSync(hashSidecarPath, currentHash, 'utf-8');
               return true;
             }
+
             const storedHash = readFileSync(hashSidecarPath, 'utf-8').trim();
             if (storedHash !== currentHash) {
               writeFileSync(hashSidecarPath, currentHash, 'utf-8');
               return true;
             }
+
             return false; // byte-identical to the last successful run
           }
+
           // ==========================================================
           // ⚡ SMART STALENESS CHECK — secondary/cheap check, now only
           //    reached AFTER the content-hash guard above has already
@@ -171,14 +158,18 @@ jobs:
           // ==========================================================
           async function isUpToDate(input, out, targetWidth, isSquare = false) {
             if (!existsSync(out)) return false;
+
             const srcTime = statSync(input).mtimeMs;
             const outTime = statSync(out).mtimeMs;
             if (outTime < srcTime) return false;
+
             try {
               const outMeta = await sharp(out).metadata();
               const srcMeta = await sharp(input).metadata();
+
               const expectedWidth = Math.min(srcMeta.width || targetWidth, targetWidth);
               if (Math.abs((outMeta.width || 0) - expectedWidth) > 2) return false;
+
               if (isSquare) {
                 const expectedHeight = Math.min(srcMeta.height || targetWidth, targetWidth);
                 const expectedSquareHeight = srcMeta.width && srcMeta.height &&
@@ -187,11 +178,13 @@ jobs:
                   : expectedHeight;
                 if (Math.abs((outMeta.height || 0) - expectedSquareHeight) > 2) return false;
               }
+
               return true;
             } catch {
               return false;
             }
           }
+
           // Combined decision: content-hash guard takes priority. Only
           // if content is byte-identical do we fall back to the
           // cheaper timestamp/dimension check.
@@ -201,27 +194,36 @@ jobs:
             const upToDate = await isUpToDate(input, out, targetWidth, isSquare);
             return !upToDate;
           }
+
           for (const { dir, maxWidth, type, square } of folders) {
             if (!existsSync(dir)) continue;
+
             for (const file of readdirSync(dir)) {
               if (!/\.(jpg|jpeg|png)$/i.test(file)) continue;
+
               const input = join(dir, file);
               const outFile = file.replace(/\.[^.]+$/, '.webp');
               const out = join(dir, outFile);
+
               const needsReconvert = await shouldReconvert(input, out, maxWidth, square);
+
               if (!needsReconvert) {
                 skippedCount++;
                 continue;
               }
+
               // If the .webp already existed (filename unchanged) but
               // content forced a reconvert, flag it for the universal
               // downstream re-verify pass below.
               if (existsSync(out)) {
                 forceVerifySet.add(out);
               }
+
               const image = sharp(input);
               const metadata = await image.metadata();
+
               let pipeline = image;
+
               if (square) {
                 pipeline = pipeline.resize({
                   width: maxWidth,
@@ -238,132 +240,18 @@ jobs:
                   kernel: sharp.kernel.lanczos3,
                 });
               }
+
               await pipeline
                 .webp({ quality: 85, smartSubsample: true, effort: 6 })
                 .toFile(out);
+
               console.log(`[${type.toUpperCase()}] ${file} (${metadata.width}x${metadata.height}) -> ${outFile}`);
+
               convertedMap[file] = outFile;
               processedCount++;
             }
           }
-          // ==========================================================
-          // 🎯 NEW (2026-07): SLIDER DUAL-OUTPUT PIPELINE — fixes
-          //    PageSpeed Insights "Improve image delivery" flag
-          //    (slide-2.webp: 86.6 KiB delivered vs ~11.7 KiB needed
-          //    on mobile). ROOT CAUSE: FeaturedSlider.astro previously
-          //    used a single plain <img src="/images/slider/slide-N.webp">
-          //    with NO responsive srcset/picture element at all — every
-          //    device, including small phones, always downloaded the
-          //    same full 1200px-wide master file regardless of the
-          //    actual rendered slot size.
-          //
-          //    THE FIX: for every slider source image, this block now
-          //    produces TWO output files:
-          //      1. "slide-N.webp"        — UNCHANGED filename, same
-          //         1200px max width, same quality — used by desktop/
-          //         tablet viewports via FeaturedSlider.astro's
-          //         <picture><img> fallback. Zero regression: any
-          //         existing reference to this exact filename anywhere
-          //         in the codebase keeps working identically.
-          //      2. "slide-N-mobile.webp" — NEW, lightweight ~700px
-          //         max width companion file, referenced by
-          //         FeaturedSlider.astro's <source media="(max-width:
-          //         767px)"> for phones/small viewports, cutting the
-          //         downloaded byte size substantially on exactly the
-          //         devices PageSpeed's mobile audit flagged.
-          //
-          //    CONTENT-HASH GUARD REUSE (critical correctness detail):
-          //    hasSourceContentChanged() is called EXACTLY ONCE per
-          //    source file here (see the "contentChanged" variable
-          //    below) and its boolean result is reused for BOTH the
-          //    desktop and mobile output decisions — calling it twice
-          //    would falsely report "unchanged" on the second call
-          //    (see the function's own doc-comment above for why).
-          //
-          //    SELF-HEALING: any new slide image dropped into
-          //    public/images/slider/ (jpg/jpeg/png) is automatically
-          //    picked up by this same loop and gets both variants
-          //    generated with zero manual configuration — exactly the
-          //    same self-healing guarantee every other image folder in
-          //    this workflow already has.
-          // ==========================================================
-          const sliderDir = 'public/images/slider';
-          const sliderDesktopMaxWidth = 1200;
-          const sliderMobileMaxWidth = 700;
-          if (existsSync(sliderDir)) {
-            for (const file of readdirSync(sliderDir)) {
-              if (!/\.(jpg|jpeg|png)$/i.test(file)) continue;
-              const input = join(sliderDir, file);
 
-              const desktopOutFile = file.replace(/\.[^.]+$/, '.webp');
-              const desktopOut = join(sliderDir, desktopOutFile);
-              const mobileOutFile = file.replace(/\.[^.]+$/, '-mobile.webp');
-              const mobileOut = join(sliderDir, mobileOutFile);
-
-              // Compute the content-change status ONCE, reuse for both
-              // outputs below (see rationale in the block comment above).
-              const contentChanged = hasSourceContentChanged(input);
-
-              // --- Desktop variant (existing filename/behavior, unchanged) ---
-              const desktopUpToDate = contentChanged
-                ? false
-                : await isUpToDate(input, desktopOut, sliderDesktopMaxWidth, false);
-              const needsDesktopReconvert = contentChanged || !desktopUpToDate;
-
-              if (needsDesktopReconvert) {
-                if (existsSync(desktopOut)) {
-                  forceVerifySet.add(desktopOut);
-                }
-                const image = sharp(input);
-                const metadata = await image.metadata();
-                let pipeline = image;
-                if (metadata.width && metadata.width > sliderDesktopMaxWidth) {
-                  pipeline = pipeline.resize({
-                    width: sliderDesktopMaxWidth,
-                    withoutEnlargement: true,
-                    kernel: sharp.kernel.lanczos3,
-                  });
-                }
-                await pipeline
-                  .webp({ quality: 85, smartSubsample: true, effort: 6 })
-                  .toFile(desktopOut);
-                convertedMap[file] = desktopOutFile;
-                processedCount++;
-                console.log(`[SLIDER-DESKTOP] ${file} (${metadata.width}x${metadata.height}) -> ${desktopOutFile}`);
-              } else {
-                skippedCount++;
-              }
-
-              // --- Mobile variant (NEW — lightweight ~700w companion) ---
-              const mobileUpToDate = contentChanged
-                ? false
-                : await isUpToDate(input, mobileOut, sliderMobileMaxWidth, false);
-              const needsMobileReconvert = contentChanged || !mobileUpToDate;
-
-              if (needsMobileReconvert) {
-                if (existsSync(mobileOut)) {
-                  forceVerifySet.add(mobileOut);
-                }
-                const image = sharp(input);
-                const metadata = await image.metadata();
-                let pipeline = image;
-                if (metadata.width && metadata.width > sliderMobileMaxWidth) {
-                  pipeline = pipeline.resize({
-                    width: sliderMobileMaxWidth,
-                    withoutEnlargement: true,
-                    kernel: sharp.kernel.lanczos3,
-                  });
-                }
-                await pipeline
-                  .webp({ quality: 82, smartSubsample: true, effort: 6 })
-                  .toFile(mobileOut);
-                processedCount++;
-                console.log(`[SLIDER-MOBILE] ${file} (${metadata.width}x${metadata.height}) -> ${mobileOutFile}`);
-              } else {
-                skippedCount++;
-              }
-            }
-          }
           // ==========================================================
           // 🖼️ ROOT IMAGES SYSTEM — public/images/ ඇතුළේ කෙලින්ම තියෙන
           //    විශේෂ පින්තූර. Crop නොවේ, Ratio ආරක්ෂා වේ. Content-hash
@@ -373,21 +261,28 @@ jobs:
           const rootImages = ['Copyright & Credit Policy.png', 'Auhor.png', 'author.png'];
           const rootDir = 'public/images';
           const rootMaxWidth = 850;
+
           for (const file of rootImages) {
             const input = join(rootDir, file);
             if (!existsSync(input)) continue;
+
             const outFile = file.replace(/\.[^.]+$/, '.webp');
             const out = join(rootDir, outFile);
+
             const needsReconvert = await shouldReconvert(input, out, rootMaxWidth, false);
+
             if (!needsReconvert) {
               skippedCount++;
               continue;
             }
+
             if (existsSync(out)) {
               forceVerifySet.add(out);
             }
+
             const image = sharp(input);
             const metadata = await image.metadata();
+
             let pipeline = image;
             if (metadata.width && metadata.width > rootMaxWidth) {
               pipeline = pipeline.resize({
@@ -396,13 +291,16 @@ jobs:
                 kernel: sharp.kernel.lanczos3
               });
             }
+
             await pipeline
               .webp({ quality: 85, smartSubsample: true, effort: 6 })
               .toFile(out);
+
             convertedMap[file] = outFile;
             processedCount++;
             console.log(`[ROOT IMAGE] ${file} (${metadata.width}x${metadata.height}) -> ${outFile}`);
           }
+
           // ==========================================================
           // 🔗 LOGO / FAVICON / OG-IMAGE / APP-ICON — universal
           //    content-hash guard now applies identically to ALL FOUR
@@ -416,22 +314,28 @@ jobs:
           // ==========================================================
           async function convertSingle(inputPath, outputPath, targetWidth, isSquare, resizeOpts, webpOpts, mapKey) {
             if (!existsSync(inputPath)) return false;
+
             const needsReconvert = await shouldReconvert(inputPath, outputPath, targetWidth, isSquare);
+
             if (!needsReconvert) {
               skippedCount++;
               return false;
             }
+
             if (existsSync(outputPath)) {
               forceVerifySet.add(outputPath);
             }
+
             let pipeline = sharp(inputPath);
             if (resizeOpts) pipeline = pipeline.resize(resizeOpts);
             await pipeline.webp(webpOpts).toFile(outputPath);
+
             convertedMap[mapKey] = outputPath.split('/').pop();
             processedCount++;
             console.log(`Done: ${mapKey} -> ${convertedMap[mapKey]}`);
             return true;
           }
+
           await convertSingle(
             'public/images/logo.png',
             'public/images/logo.webp',
@@ -440,6 +344,7 @@ jobs:
             { quality: 95, effort: 6 },
             'logo.png'
           );
+
           await convertSingle(
             'public/images/favicon.png',
             'public/images/favicon.webp',
@@ -448,6 +353,7 @@ jobs:
             { quality: 100, effort: 6 },
             'favicon.png'
           );
+
           await convertSingle(
             'public/images/og-image.jpg',
             'public/images/og-image.webp',
@@ -456,6 +362,7 @@ jobs:
             { quality: 85, effort: 6 },
             'og-image.jpg'
           );
+
           const appIconConverted = await convertSingle(
             'public/images/app-icon.jpg',
             'public/images/app-icon.webp',
@@ -464,6 +371,7 @@ jobs:
             { quality: 95, effort: 6 },
             'app-icon.jpg'
           );
+
           // ==========================================================
           // 📝 AUTO-UPDATE FRONTMATTER — content/posts/*.md, authors/*.md
           //    ආදිය ඇතුළේ image path string එක .jpg/.png -> .webp
@@ -488,6 +396,7 @@ jobs:
               const filePath = join(dir, file);
               let content = readFileSync(filePath, 'utf-8');
               let changed = false;
+
               // 1. Filename-changed replacements (existing behavior)
               for (const [oldName, newName] of Object.entries(convertedMap)) {
                 const regex = new RegExp(oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
@@ -496,6 +405,7 @@ jobs:
                   changed = true;
                 }
               }
+
               // 2. 🎯 Universal force-verify confirmation (filename
               //    unchanged, content refreshed) — no text replacement
               //    needed since the path string is already correct,
@@ -510,22 +420,26 @@ jobs:
                   console.log(`Force-verified (content refreshed, path unchanged): ${filePath} -> ${forcedBaseName}`);
                 }
               }
+
               if (changed) {
                 writeFileSync(filePath, content, 'utf-8');
                 console.log(`Frontmatter updated: ${filePath}`);
               }
             }
           }
+
           updateFrontmatterInDir('src/content/posts');
           updateFrontmatterInDir('src/content/authors');
           updateFrontmatterInDir('src/content/about');
           updateFrontmatterInDir('src/content/contact');
           updateFrontmatterInDir('src/content/pages');
+
           // config.json ඇතුළේ logo/favicon/app-icon paths update කිරීම
           const configPath = 'src/config/config.json';
           if (existsSync(configPath)) {
             let configContent = readFileSync(configPath, 'utf-8');
             let configChanged = false;
+
             for (const [oldName, newName] of Object.entries(convertedMap)) {
               const regex = new RegExp(oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
               if (regex.test(configContent)) {
@@ -533,6 +447,7 @@ jobs:
                 configChanged = true;
               }
             }
+
             // 🎯 Universal force-verify confirmation for config.json too
             // (logo.webp / favicon.webp / og-image.webp referenced here)
             for (const forcedPath of forceVerifySet) {
@@ -541,11 +456,13 @@ jobs:
                 console.log(`Force-verified (content refreshed, path unchanged): ${configPath} -> ${forcedBaseName}`);
               }
             }
+
             if (configChanged) {
               writeFileSync(configPath, configContent, 'utf-8');
               console.log('Frontmatter updated: src/config/config.json');
             }
           }
+
           // ==========================================================
           // 📝 AUTO-UPDATE public/manifest.json — now uses the SAME
           //    universal forceVerifySet mechanism as every other asset
@@ -559,6 +476,7 @@ jobs:
           if (existsSync(manifestPath)) {
             let manifestContent = readFileSync(manifestPath, 'utf-8');
             let manifestChanged = false;
+
             for (const [oldName, newName] of Object.entries(convertedMap)) {
               const regex = new RegExp(oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
               if (regex.test(manifestContent)) {
@@ -566,10 +484,13 @@ jobs:
                 manifestChanged = true;
               }
             }
+
             const appIconWebpPath = join(rootDir, 'app-icon.webp');
             const appIconExists = existsSync(appIconWebpPath);
+
             const missingAppIconRef = appIconExists && !manifestContent.includes('app-icon.webp');
             const needsForceVerify = appIconExists && (appIconConverted || forceVerifySet.has(appIconWebpPath));
+
             if (missingAppIconRef || needsForceVerify) {
               try {
                 const manifestJson = JSON.parse(manifestContent);
@@ -582,6 +503,7 @@ jobs:
                     }
                     return icon;
                   });
+
                   if (iconsFixed || missingAppIconRef) {
                     manifestContent = JSON.stringify(manifestJson, null, 2) + '\n';
                     manifestChanged = true;
@@ -596,16 +518,19 @@ jobs:
                 console.error('manifest.json parse error — skipping app-icon guard:', err.message);
               }
             }
+
             if (manifestChanged) {
               writeFileSync(manifestPath, manifestContent, 'utf-8');
               console.log('Frontmatter updated: public/manifest.json');
             }
           }
+
           console.log('--- Conversion Summary ---');
           console.log(`Processed: ${processedCount}, Skipped (already up-to-date): ${skippedCount}`);
           console.log(`Force-verified (content refreshed, filename unchanged): ${forceVerifySet.size}`);
           console.log(JSON.stringify(convertedMap, null, 2));
           EOF
+
       - name: Commit optimized images + hash sidecars + updated frontmatter
         run: |
           git config user.name "github-actions"
@@ -633,5 +558,5 @@ jobs:
           git add src/content/contact/*.md || true
           git add src/content/pages/*.md || true
           git add src/config/config.json || true
-          git diff --staged --quiet || git commit -m "Auto: Slider mobile-optimized WebP variants (PageSpeed 'Improve image delivery' fix) + universal content-hash guard + frontmatter/config/manifest sync"
+          git diff --staged --quiet || git commit -m "Auto: Universal content-hash guard for WebP optimization (all images, not just app-icon) + frontmatter/config/manifest sync"
           git push
