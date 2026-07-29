@@ -1,6 +1,7 @@
 ---
 import { getSinglePage } from "@/lib/contentParser.astro";
 import dateFormat from "@/lib/utils/dateFormat";
+import readingTime from "@/lib/utils/readingTime";
 import { humanize, plainify, slugify } from "@/lib/utils/textConverter";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import { Image } from "astro:assets";
@@ -16,124 +17,21 @@ type Props = {
 const authors = await getSinglePage("authors");
 const { className, posts, fluid } = Astro.props;
 
-// GLOBAL HARVESTING SEO
+// Global tags harvested for the Labels cloud section below.
 const allGlobalPosts = await getSinglePage("posts");
 const allTags = allGlobalPosts.flatMap((post) => post.data.tags || []);
 const uniqueTags = [...new Set(allTags)].filter(Boolean);
 
-// PAGESPEED "IMPROVE IMAGE DELIVERY" FIX (Est savings 14.2 KiB -
-// Nandage Duwa post flagged: served 397x598, displayed only 311x443 on
-// mobile). ROOT CAUSE: previous sizes value "(max-width: 640px) 50vw,
-// 204px" told the browser the image would fill 50% of a 640px-wide
-// viewport (=320px) - but the ACTUAL rendered column width on real
-// mobile devices (390px viewport, minus container padding/gutters from
-// .row/.col-6) is closer to ~180-190px, not 320px. This mismatch made
-// the browser over-fetch the 2x density variant needlessly on most
-// phones.
-//
-// PERMANENT FIX: sizes recalculated to match the ACTUAL .col-6/.col-4
-// grid math (container max-width 1000px, minus px-4/md:px-8 padding and
-// row gx-2/gx-4 gutters):
-// - Mobile (<640px, 2-col grid): ~46vw (accounts for gx-2 gutter +
-//   container padding, tighter than the old flat 50vw estimate)
-// - Tablet (640-768px, 2-col grid persists per "md:col-4" only applying
-//   at md breakpoint): ~44vw
-// - Desktop (>=768px, 3-col grid, container capped at 1000px): fixed
-//   ~300px (matches actual 3-column slot width inside the 1000px
-//   container)
-//
-// This lets the browser's native responsive-image selection pick the
-// SMALLEST sufficient file from the widths set instead of defaulting
-// to a larger variant on viewports where a smaller one is enough -
-// directly eliminating the flagged over-download without changing the
-// visual card size, aspect ratio, or grid layout in any way.
-//
-// NOTE: this comment lives in the frontmatter (script) section rather
-// than inline inside the <Image> tag's attribute list - Astro's JSX-like
-// component attribute parser cannot safely contain a raw /* */ block
-// comment between prop values (it previously caused a hard build
-// failure: "Expected ':' but found 'IMPROVE'" from esbuild, because the
-// comment's quoted text was misparsed as JSX expression syntax). Keeping
-// explanatory comments here in plain JS/TS context avoids that entirely
-// while still documenting the exact value chosen below.
+// PageSpeed image-delivery sizing. See project history for the full
+// rationale; kept short here to avoid large comment blocks.
 const postGridImageSizes = "(max-width: 640px) 46vw, (max-width: 768px) 44vw, 300px";
-
-// 2026-07 W3C VALIDATOR FIX (vnu.validator.w3.org - 4 errors:
-// "Bad value ... for attribute srcset on element img: Expected width
-// descriptor but found 1x ... When the sizes attribute is present,
-// all image candidate strings must specify a width."):
-//
-// ROOT CAUSE: The <Image> component below previously used BOTH
-// `densities={[1, 2]}` AND `sizes={postGridImageSizes}` together.
-// `densities` tells Astro to generate a srcset using density
-// descriptors (e.g. "image.webp 1x, image.webp 2x"), while `sizes`
-// tells the browser how wide the image will be rendered at different
-// viewports. Per the HTML/W3C spec, THESE TWO ARE MUTUALLY EXCLUSIVE
-// within the same srcset attribute: when a `sizes` attribute is
-// present on an <img>, every candidate string inside its `srcset`
-// MUST use a WIDTH descriptor ("NNNw"), never a density descriptor
-// ("Nx") - density descriptors are only valid when `sizes` is absent
-// entirely. Astro's <Image> component faithfully reproduces whatever
-// combination of props it's given, so passing both `densities` and
-// `sizes` together produces exactly the spec-invalid
-// srcset="...webp 1x, ...webp 2x" combined with a sizes attribute
-// that the Nu Html Checker correctly flags as a hard error on every
-// single post-grid image (4 flagged instances in the validator
-// report, one per visible post card image).
-//
-// PERMANENT FIX: `densities={[1, 2]}` has been replaced with
-// `widths={[204, 408]}` - Astro's width-descriptor equivalent, which
-// is 100% spec-compliant when combined with a `sizes` attribute
-// (this is in fact Astro's own documented recommendation: use
-// `widths` + `sizes` together, and `densities` only when `sizes` is
-// NOT used). The two chosen widths (204 = the original @1x display
-// width baseline used by the previous `sizes` calc, 408 = its @2x
-// retina equivalent) preserve the exact same intent as the original
-// densities=[1,2] approach - the browser can still pick either the
-// smaller or larger file depending on the viewport/DPR - while now
-// generating a fully spec-valid width-descriptor srcset
-// (e.g. "image.webp 204w, image.webp 408w"). Zero visual regression:
-// same physical image files, same responsive selection behavior,
-// same PageSpeed "Improve image delivery" savings intent - only the
-// srcset descriptor TYPE changed to satisfy the spec requirement
-// triggered by the co-present `sizes` attribute. This is also
-// self-healing for any future post images added to this same
-// component, since the fix lives at the single shared <Image> call
-// site used by every post-grid card site-wide.
-//
-// 2026-07 PAGESPEED "IMPROVE IMAGE DELIVERY" FOLLOW-UP FIX (Nandage
-// Duwa post flagged again: delivered 397x598 vs displayed-at-DPR2
-// requirement of only 326x464 - Est savings 12.3 KiB):
-//
-// ROOT CAUSE: `widths=[204, 408]` had only TWO buckets. A common
-// mobile phone (2-column grid, DPR2) needs an intrinsic width of
-// roughly 326px to satisfy its rendered CSS box at native pixel
-// density. Since 204 is smaller than that requirement, the browser is
-// FORCED to skip straight to 408 - the next available bucket - even
-// though 408 is far larger than the ~326 actually needed. This is a
-// classic "quantization gap": with only two width buckets spaced 2x
-// apart, any device whose real requirement falls in the middle
-// (between ~205px and ~407px) always over-fetches the larger file.
-//
-// PERMANENT FIX: a THIRD width bucket (336) has been inserted between
-// the existing two. 336 sits just above the ~326px real-world
-// requirement measured for this exact card size on common 2-column
-// mobile layouts (DPR2), so the browser can now select 336 instead of
-// jumping all the way to 408 - closing the quantization gap without
-// removing either of the original buckets (204 still serves smaller/
-// low-DPR phones, 408 still serves the 3-column desktop/tablet slot
-// exactly as before). This is purely additive: no existing srcset
-// candidate is removed, so no other viewport/DPR combination that
-// was already correctly served can regress.
 const postGridImageWidths = [204, 336, 408];
 ---
 
 <div class={`w-full ${className} bg-[#050505]`}>
-  {/* ප්‍රධාන පෝස්ට් ග්‍රිඩ් එක - RESPONSIVE ROW */}
   <div class={`row gy-4 gx-2 sm:gx-4 ${posts.length == 1 ? "justify-center" : ""} `}>
     {
       posts.map((post, i: number) => (
-        /* FIXED: මොබයිල් වලට col-6 සහ ඩෙස්ක්ටොප් වලට md:col-4 දමා Layout එක ආරක්ෂා කිරීම */
         <div class="col-6 md:col-4 flex flex-col justify-between bg-[#0d0d0d] p-2 sm:p-3 rounded-xl border border-[#1a1a1a] min-w-0">
           {post.data.image && (
             
@@ -154,32 +52,6 @@ const postGridImageWidths = [204, 336, 408];
             </a>
           )}
 
-          {/*
-            NEW: HORIZONTAL-LOCKED METADATA ROW WITH AUTO-COLLAPSING
-            OVERFLOW ARROW (fixes Category badge wrapping to a new
-            line on narrow mobile 2-column cards).
-
-            ROOT CAUSE (previous version): the parent <ul> used
-            "flex flex-wrap ... justify-between" - when the Category
-            badge + icon + Date text together exceeded the available
-            width on a col-6 (50%) mobile card, flex-wrap forced the
-            Date <li> down onto a second (vertical) row.
-
-            FIX: "flex-wrap" replaced with "flex-nowrap" so both
-            items are locked onto a single horizontal line at all
-            times. The row itself becomes horizontally scrollable
-            ("overflow-x-auto") so no content is ever clipped or lost
-            - if it does not fit, the user can reveal it via smooth
-            scroll instead of it breaking layout onto a new line.
-
-            A small pulse-animated arrow button (client-script
-            controlled, see the script block below) appears ONLY when
-            the row's content actually overflows its visible width.
-            Clicking it smooth-scrolls to reveal the rest, then
-            auto-collapses back to the start after 4 seconds - purely
-            additive UX, zero impact on cards that already fit
-            (button stays hidden there).
-          */}
           <div class="post-meta-scroll-wrap relative mt-2 mb-1 min-w-0">
             <ul class="post-meta-scroll flex flex-nowrap items-center gap-2 text-slate-200 text-[11px] sm:text-xs pr-5">
               <li class="flex items-center whitespace-nowrap flex-shrink-0">
@@ -199,8 +71,6 @@ const postGridImageWidths = [204, 336, 408];
               </li>
             </ul>
 
-            {/* Overflow arrow button - hidden by default, JS reveals
-                it only when the row above actually overflows. */}
             <button
               type="button"
               class="post-meta-arrow-btn hidden absolute right-0 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-emerald-500 text-neutral-950 items-center justify-center shadow-md"
@@ -212,31 +82,6 @@ const postGridImageWidths = [204, 336, 408];
             </button>
           </div>
 
-          {/* POST TITLE - 2026-07 W3C VALIDATOR FIX ("The heading h3
-              follows the heading h1, skipping 1 heading level"):
-              ROOT CAUSE: index.astro's hidden SEO <h1> (height:0,
-              visually collapsed but semantically real) is the page's
-              only h1. This card title was previously an <h3>, which
-              means the document's heading outline jumped h1 -> h3
-              with no h2 anywhere in between - an invalid heading
-              hierarchy per the HTML spec (each subsequent heading
-              level may only increase by one at a time in a
-              well-formed outline). PERMANENT FIX: changed the
-              semantic tag from <h3> to <h2> only - every Tailwind
-              utility class on this element (text-xs sm:text-base
-              font-extrabold, etc.) is preserved byte-for-byte, so the
-              VISUAL size/weight/appearance is 100% unchanged (Tailwind
-              utility classes always override the browser's default
-              h2 font-size, and this element never relied on
-              src/styles/base.css's default "h2, .h2 { @apply
-              text-h2-sm md:text-h2 }" sizing rule in the first place
-              since it already carried its own explicit text-xs/
-              sm:text-base classes). This also correctly fixes the
-              document outline for every other component that reuses
-              this same Posts.astro card pattern site-wide (category
-              pages, tag pages, home page, page/[slug].astro
-              pagination pages), since they all render through this
-              single shared component. */}
           <h2 class="mb-1 line-clamp-2 leading-tight">
             
               href={withTrailingSlash(`/blog/${post.id}`)}
@@ -246,21 +91,13 @@ const postGridImageWidths = [204, 336, 408];
             </a>
           </h2>
 
-          {/* EXCERPT TEXT */}
           <p class="text-slate-400 text-[11px] sm:text-sm line-clamp-2 mb-1 leading-relaxed">{plainify(post.body ?? "")}</p>
 
-          {/* 2026 READING TIME: readingTime.ts utility එක (කලින්
-              කිසිම component එකකින් use වුනේ නැති dead code) දැන්
-              Posts.astro grid card එකේ excerpt text එකට යටින්
-              display කරයි. Icon styling එක BiCalendarEdit badge
-              pattern එකටම සමාන (text-slate-400, small icon + text),
-              visual consistency එක පවත්වා ගනී. */}
           <p class="mb-2 flex items-center text-[10px] sm:text-xs text-slate-500 font-medium">
             <BiTime className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 text-emerald-500/70 flex-shrink-0" />
             {readingTime(post.body ?? "").toString()}
           </p>
 
-          {/* AUTHOR & READ ROW */}
           <div class="flex items-center justify-between border-t border-white/5 pt-2 mt-auto gap-2 min-w-0">
             {authors
               .filter((author) =>
@@ -299,22 +136,10 @@ const postGridImageWidths = [204, 336, 408];
     }
   </div>
 
-  {/* Blogger Style Labels Section */}
   {uniqueTags.length > 0 && (
     <div class="mt-12 p-4 sm:p-6 bg-[#FFCC00] rounded-xl border border-[#E6B800]">
       <div class="flex items-center gap-2 mb-4 border-b border-[#010203]/10 pb-2">
         <BiPurchaseTagAlt className="text-[#010203] h-5 w-5" />
-        {/* 2026-07 W3C VALIDATOR FIX ("The heading h4 follows the
-            heading h2, skipping 1 heading level"): the post card
-            title just above (in the .map() loop) was upgraded from
-            <h3> to <h2> in this same pass, which means this "Labels"
-            heading - the next heading in document order - must now
-            step down by exactly one level (h2 -> h3), not jump two
-            levels (h2 -> h4). Changed from <h4> to <h3> here; every
-            Tailwind class (text-sm sm:text-base font-black
-            text-[#010203]) is preserved byte-for-byte, so the visual
-            appearance is 100% unchanged - this is a pure semantic-tag
-            fix. */}
         <h3 class="text-sm sm:text-base font-black text-[#010203]">Labels (ටැග්ස්)</h3>
       </div>
 
@@ -354,13 +179,6 @@ const postGridImageWidths = [204, 336, 408];
 </div>
 
 <style is:global>
-  /*
-    NEW: post-meta horizontal-scroll support styles.
-    - Hides the native scrollbar visually (all major browsers) while
-      keeping the element fully scrollable via JS/touch/drag.
-    - scroll-behavior: smooth ensures the JS-driven scrollTo() calls
-      animate smoothly instead of jumping instantly.
-  */
   .post-meta-scroll {
     overflow-x: auto;
     scroll-behavior: smooth;
@@ -372,10 +190,6 @@ const postGridImageWidths = [204, 336, 408];
     height: 0;
     width: 0;
   }
-
-  /* Gentle pulse so the arrow button is noticeable without being
-     distracting - opacity/shadow only, no layout-affecting transform,
-     so it cannot cause any CLS. */
   .post-meta-arrow-btn {
     animation: postMetaArrowPulse 2s ease-in-out infinite;
   }
@@ -390,25 +204,18 @@ const postGridImageWidths = [204, 336, 408];
 </style>
 
 <script>
-  // NEW: post-meta overflow-arrow controller.
-  // For every post card's metadata row, detects whether its content
-  // overflows the visible width. If it does, shows a small pulse
-  // arrow button. Clicking it smooth-scrolls the row fully to the
-  // right, then after 4 seconds auto-collapses it back to the start.
   function initPostMetaScroll() {
-    const wraps = document.querySelectorAll<HTMLElement>('.post-meta-scroll-wrap');
+    const wraps = document.querySelectorAll(".post-meta-scroll-wrap");
 
-    wraps.forEach((wrap) => {
-      const scrollEl = wrap.querySelector<HTMLElement>('.post-meta-scroll');
-      const btn = wrap.querySelector<HTMLButtonElement>('.post-meta-arrow-btn');
+    wraps.forEach(function (wrap) {
+      if (wrap.getAttribute("data-meta-scroll-init") === "true") return;
+      wrap.setAttribute("data-meta-scroll-init", "true");
+
+      const scrollEl = wrap.querySelector(".post-meta-scroll");
+      const btn = wrap.querySelector(".post-meta-arrow-btn");
       if (!scrollEl || !btn) return;
 
-      // Avoid attaching duplicate listeners across repeated
-      // astro:page-load firings (View Transitions navigation).
-      if (wrap.dataset.metaScrollInit === 'true') return;
-      wrap.dataset.metaScrollInit = 'true';
-
-      let collapseTimer: ReturnType<typeof setTimeout> | null = null;
+      let collapseTimer = null;
 
       function clearCollapseTimer() {
         if (collapseTimer) {
@@ -420,64 +227,68 @@ const postGridImageWidths = [204, 336, 408];
       function checkOverflow() {
         const hasOverflow = scrollEl.scrollWidth > scrollEl.clientWidth + 2;
         if (hasOverflow) {
-          btn.classList.remove('hidden');
-          btn.classList.add('flex');
+          btn.classList.remove("hidden");
+          btn.classList.add("flex");
         } else {
-          btn.classList.add('hidden');
-          btn.classList.remove('flex');
+          btn.classList.add("hidden");
+          btn.classList.remove("flex");
         }
       }
 
       checkOverflow();
-      window.addEventListener('resize', checkOverflow);
+      window.addEventListener("resize", checkOverflow);
 
-      btn.addEventListener('click', () => {
-        scrollEl.scrollTo({ left: scrollEl.scrollWidth, behavior: 'smooth' });
-        btn.classList.add('opacity-0', 'pointer-events-none');
+      btn.addEventListener("click", function () {
+        scrollEl.scrollTo({ left: scrollEl.scrollWidth, behavior: "smooth" });
+        btn.classList.add("opacity-0", "pointer-events-none");
 
         clearCollapseTimer();
-        collapseTimer = setTimeout(() => {
-          scrollEl.scrollTo({ left: 0, behavior: 'smooth' });
-          btn.classList.remove('opacity-0', 'pointer-events-none');
+        collapseTimer = setTimeout(function () {
+          scrollEl.scrollTo({ left: 0, behavior: "smooth" });
+          btn.classList.remove("opacity-0", "pointer-events-none");
         }, 4000);
       });
     });
   }
 
-  document.addEventListener('astro:page-load', initPostMetaScroll);
+  document.addEventListener("astro:page-load", initPostMetaScroll);
   initPostMetaScroll();
 </script>
 
 <script>
   function initTagsToggler() {
-    const btn = document.getElementById('btn-toggle-tags');
-    const container = document.getElementById('tags-toggle-container');
-    const hiddenTags = document.querySelectorAll('.hidden-tag');
+    const btn = document.getElementById("btn-toggle-tags");
+    const container = document.getElementById("tags-toggle-container");
+    const hiddenTags = document.querySelectorAll(".hidden-tag");
 
     if (!btn || !container || hiddenTags.length === 0) return;
 
     let isOpen = false;
 
-    btn.addEventListener('click', () => {
+    btn.addEventListener("click", function () {
       isOpen = !isOpen;
 
       if (isOpen) {
-        container.style.maxHeight = '2000px';
-        hiddenTags.forEach(tag => tag.classList.remove('hidden'));
-        btn.querySelector('span')!.textContent = 'Show Less';
+        container.style.maxHeight = "2000px";
+        hiddenTags.forEach(function (tag) {
+          tag.classList.remove("hidden");
+        });
+        btn.querySelector("span").textContent = "Show Less";
       } else {
-        container.style.maxHeight = '110px';
-        btn.querySelector('span')!.textContent = 'Show All Tags';
+        container.style.maxHeight = "110px";
+        btn.querySelector("span").textContent = "Show All Tags";
 
-        setTimeout(() => {
+        setTimeout(function () {
           if (!isOpen) {
-            hiddenTags.forEach(tag => tag.classList.add('hidden'));
+            hiddenTags.forEach(function (tag) {
+              tag.classList.add("hidden");
+            });
           }
         }, 300);
       }
     });
   }
 
-  document.addEventListener('astro:page-load', initTagsToggler);
+  document.addEventListener("astro:page-load", initTagsToggler);
   initTagsToggler();
 </script>
