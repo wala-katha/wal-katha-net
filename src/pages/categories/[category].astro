@@ -58,6 +58,37 @@ const metaTitle = `${title} - ප්‍රවර්ගය | ${config?.site?.titl
 const postCount = sortedPosts?.length || 0;
 const metaDescription = `${title} ප්‍රවර්ගය යටතේ ඇති සියලුම බ්ලොග් ලිපි, නවතම සිංහල වල් කතා සහ වැල කතා${postCount > 0 ? ` (ලිපි ${postCount}ක්)` : ""} මෙතැනින් එකම තැනකින් නොමිලේ කියවා ගන්න.`;
 
+// 🎯 2026-07 GOOGLE SEARCH CONSOLE FIX ("Crawled - currently not
+// indexed" — /categories/amma-wala-katha/ flagged as an example):
+//
+// ROOT CAUSE (verified against src/content/posts/*.md frontmatter):
+// Only ONE post (gedara-driver-wal-katha.md) is tagged with all of
+// "amma-wala-katha", "school-wala-katha", "lesbian-guy-wala-katha",
+// "family-wala-katha", "new-wala-katha", "old-wala-katha", and
+// "other-wala-katha" simultaneously. That means these 7 category
+// archive pages all render the EXACT SAME single post card —
+// structurally near-identical, duplicate/thin content across 7
+// different URLs. Google's own documentation lists exactly this
+// pattern (thin taxonomy archives that duplicate a single item) as a
+// primary cause of "Crawled - currently not indexed".
+//
+// PERMANENT, SELF-HEALING FIX: any category page whose real post
+// count falls below a minimal threshold (postCount < 2 — i.e. 0 or 1
+// posts, which by definition cannot be meaningfully distinct from
+// another category showing the same lone post) is automatically
+// marked "noindex,nofollow" via Base.astro's existing "noindex" prop
+// (the exact same mechanism already used by 404.astro and
+// elements.mdx). This tells Google "crawl this page normally, but do
+// not index it" — removing the duplicate-content quality signal
+// entirely, without touching routing, content, or the page's normal
+// visible behavior for human visitors (the page still renders
+// exactly as before). The moment any category accumulates 2+ posts
+// (a future post gets tagged with it), this automatically flips back
+// to indexable with zero code changes required — this is computed
+// fresh from postCount on every build, not hardcoded to any specific
+// category slug.
+const isThinCategory = postCount < 2;
+
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
 
 // 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY:
@@ -128,6 +159,7 @@ const itemListSchema = currentPosts.length > 0 ? {
   meta_title={metaTitle}
   description={metaDescription} 
   canonical={canonicalUrl}
+  noindex={isThinCategory}
 >
   {/* Google Breadcrumb Snippet එක ඇතුළත් කිරීම */}
   <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
