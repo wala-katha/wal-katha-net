@@ -25,8 +25,8 @@ export default function SearchBar({ searchList }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [inputVal, setInputVal] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
-  // ✅ FIX A: useMemo — Fuse instance stable, searchList reference දෙකක් compare නොකෙරේ
-  // JSON.stringify key ලෙස නොයෙදෙනවා — slugs array length stable reference ලෙස භාවිත
+  // FIX A: useMemo - Fuse instance stable, searchList reference dekak compare nokere
+  // JSON.stringify key lesa noyedenava - slugs array length stable reference lesa bhavitha
   const fuse = useMemo(
     () =>
       new Fuse(searchList, {
@@ -36,10 +36,10 @@ export default function SearchBar({ searchList }: Props) {
         threshold: 0.5,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [] // ✅ CRITICAL: searchList mount වෙද්දී fix — prop නැවත වෙනස් නොවෙනවා (static SSG data)
-       // searchList dynamic නම් [searchList.length] use කරන්න
+    [] // CRITICAL: searchList mount vedi fix - prop nawatha venas nowenava (static SSG data)
+       // searchList dynamic nam [searchList.length] use karanna
   );
-  // ✅ FIX B: handleChange — useCallback, stable reference, re-render නොකෙරේ
+  // FIX B: handleChange - useCallback, stable reference, re-render nokere
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInputVal(e.target.value);
   }, []);
@@ -49,7 +49,7 @@ export default function SearchBar({ searchList }: Props) {
       inputRef.current?.focus();
     });
   }, []);
-  // ✅ FIX C: mount init — URL ?q= param කියවීම, dependency array හිස් — loop නෑ
+  // FIX C: mount init - URL ?q= param kiyavima, dependency array his - loop nae
   useEffect(() => {
     const searchStr = new URLSearchParams(window.location.search).get("q") ?? "";
     if (searchStr) {
@@ -63,9 +63,9 @@ export default function SearchBar({ searchList }: Props) {
       });
     }
   }, []);
-  // ✅ FIX D: ROOT CAUSE FIX — history.replaceState සම්පූර්ණයෙන් ඉවත් කළා
-  // Astro View Transitions සමඟ URL manipulation = component unmount → input නැතිවීම
-  // URL update නොකෙරේ — search state component ඇතුළේ පමණක් manage කෙරේ
+  // FIX D: ROOT CAUSE FIX - history.replaceState sampurnayenma ivath kala
+  // Astro View Transitions samaga URL manipulation = component unmount -> input naethivima
+  // URL update nokere - search state component athule pamanak manage kere
   useEffect(() => {
     if (inputVal.length > 2) {
       setSearchResults(fuse.search(inputVal) as SearchResult[]);
@@ -73,41 +73,21 @@ export default function SearchBar({ searchList }: Props) {
       setSearchResults([]);
     }
   }, [inputVal, fuse]);
-  // ==========================================================
-  // 🎯 CRITICAL BUG FIX (2026-07 — Search Result Links -> 404):
-  //
-  // ROOT CAUSE (confirmed via live repomix trace): search.astro builds
-  // "searchList" ONLY from the "posts" collection, and sets
-  // "slug: item.id" — i.e. the raw content-collection ID (e.g.
-  // "nandage-duwa-wal-katha"), WITHOUT any "blog/" route prefix.
-  //
-  // This component previously built result links as:
-  //   href={withTrailingSlash(`/${item.slug}`)}
-  // which resolves to "/nandage-duwa-wal-katha/". But the REAL, live
-  // route for every post (per src/pages/blog/[single].astro's
-  // getStaticPaths(), which maps params.single = post.id) is always
-  // "/blog/nandage-duwa-wal-katha/". src/pages/[regular].astro (which
-  // handles bare top-level slugs) only serves the "pages" content
-  // collection (about, contact, privacy-policy, etc.) — it has ZERO
-  // knowledge of "posts" collection IDs. This means every single
-  // clickable link inside the Search feature's result cards was a
-  // guaranteed 404 for every post in the collection, with no
-  // exceptions — a live, user-facing broken-link bug.
-  //
-  // PERMANENT, SELF-CONTAINED FIX: this component now builds every
-  // post result URL through a single shared helper (buildPostHref)
-  // that always prepends the mandatory "blog/" segment before the
-  // slug, matching blog/[single].astro's real route shape exactly.
-  // This is scoped to SearchBar.tsx only — search.astro's "slug"
-  // field is intentionally left as the raw content ID (so it remains
-  // reusable for any future non-href purpose, e.g. data attributes),
-  // and the URL-shape correction lives entirely at the two render
-  // call-sites that actually construct hrefs, which is the exact
-  // location the bug was introduced. Both the post-image wrapper
-  // anchor and the post-title anchor below are fixed identically, so
-  // they can never drift apart from each other again.
-  // ==========================================================
-  const buildPostHref = useCallback((slug: string) => withTrailingSlash(`/blog/${slug}`), []);
+  // ----------------------------------------------------------
+  // BUG FIX (2026-07): Search result links pointed to "/{slug}/"
+  // instead of the real post route "/blog/{slug}/", causing 404s.
+  // search.astro sets slug = item.id (raw content-collection id,
+  // no "blog/" prefix). The actual live route for every post is
+  // generated by src/pages/blog/[single].astro's getStaticPaths(),
+  // which always resolves to "/blog/{post.id}/". buildPostHref()
+  // below is the single source of truth for constructing a post
+  // link inside this component, so both the image-wrapper anchor
+  // and the title anchor always stay in sync with the real route.
+  // ----------------------------------------------------------
+  const buildPostHref = useCallback(
+    (slug: string) => withTrailingSlash("/blog/" + slug),
+    []
+  );
   return (
     <div className="min-h-[50vh] px-2 select-none relative">
       {/* EXIT BUTTON */}
@@ -131,10 +111,10 @@ export default function SearchBar({ searchList }: Props) {
                 style={{ transition: "transform 0.3s", filter: "drop-shadow(0 0 8px rgba(1,173,159,0.5))" }}>
             <IoSearchOutline className="h-6 w-6" />
           </span>
-          {/* ✅ INPUT — uncontrolled-style appearance, fully controlled value
-              transition inline style ලෙස — Tailwind/global CSS conflict නෑ
-              autoFocus නෑ — Astro hydration race condition නැතිකිරීමට
-              onFocus mount පසු manually focus කෙරේ */}
+          {/* INPUT - uncontrolled-style appearance, fully controlled value
+              transition inline style lesa - Tailwind/global CSS conflict nae
+              autoFocus nae - Astro hydration race condition naethikirimata
+              onFocus mount pasu manually focus kere */}
           <input
             ref={inputRef}
             type="text"
@@ -244,16 +224,14 @@ export default function SearchBar({ searchList }: Props) {
                       : String(item.data.date ?? "")
                   }>
                     {(() => {
-                      // ✅ ROOT FIX: dateFormat() ලබාදෙන return value එක
-                      // {day, month, year, isoString, toString} object එකක්.
-                      // JSX එකේ object එකක් direct render කළ විට React Error #31
-                      // throw වී, component crash වෙයි → SearchBar unmount →
-                      // input "disappears" (3-letter type වූ විට results render
-                      // වෙන මොහොතේම මේ crash එක සිදුවේ).
+                      // ROOT FIX: dateFormat() returns
+                      // {day, month, year, isoString, toString} object.
+                      // Rendering an object directly in JSX throws
+                      // React Error #31, crashing this component ->
+                      // input "disappears" when results render.
                       if (!item.data.date) return "";
                       const formatted = dateFormat(item.data.date);
                       if (formatted && typeof formatted === "object") {
-                        // object එකේ toString() method එක call කර string ලබාගන්න
                         return typeof (formatted as any).toString === "function"
                           ? (formatted as any).toString()
                           : String((formatted as any).isoString ?? "");
