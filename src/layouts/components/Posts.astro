@@ -17,21 +17,124 @@ type Props = {
 const authors = await getSinglePage("authors");
 const { className, posts, fluid } = Astro.props;
 
-// Global tags harvested for the Labels cloud section below.
+// GLOBAL HARVESTING SEO
 const allGlobalPosts = await getSinglePage("posts");
 const allTags = allGlobalPosts.flatMap((post) => post.data.tags || []);
 const uniqueTags = [...new Set(allTags)].filter(Boolean);
 
-// PageSpeed image-delivery sizing. See project history for the full
-// rationale; kept short here to avoid large comment blocks.
+// PAGESPEED "IMPROVE IMAGE DELIVERY" FIX (Est savings 14.2 KiB —
+// Nandage Duwa post flagged: served 397x598, displayed only 311x443 on
+// mobile). ROOT CAUSE: previous sizes value "(max-width: 640px) 50vw,
+// 204px" told the browser the image would fill 50% of a 640px-wide
+// viewport (=320px) — but the ACTUAL rendered column width on real
+// mobile devices (390px viewport, minus container padding/gutters from
+// .row/.col-6) is closer to ~180-190px, not 320px. This mismatch made
+// the browser over-fetch the 2x density variant needlessly on most
+// phones.
+//
+// PERMANENT FIX: sizes recalculated to match the ACTUAL .col-6/.col-4
+// grid math (container max-width 1000px, minus px-4/md:px-8 padding and
+// row gx-2/gx-4 gutters):
+// - Mobile (<640px, 2-col grid): ~46vw (accounts for gx-2 gutter +
+//   container padding, tighter than the old flat 50vw estimate)
+// - Tablet (640-768px, 2-col grid persists per "md:col-4" only applying
+//   at md breakpoint): ~44vw
+// - Desktop (>=768px, 3-col grid, container capped at 1000px): fixed
+//   ~300px (matches actual 3-column slot width inside the 1000px
+//   container)
+//
+// This lets the browser's native responsive-image selection pick the
+// SMALLEST sufficient file from the widths set instead of defaulting
+// to a larger variant on viewports where a smaller one is enough —
+// directly eliminating the flagged over-download without changing the
+// visual card size, aspect ratio, or grid layout in any way.
+//
+// NOTE: this comment lives in the frontmatter (script) section rather
+// than inline inside the <Image> tag's attribute list — Astro's JSX-like
+// component attribute parser cannot safely contain a raw /* */ block
+// comment between prop values (it previously caused a hard build
+// failure: "Expected ':' but found 'IMPROVE'" from esbuild, because the
+// comment's quoted text was misparsed as JSX expression syntax). Keeping
+// explanatory comments here in plain JS/TS context avoids that entirely
+// while still documenting the exact value chosen below.
 const postGridImageSizes = "(max-width: 640px) 46vw, (max-width: 768px) 44vw, 300px";
+
+// 🎯 2026-07 W3C VALIDATOR FIX (vnu.validator.w3.org — 4 errors:
+// "Bad value ... for attribute srcset on element img: Expected width
+// descriptor but found 1x ... When the sizes attribute is present,
+// all image candidate strings must specify a width."):
+//
+// ROOT CAUSE: The <Image> component below previously used BOTH
+// `densities={[1, 2]}` AND `sizes={postGridImageSizes}` together.
+// `densities` tells Astro to generate a srcset using density
+// descriptors (e.g. "image.webp 1x, image.webp 2x"), while `sizes`
+// tells the browser how wide the image will be rendered at different
+// viewports. Per the HTML/W3C spec, THESE TWO ARE MUTUALLY EXCLUSIVE
+// within the same srcset attribute: when a `sizes` attribute is
+// present on an <img>, every candidate string inside its `srcset`
+// MUST use a WIDTH descriptor ("NNNw"), never a density descriptor
+// ("Nx") — density descriptors are only valid when `sizes` is absent
+// entirely. Astro's <Image> component faithfully reproduces whatever
+// combination of props it's given, so passing both `densities` and
+// `sizes` together produces exactly the spec-invalid
+// srcset="...webp 1x, ...webp 2x" combined with a sizes attribute
+// that the Nu Html Checker correctly flags as a hard error on every
+// single post-grid image (4 flagged instances in the validator
+// report, one per visible post card image).
+//
+// PERMANENT FIX: `densities={[1, 2]}` has been replaced with
+// `widths={[204, 408]}` — Astro's width-descriptor equivalent, which
+// is 100% spec-compliant when combined with a `sizes` attribute
+// (this is in fact Astro's own documented recommendation: use
+// `widths` + `sizes` together, and `densities` only when `sizes` is
+// NOT used). The two chosen widths (204 = the original @1x display
+// width baseline used by the previous `sizes` calc, 408 = its @2x
+// retina equivalent) preserve the exact same intent as the original
+// densities=[1,2] approach — the browser can still pick either the
+// smaller or larger file depending on the viewport/DPR — while now
+// generating a fully spec-valid width-descriptor srcset
+// (e.g. "image.webp 204w, image.webp 408w"). Zero visual regression:
+// same physical image files, same responsive selection behavior,
+// same PageSpeed "Improve image delivery" savings intent — only the
+// srcset descriptor TYPE changed to satisfy the spec requirement
+// triggered by the co-present `sizes` attribute. This is also
+// self-healing for any future post images added to this same
+// component, since the fix lives at the single shared <Image> call
+// site used by every post-grid card site-wide.
+//
+// 🎯 2026-07 PAGESPEED "IMPROVE IMAGE DELIVERY" FOLLOW-UP FIX (Nandage
+// Duwa post flagged again: delivered 397x598 vs displayed-at-DPR2
+// requirement of only 326x464 — Est savings 12.3 KiB):
+//
+// ROOT CAUSE: `widths=[204, 408]` had only TWO buckets. A common
+// mobile phone (2-column grid, DPR2) needs an intrinsic width of
+// roughly 326px to satisfy its rendered CSS box at native pixel
+// density. Since 204 is smaller than that requirement, the browser is
+// FORCED to skip straight to 408 — the next available bucket — even
+// though 408 is far larger than the ~326 actually needed. This is a
+// classic "quantization gap": with only two width buckets spaced 2x
+// apart, any device whose real requirement falls in the middle
+// (between ~205px and ~407px) always over-fetches the larger file.
+//
+// PERMANENT FIX: a THIRD width bucket (336) has been inserted between
+// the existing two. 336 sits just above the ~326px real-world
+// requirement measured for this exact card size on common 2-column
+// mobile layouts (DPR2), so the browser can now select 336 instead of
+// jumping all the way to 408 — closing the quantization gap without
+// removing either of the original buckets (204 still serves smaller/
+// low-DPR phones, 408 still serves the 3-column desktop/tablet slot
+// exactly as before). This is purely additive: no existing srcset
+// candidate is removed, so no other viewport/DPR combination that
+// was already correctly served can regress.
 const postGridImageWidths = [204, 336, 408];
 ---
 
 <div class={`w-full ${className} bg-[#050505]`}>
+  {/* ප්‍රධාන පෝස්ට් ග්‍රිඩ් එක - RESPONSIVE ROW */}
   <div class={`row gy-4 gx-2 sm:gx-4 ${posts.length == 1 ? "justify-center" : ""} `}>
     {
       posts.map((post, i: number) => (
+        /* 🎯 FIXED: මොබයිල් වලට col-6 සහ ඩෙස්ක්ටොප් වලට md:col-4 දමා Layout එක ආරක්ෂා කිරීම */
         <div class="col-6 md:col-4 flex flex-col justify-between bg-[#0d0d0d] p-2 sm:p-3 rounded-xl border border-[#1a1a1a] min-w-0">
           {post.data.image && (
             
@@ -70,18 +173,19 @@ const postGridImageWidths = [204, 336, 408];
                 {dateFormat(post.data.date!)}
               </li>
             </ul>
-
             <button
               type="button"
               class="post-meta-arrow-btn hidden absolute right-0 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-emerald-500 text-neutral-950 items-center justify-center shadow-md"
               aria-label="Show more post info"
             >
               <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
               </svg>
             </button>
           </div>
 
+          {/* POST TITLE — 🎯 2026-07 W3C VALIDATOR FIX ("The heading h3
+              follows the heading h1, skipping 1 heading level") */}
           <h2 class="mb-1 line-clamp-2 leading-tight">
             
               href={withTrailingSlash(`/blog/${post.id}`)}
@@ -91,13 +195,16 @@ const postGridImageWidths = [204, 336, 408];
             </a>
           </h2>
 
+          {/* EXCERPT TEXT */}
           <p class="text-slate-400 text-[11px] sm:text-sm line-clamp-2 mb-1 leading-relaxed">{plainify(post.body ?? "")}</p>
 
+          {/* 🎯 2026 READING TIME */}
           <p class="mb-2 flex items-center text-[10px] sm:text-xs text-slate-500 font-medium">
             <BiTime className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 text-emerald-500/70 flex-shrink-0" />
             {readingTime(post.body ?? "").toString()}
           </p>
 
+          {/* AUTHOR & READ ROW */}
           <div class="flex items-center justify-between border-t border-white/5 pt-2 mt-auto gap-2 min-w-0">
             {authors
               .filter((author) =>
@@ -123,9 +230,9 @@ const postGridImageWidths = [204, 336, 408];
                   <span class="truncate">{author.data.title}</span>
                 </a>
               ))}
-
-            
-              href={withTrailingSlash(`/blog/${post.id}`)}
+              
+            <a 
+              href={withTrailingSlash(`/blog/${post.id}`)} 
               class="text-[11px] sm:text-xs bg-emerald-500 text-neutral-950 px-3 sm:px-5 py-1 sm:py-1.5 rounded-full hover:bg-emerald-400 transition-colors font-bold whitespace-nowrap text-center flex-shrink-0"
             >
               Read
@@ -136,13 +243,14 @@ const postGridImageWidths = [204, 336, 408];
     }
   </div>
 
+  {/* 🏷️ Blogger Style Labels Section */}
   {uniqueTags.length > 0 && (
     <div class="mt-12 p-4 sm:p-6 bg-[#FFCC00] rounded-xl border border-[#E6B800]">
       <div class="flex items-center gap-2 mb-4 border-b border-[#010203]/10 pb-2">
         <BiPurchaseTagAlt className="text-[#010203] h-5 w-5" />
         <h3 class="text-sm sm:text-base font-black text-[#010203]">Labels (ටැග්ස්)</h3>
       </div>
-
+      
       <div class="relative flex flex-col">
         <nav aria-label="Tags Cloud" class="transition-all duration-300 ease-in-out overflow-hidden max-h-[110px]" id="tags-toggle-container">
           <ul class="flex flex-wrap gap-2 m-0 p-0 list-none">
@@ -205,50 +313,55 @@ const postGridImageWidths = [204, 336, 408];
 
 <script>
   function initPostMetaScroll() {
-    const wraps = document.querySelectorAll(".post-meta-scroll-wrap");
-
-    wraps.forEach(function (wrap) {
-      if (wrap.getAttribute("data-meta-scroll-init") === "true") return;
-      wrap.setAttribute("data-meta-scroll-init", "true");
-
-      const scrollEl = wrap.querySelector(".post-meta-scroll");
-      const btn = wrap.querySelector(".post-meta-arrow-btn");
-      if (!scrollEl || !btn) return;
-
-      let collapseTimer = null;
-
-      function clearCollapseTimer() {
-        if (collapseTimer) {
-          clearTimeout(collapseTimer);
-          collapseTimer = null;
+    var wraps = document.querySelectorAll(".post-meta-scroll-wrap");
+    for (var i = 0; i < wraps.length; i++) {
+      (function (wrap) {
+        if (wrap.getAttribute("data-meta-scroll-init") === "true") {
+          return;
         }
-      }
+        wrap.setAttribute("data-meta-scroll-init", "true");
 
-      function checkOverflow() {
-        const hasOverflow = scrollEl.scrollWidth > scrollEl.clientWidth + 2;
-        if (hasOverflow) {
-          btn.classList.remove("hidden");
-          btn.classList.add("flex");
-        } else {
-          btn.classList.add("hidden");
-          btn.classList.remove("flex");
+        var scrollEl = wrap.querySelector(".post-meta-scroll");
+        var btn = wrap.querySelector(".post-meta-arrow-btn");
+        if (!scrollEl || !btn) {
+          return;
         }
-      }
 
-      checkOverflow();
-      window.addEventListener("resize", checkOverflow);
+        var collapseTimer = null;
 
-      btn.addEventListener("click", function () {
-        scrollEl.scrollTo({ left: scrollEl.scrollWidth, behavior: "smooth" });
-        btn.classList.add("opacity-0", "pointer-events-none");
+        function clearCollapseTimer() {
+          if (collapseTimer) {
+            clearTimeout(collapseTimer);
+            collapseTimer = null;
+          }
+        }
 
-        clearCollapseTimer();
-        collapseTimer = setTimeout(function () {
-          scrollEl.scrollTo({ left: 0, behavior: "smooth" });
-          btn.classList.remove("opacity-0", "pointer-events-none");
-        }, 4000);
-      });
-    });
+        function checkOverflow() {
+          var hasOverflow = scrollEl.scrollWidth > scrollEl.clientWidth + 2;
+          if (hasOverflow) {
+            btn.classList.remove("hidden");
+            btn.classList.add("flex");
+          } else {
+            btn.classList.add("hidden");
+            btn.classList.remove("flex");
+          }
+        }
+
+        checkOverflow();
+        window.addEventListener("resize", checkOverflow);
+
+        btn.addEventListener("click", function () {
+          scrollEl.scrollTo({ left: scrollEl.scrollWidth, behavior: "smooth" });
+          btn.classList.add("opacity-0", "pointer-events-none");
+
+          clearCollapseTimer();
+          collapseTimer = setTimeout(function () {
+            scrollEl.scrollTo({ left: 0, behavior: "smooth" });
+            btn.classList.remove("opacity-0", "pointer-events-none");
+          }, 4000);
+        });
+      })(wraps[i]);
+    }
   }
 
   document.addEventListener("astro:page-load", initPostMetaScroll);
@@ -257,38 +370,34 @@ const postGridImageWidths = [204, 336, 408];
 
 <script>
   function initTagsToggler() {
-    const btn = document.getElementById("btn-toggle-tags");
-    const container = document.getElementById("tags-toggle-container");
-    const hiddenTags = document.querySelectorAll(".hidden-tag");
-
+    var btn = document.getElementById('btn-toggle-tags');
+    var container = document.getElementById('tags-toggle-container');
+    var hiddenTags = document.querySelectorAll('.hidden-tag');
+    
     if (!btn || !container || hiddenTags.length === 0) return;
-
-    let isOpen = false;
-
-    btn.addEventListener("click", function () {
+    
+    var isOpen = false;
+    
+    btn.addEventListener('click', function () {
       isOpen = !isOpen;
-
+      
       if (isOpen) {
-        container.style.maxHeight = "2000px";
-        hiddenTags.forEach(function (tag) {
-          tag.classList.remove("hidden");
-        });
-        btn.querySelector("span").textContent = "Show Less";
+        container.style.maxHeight = '2000px';
+        hiddenTags.forEach(function (tag) { tag.classList.remove('hidden'); });
+        btn.querySelector('span').textContent = 'Show Less';
       } else {
-        container.style.maxHeight = "110px";
-        btn.querySelector("span").textContent = "Show All Tags";
-
+        container.style.maxHeight = '110px';
+        btn.querySelector('span').textContent = 'Show All Tags';
+        
         setTimeout(function () {
           if (!isOpen) {
-            hiddenTags.forEach(function (tag) {
-              tag.classList.add("hidden");
-            });
+            hiddenTags.forEach(function (tag) { tag.classList.add('hidden'); });
           }
         }, 300);
       }
     });
   }
 
-  document.addEventListener("astro:page-load", initTagsToggler);
+  document.addEventListener('astro:page-load', initTagsToggler);
   initTagsToggler();
 </script>
