@@ -12,7 +12,7 @@ import { humanize } from "@/lib/utils/textConverter";
 export async function getStaticPaths() {
   const tags = await getTaxonomy("posts", "tags");
 
-  // 🛠️ CRITICAL BUILD FIX (Auto-Fix): Tags ලැයිස්තුව හිස් නම් Astro Build එක Fail වීම වළක්වයි
+  // Tags ලැයිස්තුව හිස් නම් Astro Build එක Fail වීම වළක්වයි
   if (!tags || tags.length === 0) return [];
 
   return tags.map((tag) => {
@@ -25,15 +25,13 @@ export async function getStaticPaths() {
 const { tag } = Astro.params;
 
 const posts = await getSinglePage("posts");
-// 🛠️ CRITICAL DATA PROTECTION: posts දත්ත හිස් නම්සිදුවන සයිට් ක්‍රෑෂ් (Crash) වැළැක්වීම
+// posts දත්ත හිස් නම් සිදුවන සයිට් crash එක වළක්වයි
 const filterByTags = taxonomyFilter(posts || [], "tags", tag);
 const sortedPosts = sortByDate(filterByTags);
 
-// 🎯 2026 TAG PAGINATION FIX (Core Web Vitals + SEO Depth): categories/
-// [category].astro එකේම root-cause fix එකම pattern — tag pages වලටත්
-// posts count 6ට වඩා වැඩි නම් page load size එක අනවශ්‍ය ලෙස ලොකු වීම
-// වළක්වයි. config.settings.pagination (6) limit එකම භාවිතා කරයි. Page
-// 1 මෙම file එකෙන්ම serve වේ; Page 2+ සඳහා අලුතින් සාදන ලද
+// tag pages වලටත් posts count 6ට වඩා වැඩි නම් page load size එක
+// අනවශ්‍ය ලෙස ලොකු වීම වළක්වයි. config.settings.pagination (6) limit
+// එකම භාවිතා කරයි. Page 1 මෙම file එකෙන්ම serve වේ; Page 2+ සඳහා
 // tags/[tag]/page/[slug].astro handle කරයි.
 const paginationLimit = config?.settings?.pagination || 6;
 const totalPages = Math.ceil((sortedPosts?.length || 0) / paginationLimit);
@@ -41,25 +39,34 @@ const currentPosts = sortedPosts.slice(0, paginationLimit);
 
 const title = humanize(tag || "");
 
-// 📈 SEO ප්‍රශස්තකරණය: සෙවුම් යන්ත්‍ර සඳහා නිවැරදි Meta දත්ත සහ පිරිසිදු ලින්ක්ස්
-// ✅ FIXED: "Wala Katha" duplication bug — metaTitle variable එකම දැන්
-// title සහ meta_title දෙකටම pass කරනවා, Base.astro එකෙන් "- Wala Katha"
-// නැවත append කරන්නේ meta_title empty වෙලාවට විතරයි නිසා, මෙතන
-// meta_title එකට value එකක් දීමෙන් duplication එක සම්පූර්ණයෙන්ම නවතී.
+// SEO ප්‍රශස්තකරණය: සෙවුම් යන්ත්‍ර සඳහා නිවැරදි Meta දත්ත සහ පිරිසිදු ලින්ක්ස්
+// metaTitle එකම title සහ meta_title දෙකටම pass කරනවා, "- Wala Katha"
+// duplication එක නවතී.
 const metaTitle = `${title} - ටැගය | ${config?.site?.title || "Wala Katha"}`;
 
-// ✅ FIXED (Ahrefs "Meta description too short"): පරණ template එකෙන් 96-99
-// characters විතරයි ලැබුනේ (Ahrefs ~110 char minimum threshold එකට අඩුයි).
-// සියලුම tags වලට consistent ලෙස වැඩිකළ, තව keyword-rich sentence එකක්
-// එකතු කරලා 110+ characters ලබාගැනීමට template එක extend කළා. Post
-// count එකත් dynamic ලෙස description එකට එකතු කරලා uniqueness එකත්
-// වැඩිකළා (duplicate-description risk එකත් අඩුවෙනවා).
+// Post count එකත් dynamic ලෙස description එකට එකතු කරලා uniqueness එකත් වැඩිකළා
 const postCount = sortedPosts?.length || 0;
 const metaDescription = `${title} ටැගය (Tag) යටතේ ඇති සියලුම බ්ලොග් ලිපි, නවතම රසවත් සිංහල වල් කතා සහ වැල කතා${postCount > 0 ? ` (ලිපි ${postCount}ක්)` : ""} මෙතැනින් එකම තැනකින් නොමිලේ කියවා ගන්න.`;
 
+// Google Search Console "Discovered - currently not indexed" FIX (2026-07):
+// categories/[category].astro එකේම root-cause fix එකම pattern —
+// tag එකකට post 1ක් හෝ 0ක් පමණක් ඇත්නම් (postCount < 2), එම tag
+// archive page එක /blog/{post}/ එකේ දැනටමත් ඇති content එකම duplicate
+// කරන thin content page එකක් වේ. Google Search Console එකේ පෙන්වූ
+// aluth-katha, duwakatha, famlly-katha, famly-katha, hot-katha,
+// sex-katha, thaththa-katha ටැග් 7ම මෙම pattern එකට ගැලපේ (post 1ක්
+// හෝ ඇති, එකිනෙකාට වඩා distinct නොවන archive pages).
+//
+// Fix එක: postCount < 2 වන ඕනෑම tag page එකකට noindex,nofollow
+// meta tag එකක් Base.astro හරහා auto-add කරයි. Page එක සාමාන්‍ය
+// පරිදිම render වේ (visitors ට normal), Google ට පමණක් index
+// කරන්නට එපා කියන signal එකක් යයි. අනාගතයේ post ගණන 2+ බවට වැඩි
+// වුවහොත් ස්වයංක්‍රීයවම indexable බවට හැරේ — build එකෙන් fresh
+// ලෙස ගණනය වන නිසා.
+const isThinTag = postCount < 2;
+
 const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
 
-// 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY:
 // Base.astro auto-appends a trailing slash to <link rel="canonical">
 // (Cloudflare Pages serves directory-style URLs with a trailing slash
 // by default). This local canonicalUrl is also embedded directly inside
@@ -68,10 +75,10 @@ const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 const canonicalUrl = `${base_url}/tags/${tag}/`;
 const tagsIndexUrl = `${base_url}/tags/`;
 
-// 🎯 PAGINATION SEO LINK TAG: same convention as categories/[category].astro
+// PAGINATION SEO LINK TAG: same convention as categories/[category].astro
 const nextUrl = totalPages > 1 ? `${canonicalUrl}page/2/` : null;
 
-// 🚀 GOOGLE SEO BREADCRUMB SCHEMA: සෙවුම් යන්ත්‍ර වලට ටැග් ව්‍යුහය වටහා දීමට (JSON-LD)
+// GOOGLE SEO BREADCRUMB SCHEMA: සෙවුම් යන්ත්‍ර වලට ටැග් ව්‍යුහය වටහා දීමට (JSON-LD)
 const breadcrumbSchema = {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
@@ -86,7 +93,7 @@ const breadcrumbSchema = {
       "@type": "ListItem",
       "position": 2,
       "name": "Tags",
-      "item": tagsIndexUrl // යම් හෙයකින් /tags පිටුවක් තිබේ නම් ඒ සඳහා ලින්ක් එක
+      "item": tagsIndexUrl
     },
     {
       "@type": "ListItem",
@@ -97,7 +104,10 @@ const breadcrumbSchema = {
   ]
 };
 
-// 🎯 2026 ItemList SCHEMA — categories/[category].astro pattern එකම
+// ItemList SCHEMA — categories/[category].astro pattern එකම.
+// isThinTag නම් schema එකේ numberOfItems=1 විදිහටම, thin පිටුවක්
+// කියලා Google ට accurate signal එකක් continue වේ (හිස් schema
+// එකක් නොවේ, ඇත්ත content එකම reflect කරයි).
 const itemListSchema = currentPosts.length > 0 ? {
   "@context": "https://schema.org",
   "@type": "ItemList",
@@ -117,16 +127,23 @@ const itemListSchema = currentPosts.length > 0 ? {
   meta_title={metaTitle}
   description={metaDescription} 
   canonical={canonicalUrl}
+  noindex={isThinTag}
 >
   {/* Google Breadcrumb Snippet එක ඇතුළත් කිරීම (SEO Booster) */}
   <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
 
-  {/* 🎯 ItemList Schema — listing page එකේ posts array එක structured data ලෙස */}
+  {/* ItemList Schema — listing page එකේ posts array එක structured data ලෙස.
+      Thin tag පිටුවලටත් schema එක render වේ (content එකට match වන
+      accurate data එකකි, noindex meta එකෙන් Google ට indexing decision
+      එක handle කරයි). */}
   {itemListSchema && (
     <script type="application/ld+json" set:html={JSON.stringify(itemListSchema)} />
   )}
 
-  {/* ⚡ GOOGLE BOT PAGINATION HINT: page 2+ තියෙනවා නම් rel="next" tag එක */}
+  {/* GOOGLE BOT PAGINATION HINT: page 2+ තියෙනවා නම් rel="next" tag එක.
+      Thin tag pages (postCount < 2) වලට pagination page 2ක් කවදාවත්
+      නොපවතින නිසා (totalPages එහෙම always 1), මෙය ස්වයංක්‍රීයවම
+      skip වේ — extra check එකක් අවශ්‍ය නැත. */}
   <Fragment slot="head">
     {nextUrl && <link rel="next" href={nextUrl} />}
   </Fragment>
@@ -139,11 +156,9 @@ const itemListSchema = currentPosts.length > 0 ? {
       <p class="text-center text-2xl mb-4">Showing Posts From</p>
       
       {/* 100% Original Main Tag Heading
-          🎯 KEYWORD-DISTRIBUTION FIX: H1 එක කලින් bare tag name එකක්
-          විතරයි (උදා: "Akka Katha"). දැන් brand + topical keyword
+          KEYWORD-DISTRIBUTION FIX: H1 එක brand + topical keyword
           variation (Sinhala Wal Katha / Wala Katha) H1 එකටම natural
-          ලෙස ඇතුළත් කර ඇත, සහ intro paragraph එකකින් keyword coverage
-          එක broaden කර ඇත. Visual size/color/spacing පවතින .h2
+          ලෙස ඇතුළත් කර ඇත. Visual size/color/spacing පවතින .h2
           .text-primary classes එලෙසම — no design regression. */}
       <h1 class="h2 !mb-4 text-center text-primary">{title} - Sinhala Wal Katha | Wala Katha</h1>
       <p class="text-center text-sm text-text/70 mb-16 max-w-xl mx-auto leading-relaxed">
@@ -160,7 +175,7 @@ const itemListSchema = currentPosts.length > 0 ? {
         </div>
       )}
 
-      {/* 🎯 TAG PAGINATION UI */}
+      {/* TAG PAGINATION UI */}
       {totalPages > 1 && (
         <div class="mt-12 flex justify-center">
           <Pagination
