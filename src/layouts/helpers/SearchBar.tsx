@@ -165,7 +165,8 @@ export default function SearchBar({ searchList }: Props) {
 
       {showEmptyState && (
         <div className="text-center py-16 text-white/40 text-base">
-          <p>Search-Nothing found. Try a different word.</p>
+          <p>කිසිදු ප්‍රතිඵලයක් හමු නොවීය</p>
+          <p className="text-sm mt-2">වෙනත් වචනයක් උත්සාහ කරන්න</p>
         </div>
       )}
     </div>
