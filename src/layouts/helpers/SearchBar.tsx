@@ -9,22 +9,27 @@ import {
   IoCloseCircleOutline,
   IoCloseOutline,
 } from "react-icons/io5";
+
 export type SearchItem = {
   slug: string;
   data: any;
   content: any;
 };
+
 interface Props {
   searchList: SearchItem[];
 }
+
 interface SearchResult {
   item: SearchItem;
   refIndex: number;
 }
+
 export default function SearchBar({ searchList }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [inputVal, setInputVal] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
+
   // ✅ FIX A: useMemo — Fuse instance stable, searchList reference දෙකක් compare නොකෙරේ
   // JSON.stringify key ලෙස නොයෙදෙනවා — slugs array length stable reference ලෙස භාවිත
   const fuse = useMemo(
@@ -39,16 +44,19 @@ export default function SearchBar({ searchList }: Props) {
     [] // ✅ CRITICAL: searchList mount වෙද්දී fix — prop නැවත වෙනස් නොවෙනවා (static SSG data)
        // searchList dynamic නම් [searchList.length] use කරන්න
   );
+
   // ✅ FIX B: handleChange — useCallback, stable reference, re-render නොකෙරේ
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInputVal(e.target.value);
   }, []);
+
   const handleClear = useCallback(() => {
     setInputVal("");
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
   }, []);
+
   // ✅ FIX C: mount init — URL ?q= param කියවීම, dependency array හිස් — loop නෑ
   useEffect(() => {
     const searchStr = new URLSearchParams(window.location.search).get("q") ?? "";
@@ -63,6 +71,7 @@ export default function SearchBar({ searchList }: Props) {
       });
     }
   }, []);
+
   // ✅ FIX D: ROOT CAUSE FIX — history.replaceState සම්පූර්ණයෙන් ඉවත් කළා
   // Astro View Transitions සමඟ URL manipulation = component unmount → input නැතිවීම
   // URL update නොකෙරේ — search state component ඇතුළේ පමණක් manage කෙරේ
@@ -73,11 +82,13 @@ export default function SearchBar({ searchList }: Props) {
       setSearchResults([]);
     }
   }, [inputVal, fuse]);
+
   return (
     <div className="min-h-[50vh] px-2 select-none relative">
+
       {/* EXIT BUTTON */}
       <div className="max-w-2xl mx-auto flex justify-end mb-4">
-        
+        <a
           href="/"
           rel="home"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.08] text-white/60 hover:text-red-400 transition-all duration-300 text-sm font-semibold tracking-wide shadow-sm"
@@ -88,14 +99,17 @@ export default function SearchBar({ searchList }: Props) {
           <IoCloseOutline className="h-5 w-5" />
         </a>
       </div>
+
       {/* SEARCH INPUT BOX */}
       <div className="max-w-2xl mx-auto mb-10">
         <div className="relative flex items-center group">
+
           {/* Left Icon */}
           <span className="absolute left-4 z-10 text-[#01AD9F] pointer-events-none group-focus-within:scale-110"
                 style={{ transition: "transform 0.3s", filter: "drop-shadow(0 0 8px rgba(1,173,159,0.5))" }}>
             <IoSearchOutline className="h-6 w-6" />
           </span>
+
           {/* ✅ INPUT — uncontrolled-style appearance, fully controlled value
               transition inline style ලෙස — Tailwind/global CSS conflict නෑ
               autoFocus නෑ — Astro hydration race condition නැතිකිරීමට
@@ -139,6 +153,7 @@ export default function SearchBar({ searchList }: Props) {
               e.currentTarget.style.boxShadow = "none";
             }}
           />
+
           {/* Clear Button */}
           {inputVal.length > 0 && (
             <button
@@ -154,6 +169,7 @@ export default function SearchBar({ searchList }: Props) {
           )}
         </div>
       </div>
+
       {/* RESULT COUNT */}
       {inputVal.length > 2 && (
         <div
@@ -169,6 +185,7 @@ export default function SearchBar({ searchList }: Props) {
           <span className="text-[#F8F8FF] font-semibold">'{inputVal}'</span>
         </div>
       )}
+
       {/* RESULTS GRID */}
       <div
         id="search-results-list"
@@ -184,8 +201,8 @@ export default function SearchBar({ searchList }: Props) {
           >
             <div>
               {item.data.image && (
-                
-                  href={withTrailingSlash(`/blog/${item.slug}`)}
+                <a
+                  href={withTrailingSlash(`/${item.slug}`)}
                   className="rounded-xl block overflow-hidden relative aspect-video w-full bg-white/5"
                 >
                   <img
@@ -200,6 +217,7 @@ export default function SearchBar({ searchList }: Props) {
                   />
                 </a>
               )}
+
               <ul className="mt-5 mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-white/50">
                 <li className="flex items-center font-medium">
                   <BiCalendarEdit className="mr-1.5 h-4 w-4 text-[#01AD9F]" />
@@ -233,7 +251,7 @@ export default function SearchBar({ searchList }: Props) {
                     {(item.data.categories ?? [])
                       .filter((c: unknown) => typeof c === "string" && c.length > 0)
                       .map((category: string, i: number, arr: string[]) => (
-                        
+                        <a
                           key={i}
                           href={withTrailingSlash(`/categories/${slugify(category)}`)}
                           className="hover:text-[#01AD9F]"
@@ -246,9 +264,10 @@ export default function SearchBar({ searchList }: Props) {
                   </div>
                 </li>
               </ul>
+
               <h3 className="mb-2 text-lg sm:text-xl font-bold tracking-tight">
-                
-                  href={withTrailingSlash(`/blog/${item.slug}`)}
+                <a
+                  href={withTrailingSlash(`/${item.slug}`)}
                   className="block text-[#F8F8FF] hover:text-[#01AD9F] line-clamp-2 leading-snug"
                   style={{ transition: "color 0.3s" }}
                 >
@@ -256,12 +275,14 @@ export default function SearchBar({ searchList }: Props) {
                 </a>
               </h3>
             </div>
+
             <p className="text-white/60 text-sm line-clamp-2 mt-2 leading-relaxed">
               {typeof item.content === "string" ? item.content : ""}
             </p>
           </article>
         ))}
       </div>
+
       {/* EMPTY STATE */}
       {inputVal.length > 2 && searchResults?.length === 0 && (
         <div className="text-center py-16 text-white/40 text-base">
