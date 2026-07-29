@@ -1,0 +1,17 @@
+# 🎯 2026-07 — Google Search Console "Not found (404)" report fix.
+# Categories rename වීමට කලින් Google/social media indexed කරගත් old
+# URLs, real content නොමැති නිසා 404 වේ. පැරණි links share වී තිබිය
+# හැකි නිසා (SEO value + user experience), 404 එකක් වෙනුවට permanent
+# 301 redirect එකක් නව නිවැරදි URL එකට යවයි.
+#
+# ⚠️ /categories/development සහ /blog/post-3 මෙතන ඇතුළත් නොකෙරේ —
+# ඒවාට කිසිදු කාලයක real, equivalent content මෙම site එකේ පැවතුනේ
+# නැත (theme demo/template leftover slugs), එබැවින් ඒවා 404 වශයෙන්ම
+# පැවතීම නිවැරදි හැසිරීමකි.
+
+/categories/amma-katha/                    /categories/amma-wala-katha/          301
+/categories/amma-katha                     /categories/amma-wala-katha/          301
+/categories/lesbian-and-guy-wala-katha/    /categories/lesbian-guy-wala-katha/   301
+/categories/lesbian-and-guy-wala-katha     /categories/lesbian-guy-wala-katha/   301
+/copyright/                                /copyright-credit-policy/             301
+/copyright                                 /copyright-credit-policy/             301
