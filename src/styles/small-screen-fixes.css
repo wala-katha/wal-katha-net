@@ -1,0 +1,72 @@
+/* ==========================================================
+   SMALL SCREEN FIX (narrow phone squish / badge truncation)
+
+   ROOT CAUSE: post card category badge used a fixed max-width
+   percentage (65% of the card column) plus text truncation.
+   This works fine on phones roughly 380px and wider, but on
+   genuinely narrow screens (320-379px CSS viewport - common on
+   older/budget Android devices) the 2-column post grid leaves
+   very little room per card, so the badge text gets cut off
+   mid-word ("Amma wala k...") and the whole meta row looks
+   squished/broken, even though the exact same HTML looks
+   perfectly fine on a slightly wider phone.
+
+   FIX: below 380px viewport width only, the category+date meta
+   row switches from a single horizontal line to a stacked
+   column layout (each item gets its own full-width line), and
+   the category badge truncation is lifted so the full category
+   name is always fully readable instead of being cut off.
+
+   This block only activates below 380px - every screen 380px
+   and above (including a typical modern phone) is completely
+   untouched and renders exactly as it already does today.
+   ========================================================== */
+
+@media (max-width: 380px) {
+  /* Post grid card meta row (category + date) - stack instead
+     of squish */
+  .post-card-meta-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .post-card-category-item {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .post-card-category-link {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    max-width: 100%;
+  }
+
+  /* Similar-posts card meta row - same stacking, kept centered
+     to match that component's centered card design */
+  .similar-card-meta-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Header logo tightened slightly further so the logo, search
+     icon, and hamburger button never crowd each other on very
+     narrow screens */
+  .navbar-brand img {
+    max-width: 140px;
+  }
+
+  /* Container side padding trimmed slightly so cards get a
+     touch more usable width on very narrow devices */
+  .container {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  /* Post grid gutter tightened slightly on very narrow screens */
+  .row.gx-2 {
+    --bs-gutter-x: 0.5rem;
+  }
+}
