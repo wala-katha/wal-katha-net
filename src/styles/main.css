@@ -3,14 +3,12 @@
 @plugin "../tailwind-plugin/tw-bs-grid.mjs";
 @plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/typography";
-
 @import "./safe.css";
 @import "./utilities.css";
-
+@import "./small-screen-fixes.css";
 @layer base {
   @import "./base.css";
 }
-
 @layer components {
   @import "./components.css";
   @import "./navigation.css";
