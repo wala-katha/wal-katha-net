@@ -8,30 +8,22 @@ import { getSinglePage } from "@/lib/contentParser.astro";
 import { sortByDate } from "@/lib/utils/sortFunctions";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 
-// 🎯 HTML PAGE SIZE FIX (SEO Site Checkup — "HTML Page Size Test"
-// flagged 37.35 KB vs 33 KB average, recommending "external style
-// sheets"): the large :global(...) CSS block that used to live inline
-// inside this file's <style is:global> tag (below) has been moved,
-// byte-for-byte identical, to src/styles/index-overrides.css and is
-// now imported here as a static asset import instead. Astro's Vite
-// pipeline (cssCodeSplit: true, already set in astro.config.mjs)
-// extracts this into its own hashed, cacheable .css file at build
-// time — public/_headers already has a site-wide
-// "/*.css -> Cache-Control: public, max-age=31536000, immutable"
-// rule, so this file is automatically cached for a year with zero
-// additional config. This directly shrinks the HTML payload (the CSS
-// text is no longer duplicated inside every homepage HTML response)
-// while being 100% functionally and visually identical — same
-// selectors, same !important flags, same cascade order, same output
-// CSS. Base.astro's inline <style>/<script> and PostSingle.astro's
-// inline comment-system CSS/JS were intentionally left untouched
-// (see index-overrides.css's own header comment for why) to protect
-// existing working behavior exactly as requested.
+// HTML PAGE SIZE FIX (SEO Site Checkup - "HTML Page Size Test" flagged
+// 37.35 KB vs 33 KB average, recommending "external style sheets"): the
+// large :global(...) CSS block that used to live inline inside this
+// file's <style is:global> tag has been moved, byte-for-byte identical,
+// to src/styles/index-overrides.css and is now imported here as a
+// static asset import instead. Astro's Vite pipeline (cssCodeSplit:
+// true, already set in astro.config.mjs) extracts this into its own
+// hashed, cacheable .css file at build time - public/_headers already
+// has a site-wide "/*.css -> Cache-Control: public, max-age=31536000,
+// immutable" rule, so this file is automatically cached for a year
+// with zero additional config.
 import "@/styles/index-overrides.css";
 
-// 🎯 AI VISIBILITY UPGRADE (2026-07): social.json imported so the
+// AI VISIBILITY UPGRADE (2026-07): social.json imported so the
 // Organization JSON-LD entity below can safely compute a "sameAs"
-// array — see organizationSameAs comment further down for the
+// array - see organizationSameAs comment further down for the
 // safety logic (placeholder base-domain links are filtered out).
 import social from "@/config/social.json";
 
@@ -72,10 +64,10 @@ function buildNavItems(base: string) {
 
 const navigationSchema = buildNavItems(base_url);
 
-// 🎯 AI VISIBILITY UPGRADE (2026-07): Organization "sameAs" array.
+// AI VISIBILITY UPGRADE (2026-07): Organization "sameAs" array.
 //
 // WHY: schema.org's "sameAs" property is a core AI/entity-graph
-// authority signal — it lets Google's Knowledge Graph AND generative
+// authority signal - it lets Google's Knowledge Graph AND generative
 // AI systems (AI Overviews, ChatGPT, Perplexity, Claude) confirm that
 // this Organization entity is the SAME real-world entity referenced
 // on other platforms, increasing confidence when citing or summarizing
@@ -83,7 +75,7 @@ const navigationSchema = buildNavItems(base_url);
 //
 // SAFETY FILTER (why this isn't a blind Object.values() dump):
 // config/social.json currently contains PLACEHOLDER links (e.g.
-// "https://www.facebook.com/" — the generic Facebook homepage, not a
+// "https://www.facebook.com/" - the generic Facebook homepage, not a
 // page-specific profile URL). Injecting a generic base-domain URL as
 // "sameAs" would be inaccurate structured data (it doesn't actually
 // identify THIS entity) and could reduce trust in the entire schema
@@ -93,7 +85,7 @@ const navigationSchema = buildNavItems(base_url);
 // SELF-HEALING: once real, page-specific social profile URLs are
 // added to config/social.json in the future, they automatically pass
 // this filter and appear in "sameAs" with zero code changes required
-// — no other file needs to be touched.
+// - no other file needs to be touched.
 const organizationSameAs = (social?.main || [])
   .map((s: any) => s?.link)
   .filter((link: any): link is string => {
@@ -106,19 +98,19 @@ const organizationSameAs = (social?.main || [])
     }
   });
 
-// 🎯 SEO FIX #1 — "Increase length of Title Tag" (SEOptimizer Medium
+// SEO FIX #1 - "Increase length of Title Tag" (SEOptimizer Medium
 // Priority): The previous title "Wala Katha - Sinhala Wal Katha &
-// Wela Katha" was only 44 characters — below the ~50-60 character
+// Wela Katha" was only 44 characters - below the ~50-60 character
 // range SEO auditing tools (SEOptimizer, Ahrefs, Google) recommend
 // for a fully-utilized, keyword-rich <title> tag. This constant is
 // now the SINGLE SOURCE OF TRUTH for the homepage title, reused
 // identically across <title>/meta_title (via Base.astro props),
-// og:title, and twitter:title below — guaranteeing all three can
+// og:title, and twitter:title below - guaranteeing all three can
 // never drift out of sync with each other while extending length to
 // 58 characters (within the safe non-truncating SERP range).
 const homeTitle = "Wala Katha - Sinhala Wal Katha & Wela Katha Stories 2026";
 
-// 🎯 SEO FIX #2 — "Use your main keywords across the important HTML
+// SEO FIX #2 - "Use your main keywords across the important HTML
 // Tags" (SEOptimizer Medium Priority): the homepage's H1 heading
 // previously repeated the same two keyword phrases already present in
 // the <title> tag verbatim. Search engines value keyword variation/
@@ -128,13 +120,13 @@ const homeTitle = "Wala Katha - Sinhala Wal Katha & Wela Katha Stories 2026";
 // in the title, broadening topical coverage without keyword-stuffing
 // (still a single, natural-reading sentence).
 //
-// 🎯 SEO FIX #3 (2026-07 — Hidden-Text Risk Removal): this text was
+// SEO FIX #3 (2026-07 - Hidden-Text Risk Removal): this text was
 // PREVIOUSLY rendered inside a visually-collapsed (.seo-h1-wrap,
 // height:0/font-size:1px/color:transparent) <h1>, while a SEPARATE,
 // visible <h2 id="speakable-home-heading"> carried different text
 // just below it. Per Google Search Essentials, CSS-hiding text purely
 // to stuff keywords search engines can read but users can't is
-// classified as a hidden-text technique — a real ranking/manual-action
+// classified as a hidden-text technique - a real ranking/manual-action
 // risk regardless of original intent. The fix (see the single visible
 // <h1> below, in the template) merges these into ONE real, fully
 // visible H1 that carries this exact keyword-rich text, styled
@@ -215,7 +207,7 @@ const homePageSchema = {
   </Fragment>
 
   <!--
-    🎯 FIXED (CRITICAL — Rich Results Test "No items detected"):
+    FIXED (CRITICAL - Rich Results Test "No items detected"):
     මෙය කලින් <main class="section pt-4 pb-12..."> ලෙස ආරම්භ වී, Base.astro
     layout එකේ දැනටමත් තිබූ <main id="main-content">...<slot /></main>
     ඇතුළත NESTED <main> tag එකක් ලෙස render විය (main > main). HTML spec
@@ -224,28 +216,49 @@ const homePageSchema = {
     Console හි parser එකට document structure එක malformed ලෙස පෙනී,
     homepage එකේ valid JSON-LD schema තිබුණත් "No items detected" ලෙස
     වාර්තා වීමට හේතු විය. Inner <main> එක සෙමැන්ටික් වශයෙන් නිවැරදි
-    <div> එකකට මාරු කර ඇත — CSS classes සියල්ල එලෙසම රඳවා ඇති නිසා
+    <div> එකකට මාරු කර ඇත - CSS classes සියල්ල එලෙසම රඳවා ඇති නිසා
     visual design එකට කිසිදු බලපෑමක් නැත.
   -->
   <div class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
     <div class="container">
 
-      {/* ✅ SEO FIX (2026-07 — Hidden-Text Risk Removal): මීට කලින්
-          තිබූ .seo-h1-wrap (height:0, font-size:1px, color:transparent)
-          H1 එක Google Search Essentials guidelines අනුව "hidden text"
-          technique එකක් ලෙස සැලකෙන අවදානමක් තිබූ බැවින් සම්පූර්ණයෙන්ම
-          ඉවත් කර ඇත, එය සමගම වෙනම තිබූ visible H2 එකද මෙයට ඒකාබද්ධ කර
-          ඇත — දැන් H1 tag එකම page එකේ එකම, සැබවින්ම පෙනෙන (visible)
-          heading එක ලෙස render වේ (duplicate heading දෙකක් නොව එකක්
-          පමණි). Design/layout/spacing කිසිවක් වෙනස් නොවේ — කලින් H2
-          එකට තිබූ Tailwind classes සියල්ලම මෙම H1 එකටම එලෙසම යොදා ඇත.
-          id="speakable-home-heading" එකද පවතී — homePageSchema හි
-          CollectionPage entry තුළ ඇති "speakable"
-          SpeakableSpecification එකට මෙම real, visible DOM node එකම
-          point කරයි (schema selector එකට කිසිදු බලපෑමක් නැත). */}
-      <h1 id="speakable-home-heading" class="text-center text-sm sm:text-base font-bold text-emerald-400/90 tracking-wide mb-4 uppercase">
-        {homeH1}
-      </h1>
+      <!--
+        NEW (2026-08 - Auto-Collapsing Homepage H1, SEO-Safe Pattern):
+
+        WHY THIS EXISTS: the visible H1 below used to stay on screen
+        permanently. This wrapper makes it show fully to the visitor
+        for a few seconds, then smoothly collapse out of view - purely
+        a UX/visual behavior, NOT a hidden-text technique.
+
+        SEO SAFETY (same reasoning already established and documented
+        for the breadcrumb pattern in PostSingle.astro): the H1 text
+        node, its id="speakable-home-heading" (used by the
+        CollectionPage "speakable" schema above), and all of its
+        content remain fully present in the DOM at all times -
+        display:none is never used. Only max-height/opacity/margin are
+        animated via a CSS transition, and only a JS-added class
+        triggers the collapse after a delay. Crawlers reading the raw
+        HTML/CSS see this content exactly as before; this is
+        functionally identical to a "read more" or "auto-dismissing
+        banner" UI pattern, not cloaking, since the text is genuinely
+        shown to real visitors first and is never hidden from crawlers
+        at the source level.
+
+        BEHAVIOR: on every page load (including client-side View
+        Transition navigations back to "/"), the heading is visible
+        for 5 seconds (matching the same 5-second convention already
+        used by the breadcrumb auto-collapse in PostSingle.astro),
+        then fades/collapses smoothly. No manual re-open control is
+        provided here since the heading is decorative/supplementary
+        text sitting above the slider, not primary navigation the
+        visitor needs to get back to (unlike the breadcrumb, which
+        does get a toggle button).
+      -->
+      <div id="home-heading-shell" class="home-heading-collapsible">
+        <h1 id="speakable-home-heading" class="text-center text-sm sm:text-base font-bold text-emerald-400/90 tracking-wide uppercase">
+          {homeH1}
+        </h1>
+      </div>
 
       <FeaturedSlider />
 
@@ -256,3 +269,68 @@ const homePageSchema = {
     </div>
   </div>
 </Base>
+
+<style>
+  /*
+    Auto-collapsing homepage H1 - see the template comment above for
+    full rationale. max-height starts generous (200px) so the heading
+    never clips while visible across any viewport width/line-wrap
+    count; it only matters as a ceiling during the collapse animation
+    itself, since the div's real height while visible is driven by its
+    actual content, not this ceiling value.
+  */
+  .home-heading-collapsible {
+    max-height: 200px;
+    opacity: 1;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition:
+      max-height 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.5s ease,
+      margin-bottom 0.6s ease;
+  }
+  #home-heading-shell.is-collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+    pointer-events: none;
+  }
+</style>
+
+<script>
+  // Auto-collapsing homepage H1 timer logic. Follows the same
+  // astro:page-load / astro:before-swap convention already used by
+  // PostSingle.astro's breadcrumb auto-collapse, Header.astro, and
+  // FeaturedSlider.astro, so this works correctly across Astro View
+  // Transitions (ClientRouter) client-side navigations, not just a
+  // hard page load.
+  let homeHeadingCollapseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function initHomeHeadingAutoCollapse() {
+    const shell = document.getElementById("home-heading-shell");
+    if (!shell) return;
+
+    // Reset to visible state on every load (handles back/forward nav
+    // and repeated client-side visits to "/").
+    shell.classList.remove("is-collapsed");
+
+    if (homeHeadingCollapseTimer) {
+      clearTimeout(homeHeadingCollapseTimer);
+    }
+
+    homeHeadingCollapseTimer = setTimeout(() => {
+      shell.classList.add("is-collapsed");
+    }, 5000);
+  }
+
+  document.addEventListener("astro:page-load", initHomeHeadingAutoCollapse);
+
+  // Cleanup on page swap so a stale timer from a previous visit to "/"
+  // can never fire after the user has navigated elsewhere.
+  document.addEventListener("astro:before-swap", () => {
+    if (homeHeadingCollapseTimer) {
+      clearTimeout(homeHeadingCollapseTimer);
+      homeHeadingCollapseTimer = null;
+    }
+  });
+</script>
