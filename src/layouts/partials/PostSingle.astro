@@ -1035,17 +1035,16 @@ const breadcrumbSchema = JSON.stringify({
   }
 
   /* ==========================================================
-     LIKE SUCCESS TOAST + HEART RAIN (NEW)
-     A short "thanks for liking" confirmation toast, paired with a
-     shower of real heart-shaped particles rising from the like
-     button across the viewport. This is additive to the LIKE-BURST
+     LIKE SUCCESS TOAST (NEW)
+     A short "thanks for liking" confirmation toast that pops up
+     briefly and fades away on its own, letting the reader know their
+     like was registered. This is additive to the LIKE-BURST
      ANIMATION SYSTEM above - the small .like-particle dots stay
-     contained near the icon exactly as before; this is a bigger,
-     screen-level celebration plus a short text confirmation. Both
-     fire on the same like->liked transition only (never on unlike),
-     are spawned/removed entirely via JS (see script below), and
-     never live permanently in the DOM, so they cannot affect layout
-     or the accessibility tree while idle. */
+     exactly as before; this only adds a short text confirmation.
+     Fires on the like->liked transition only (never on unlike), is
+     spawned/removed entirely via JS (see script below), and never
+     lives permanently in the DOM, so it cannot affect layout or the
+     accessibility tree while idle. */
   #like-success-toast {
     position: fixed;
     left: 50%;
@@ -1092,41 +1091,9 @@ const breadcrumbSchema = JSON.stringify({
     flex: 1;
   }
 
-  /* Heart-rain particles - real heart-shaped SVGs (reusing the exact
-     same heart path already used by #like-heart-icon, for visual
-     consistency), spawned by JS at the like button's live on-screen
-     position and rising/fading across the viewport. Kept entirely
-     separate from the small contained .like-particle dots, which by
-     design stay close to the icon. */
-  .like-rain-heart {
-    position: fixed;
-    z-index: 9998;
-    pointer-events: none;
-    animation-name: likeRainRise;
-    animation-timing-function: cubic-bezier(0.2, 0.65, 0.3, 1);
-    animation-fill-mode: forwards;
-  }
-  @keyframes likeRainRise {
-    0% {
-      transform: translate(0, 0) scale(0.4) rotate(0deg);
-      opacity: 0;
-    }
-    14% {
-      opacity: 1;
-      transform: translate(var(--rain-x-start, 0px), -14px) scale(1) rotate(var(--rain-rotate, 0deg));
-    }
-    100% {
-      transform: translate(var(--rain-x-end, 0px), -130px) scale(0.6) rotate(var(--rain-rotate, 0deg));
-      opacity: 0;
-    }
-  }
-
   @media (prefers-reduced-motion: reduce) {
     #like-success-toast.show .lst-heart {
       animation: none !important;
-    }
-    .like-rain-heart {
-      display: none !important;
     }
   }
 </style>
@@ -1320,14 +1287,13 @@ const breadcrumbSchema = JSON.stringify({
     }
   }
 
-  // 2026 LIKE SUCCESS TOAST + HEART RAIN HELPERS
+  // 2026 LIKE SUCCESS TOAST HELPERS
   //
   // Reuses the exact same heart SVG path already drawn by
-  // #like-heart-icon above, so every heart shown anywhere on this
-  // page (icon, small burst dots, and this new rain/toast) reads as
-  // one consistent shape. Kept as a plain string constant (not a
-  // template copy-pasted per element) so there is a single source of
-  // truth for the path data.
+  // #like-heart-icon above, so the heart shown in this toast reads
+  // as the same consistent shape used everywhere else on the page.
+  // Kept as a plain string constant (not a template copy-pasted per
+  // element) so there is a single source of truth for the path data.
   const LIKE_HEART_SVG_PATH =
     "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z";
 
@@ -1337,49 +1303,6 @@ const breadcrumbSchema = JSON.stringify({
       '<path d="' + LIKE_HEART_SVG_PATH + '"></path>' +
       "</svg>"
     );
-  }
-
-  // Bigger, screen-level heart shower - spawned at the like button's
-  // live on-screen position via getBoundingClientRect(), separate
-  // from the small contained .like-particle dots (which stay close
-  // to the icon by design). Each heart gets its own random drift,
-  // rotation, size, delay and color for a natural, non-repeating
-  // shower feel, then removes itself once its animation finishes.
-  function spawnHeartRain(originEl: Element | null) {
-    if (!originEl) return;
-    const rect = originEl.getBoundingClientRect();
-    const originX = rect.left + rect.width / 2;
-    const originY = rect.top;
-    const colors = ["#fb7185", "#f43f5e", "#fda4af", "#f472b6"];
-    const count = 7;
-
-    for (let i = 0; i < count; i++) {
-      const heart = document.createElement("span");
-      heart.className = "like-rain-heart";
-      heart.innerHTML = heartSvgMarkup();
-
-      const driftEnd = (Math.random() - 0.5) * 90;
-      const driftStart = driftEnd * 0.3;
-      const rotate = (Math.random() - 0.5) * 36;
-      const delay = Math.random() * 160;
-      const duration = 850 + Math.random() * 450;
-      const size = 11 + Math.random() * 9;
-      const color = colors[i % colors.length];
-
-      heart.style.left = `${originX}px`;
-      heart.style.top = `${originY}px`;
-      heart.style.width = `${size}px`;
-      heart.style.height = `${size}px`;
-      heart.style.color = color;
-      heart.style.setProperty("--rain-x-start", `${driftStart}px`);
-      heart.style.setProperty("--rain-x-end", `${driftEnd}px`);
-      heart.style.setProperty("--rain-rotate", `${rotate}deg`);
-      heart.style.animationDuration = `${duration}ms`;
-      heart.style.animationDelay = `${delay}ms`;
-
-      document.body.appendChild(heart);
-      setTimeout(() => heart.remove(), delay + duration + 150);
-    }
   }
 
   let likeToastHideTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1506,7 +1429,6 @@ const breadcrumbSchema = JSON.stringify({
       if (becomingLiked && !prefersReducedMotion()) {
         replayAnimationClass(freshBtn, "is-liking");
         spawnLikeParticles(freshParticles);
-        spawnHeartRain(freshBtn);
         setTimeout(() => freshBtn.classList.remove("is-liking"), 900);
       }
 
