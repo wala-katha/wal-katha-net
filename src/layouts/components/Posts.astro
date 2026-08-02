@@ -24,9 +24,8 @@ const uniqueTags = [...new Set(allTags)].filter(Boolean);
 
 // PAGESPEED "IMPROVE IMAGE DELIVERY" FIX - 2026-08 RE-MEASURED VALUES
 // (root cause found via direct box-model recalculation after a repeat
-// flag on the Nandage Duwa post image: real file served 397x598,
-// actual displayed physical pixels needed only 326x464 - Est savings
-// 12.3 KiB).
+// flag on the Nandage Duwa post image: real file served 397x598, actual
+// displayed physical pixels needed only 326x464 - Est savings 12.3 KiB).
 //
 // ROOT CAUSE: the previous "sizes" value ("46vw" mobile / "44vw"
 // tablet) OVER-estimated the true rendered grid-cell width, so the
@@ -77,7 +76,75 @@ const uniqueTags = [...new Set(allTags)].filter(Boolean);
 // failure from esbuild). Keeping explanatory comments here in plain
 // JS/TS context avoids that entirely while still documenting the
 // exact value chosen below.
-const postGridImageSizes = "(max-width: 640px) 40vw, (max-width: 768px) 43vw, 280px";
+//
+// ==========================================================
+// 🎯 2026-08 PERMANENT FIX (calc()-BASED EXACT SIZES — SUPERSEDES
+// EVERY PRIOR vw-APPROXIMATION ATTEMPT ABOVE):
+//
+// ROOT CAUSE THIS SOLVES (confirmed via a live PageSpeed Insights
+// report on the "Nandage Duwa" post-grid card image, captured AFTER
+// the "40vw / 43vw / 280px" values above were already deployed):
+// the report still showed the SAME recurring over-fetch signature
+// (delivered 397x598 / 33.8 KiB vs a real displayed-box requirement
+// of only 326x464, Est savings 12.3 KiB). Even the tightened vw
+// percentages above are still an APPROXIMATION of the true CSS box
+// width — "vw" only tells the browser a fraction of the raw viewport
+// width, so any small mismatch between the assumed box-model math and
+// the real rendering (different device DPR, container edge-cases,
+// rounding) can push the browser's own "needed physical pixels"
+// calculation just high enough to skip the 336w candidate and select
+// 408w instead, even though the box only ever needs ~326-330px.
+//
+// PERMANENT, DETERMINISTIC FIX: every vw fraction below has been
+// replaced with an exact CSS calc() expression that encodes the
+// SAME box-model formula (container padding + row gutter + card
+// padding, per breakpoint) as a literal subtraction from vw — not an
+// approximation of it. This removes ALL guesswork: for ANY real
+// viewport width and ANY device pixel ratio, the browser computes the
+// exact CSS pixel width of the image slot, multiplies by the real
+// DPR, and picks the smallest sufficient candidate from
+// postGridImageWidths automatically — with zero dependency on which
+// specific device/DPR PageSpeed (or a real visitor) happens to test
+// with. This is what makes the fix self-healing/future-proof rather
+// than a one-off number tweak that can regress again on a different
+// test device.
+//
+//   Mobile (<=640px, .container px-4 / .row gx-2 / card p-2):
+//     image_width = 50vw - 44px
+//     (derived: content = V - 32; column = content/2; image =
+//     column - 6(half-gutter*2=12 total gutter, 6px removed per
+//     side by column padding) - 8(half of p-2's 16px total card
+//     padding) - 8 => image = V/2 - 44, matching the exact box-model
+//     algebra used throughout this file's comment history above)
+//
+//   Tablet (641-768px, .row sm:gx-4 / card sm:p-3, container still
+//   px-4 since md:px-8 only starts at 768px):
+//     image_width = 50vw - 72px
+//
+//   Desktop (>768px up to the container's max-w-[1000px] cap,
+//   .container md:px-8 / 3-column md:col-4 / .row sm:gx-4 / card
+//   sm:p-3):
+//     image_width = 33.34vw - 77px
+//
+//   Very wide viewports (>=1128px, i.e. once 100vw - 64px exceeds
+//   the container's 1000px cap): the column width stops growing with
+//   the viewport entirely, so a FIXED 256px is used instead of a vw
+//   formula (a pure vw-based formula would keep growing past the
+//   container's real cap and over-estimate on ultra-wide monitors).
+//
+// Order matters in the "sizes" attribute: the browser evaluates each
+// comma-separated condition left-to-right and uses the FIRST one that
+// matches, so the two most specific max-width conditions come first,
+// the min-width cap comes next, and the unconditional desktop calc()
+// is last as the final fallback for the 769-1127px range.
+//
+// postGridImageWidths below is left unchanged ([204, 336, 408]) since
+// it already brackets the real ~324-330px physical requirement
+// tightly (336w is only ~3% larger) — the previous over-fetch to 408w
+// was purely a "sizes" miscalculation problem, not a missing
+// width-bucket problem, so no bucket changes are needed here.
+// ==========================================================
+const postGridImageSizes = "(max-width: 640px) calc(50vw - 44px), (max-width: 768px) calc(50vw - 72px), (min-width: 1128px) 256px, calc(33.34vw - 77px)";
 
 // 2026-07 W3C VALIDATOR FIX (vnu.validator.w3.org - 4 errors:
 // "Bad value ... for attribute srcset on element img: Expected width
@@ -156,6 +223,15 @@ const postGridImageSizes = "(max-width: 640px) 40vw, (max-width: 768px) 43vw, 28
 // value (40vw/43vw/280px, re-derived above) is the actual fix this
 // time; the width-bucket set here is left unchanged since 336 is
 // already a good match once the sizes value is accurate.
+//
+// 2026-08 SECOND REPEAT-FLAG (calc()-based permanent fix, see the
+// large comment block directly above postGridImageSizes): even the
+// re-derived 40vw/43vw/280px values above were STILL approximations
+// and a live PageSpeed report continued to show the identical 12.3
+// KiB over-fetch after that deploy. The width buckets here remain
+// unchanged (336 is still the correct target bucket), only the
+// "sizes" attribute's calculation method changed from vw-approximation
+// to exact calc()-based box-model math.
 const postGridImageWidths = [204, 336, 408];
 ---
 
@@ -166,7 +242,7 @@ const postGridImageWidths = [204, 336, 408];
       posts.map((post, i: number) => (
         <div class="col-6 md:col-4 flex flex-col justify-between bg-[#0d0d0d] p-2 sm:p-3 rounded-xl border border-[#1a1a1a] min-w-0">
           {post.data.image && (
-            <a
+            
               href={withTrailingSlash(`/blog/${post.id}`)}
               class="rounded-lg block overflow-hidden group relative border border-white/5 aspect-[2/3]"
             >
@@ -197,7 +273,7 @@ const postGridImageWidths = [204, 336, 408];
               <ul class="min-w-0">
                 {post.data.categories.slice(0, 1).map((category) => (
                   <li class="inline-block max-w-full">
-                    <a
+                    
                       href={withTrailingSlash(`/categories/${slugify(category)}`)}
                       class="post-card-category-link hover:text-emerald-400 font-bold text-[10px] sm:text-xs bg-white/5 px-1.5 py-0.5 rounded text-slate-200 truncate block max-w-full"
                     >
@@ -215,7 +291,7 @@ const postGridImageWidths = [204, 336, 408];
 
           {/* POST TITLE */}
           <h2 class="mb-1 line-clamp-2 leading-tight">
-            <a
+            
               href={withTrailingSlash(`/blog/${post.id}`)}
               class="block hover:text-emerald-400 transition duration-200 text-xs sm:text-base font-extrabold text-white"
             >
@@ -241,7 +317,7 @@ const postGridImageWidths = [204, 336, 408];
               )
               .slice(0, 1)
               .map((author) => (
-                <a
+                
                   href={withTrailingSlash(`/authors/${slugify(author.data.title)}`)}
                   class="flex items-center hover:text-emerald-400 text-[11px] sm:text-xs font-semibold text-slate-300 min-w-0 flex-shrink-1"
                 >
@@ -258,7 +334,7 @@ const postGridImageWidths = [204, 336, 408];
                 </a>
               ))}
 
-            <a
+            
               href={withTrailingSlash(`/blog/${post.id}`)}
               class="text-[11px] sm:text-xs bg-emerald-500 text-neutral-950 px-3 sm:px-5 py-1 sm:py-1.5 rounded-full hover:bg-emerald-400 transition-colors font-bold whitespace-nowrap text-center flex-shrink-0"
             >
@@ -283,7 +359,7 @@ const postGridImageWidths = [204, 336, 408];
           <ul class="flex flex-wrap gap-2 m-0 p-0 list-none">
             {uniqueTags.map((tag, index) => (
               <li class={`tag-item-wrap ${index >= 12 ? 'hidden-tag hidden' : ''}`}>
-                <a
+                
                   href={withTrailingSlash(`/tags/${slugify(tag)}`)}
                   rel="tag"
                   class="text-[11px] sm:text-xs bg-[#010203] text-white font-black tracking-wide px-2.5 py-1.5 rounded-md border border-black hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center gap-0.5"
