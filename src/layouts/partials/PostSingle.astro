@@ -1033,6 +1033,102 @@ const breadcrumbSchema = JSON.stringify({
       animation: none !important;
     }
   }
+
+  /* ==========================================================
+     LIKE SUCCESS TOAST + HEART RAIN (NEW)
+     A short "thanks for liking" confirmation toast, paired with a
+     shower of real heart-shaped particles rising from the like
+     button across the viewport. This is additive to the LIKE-BURST
+     ANIMATION SYSTEM above - the small .like-particle dots stay
+     contained near the icon exactly as before; this is a bigger,
+     screen-level celebration plus a short text confirmation. Both
+     fire on the same like->liked transition only (never on unlike),
+     are spawned/removed entirely via JS (see script below), and
+     never live permanently in the DOM, so they cannot affect layout
+     or the accessibility tree while idle. */
+  #like-success-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 96px;
+    transform: translate(-50%, 14px) scale(0.94);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: min(90vw, 360px);
+    background: #0c0d10;
+    border: 1px solid rgba(244, 63, 94, 0.35);
+    color: #F8F8FF;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.35;
+    padding: 12px 20px;
+    border-radius: 999px;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  #like-success-toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  #like-success-toast .lst-heart {
+    width: 18px;
+    height: 18px;
+    color: #fb7185;
+    flex-shrink: 0;
+  }
+  #like-success-toast.show .lst-heart {
+    animation: likeToastHeartBeat 0.9s ease-in-out 1;
+  }
+  @keyframes likeToastHeartBeat {
+    0%, 100% { transform: scale(1); }
+    30% { transform: scale(1.3); }
+    55% { transform: scale(0.95); }
+    75% { transform: scale(1.15); }
+  }
+  #like-success-toast .lst-text {
+    flex: 1;
+  }
+
+  /* Heart-rain particles - real heart-shaped SVGs (reusing the exact
+     same heart path already used by #like-heart-icon, for visual
+     consistency), spawned by JS at the like button's live on-screen
+     position and rising/fading across the viewport. Kept entirely
+     separate from the small contained .like-particle dots, which by
+     design stay close to the icon. */
+  .like-rain-heart {
+    position: fixed;
+    z-index: 9998;
+    pointer-events: none;
+    animation-name: likeRainRise;
+    animation-timing-function: cubic-bezier(0.2, 0.65, 0.3, 1);
+    animation-fill-mode: forwards;
+  }
+  @keyframes likeRainRise {
+    0% {
+      transform: translate(0, 0) scale(0.4) rotate(0deg);
+      opacity: 0;
+    }
+    14% {
+      opacity: 1;
+      transform: translate(var(--rain-x-start, 0px), -14px) scale(1) rotate(var(--rain-rotate, 0deg));
+    }
+    100% {
+      transform: translate(var(--rain-x-end, 0px), -130px) scale(0.6) rotate(var(--rain-rotate, 0deg));
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #like-success-toast.show .lst-heart {
+      animation: none !important;
+    }
+    .like-rain-heart {
+      display: none !important;
+    }
+  }
 </style>
 
 <script>
@@ -1224,6 +1320,106 @@ const breadcrumbSchema = JSON.stringify({
     }
   }
 
+  // 2026 LIKE SUCCESS TOAST + HEART RAIN HELPERS
+  //
+  // Reuses the exact same heart SVG path already drawn by
+  // #like-heart-icon above, so every heart shown anywhere on this
+  // page (icon, small burst dots, and this new rain/toast) reads as
+  // one consistent shape. Kept as a plain string constant (not a
+  // template copy-pasted per element) so there is a single source of
+  // truth for the path data.
+  const LIKE_HEART_SVG_PATH =
+    "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z";
+
+  function heartSvgMarkup(): string {
+    return (
+      '<svg viewBox="0 0 24 24" width="100%" height="100%" fill="currentColor" aria-hidden="true">' +
+      '<path d="' + LIKE_HEART_SVG_PATH + '"></path>' +
+      "</svg>"
+    );
+  }
+
+  // Bigger, screen-level heart shower - spawned at the like button's
+  // live on-screen position via getBoundingClientRect(), separate
+  // from the small contained .like-particle dots (which stay close
+  // to the icon by design). Each heart gets its own random drift,
+  // rotation, size, delay and color for a natural, non-repeating
+  // shower feel, then removes itself once its animation finishes.
+  function spawnHeartRain(originEl: Element | null) {
+    if (!originEl) return;
+    const rect = originEl.getBoundingClientRect();
+    const originX = rect.left + rect.width / 2;
+    const originY = rect.top;
+    const colors = ["#fb7185", "#f43f5e", "#fda4af", "#f472b6"];
+    const count = 7;
+
+    for (let i = 0; i < count; i++) {
+      const heart = document.createElement("span");
+      heart.className = "like-rain-heart";
+      heart.innerHTML = heartSvgMarkup();
+
+      const driftEnd = (Math.random() - 0.5) * 90;
+      const driftStart = driftEnd * 0.3;
+      const rotate = (Math.random() - 0.5) * 36;
+      const delay = Math.random() * 160;
+      const duration = 850 + Math.random() * 450;
+      const size = 11 + Math.random() * 9;
+      const color = colors[i % colors.length];
+
+      heart.style.left = `${originX}px`;
+      heart.style.top = `${originY}px`;
+      heart.style.width = `${size}px`;
+      heart.style.height = `${size}px`;
+      heart.style.color = color;
+      heart.style.setProperty("--rain-x-start", `${driftStart}px`);
+      heart.style.setProperty("--rain-x-end", `${driftEnd}px`);
+      heart.style.setProperty("--rain-rotate", `${rotate}deg`);
+      heart.style.animationDuration = `${duration}ms`;
+      heart.style.animationDelay = `${delay}ms`;
+
+      document.body.appendChild(heart);
+      setTimeout(() => heart.remove(), delay + duration + 150);
+    }
+  }
+
+  let likeToastHideTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // "Thanks for liking" confirmation toast - created once on first
+  // use and reused afterwards (same lazy-create-then-reuse pattern as
+  // #comment-success-toast further below in this file), shown for a
+  // few seconds then faded out automatically. The heart-beat pulse on
+  // its icon is purely decorative and is switched off under
+  // prefers-reduced-motion via the CSS above; the toast itself (core
+  // confirmation feedback, not decoration) still appears either way.
+  function showLikeSuccessToast() {
+    let toast = document.getElementById("like-success-toast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "like-success-toast";
+      toast.setAttribute("role", "status");
+      toast.setAttribute("aria-live", "polite");
+
+      const iconWrap = document.createElement("span");
+      iconWrap.className = "lst-heart";
+      iconWrap.setAttribute("aria-hidden", "true");
+      iconWrap.innerHTML = heartSvgMarkup();
+
+      const text = document.createElement("span");
+      text.className = "lst-text";
+      text.textContent = "ස්තූතියි! ඔබත් මේ කතාවට කැමතියි";
+
+      toast.appendChild(iconWrap);
+      toast.appendChild(text);
+      document.body.appendChild(toast);
+    }
+
+    toast.classList.add("show");
+    if (likeToastHideTimer) clearTimeout(likeToastHideTimer);
+    likeToastHideTimer = setTimeout(() => {
+      toast?.classList.remove("show");
+    }, 2600);
+  }
+
   function initLikeButton() {
     const btn = document.getElementById("like-button");
     if (!btn) return;
@@ -1310,7 +1506,18 @@ const breadcrumbSchema = JSON.stringify({
       if (becomingLiked && !prefersReducedMotion()) {
         replayAnimationClass(freshBtn, "is-liking");
         spawnLikeParticles(freshParticles);
+        spawnHeartRain(freshBtn);
         setTimeout(() => freshBtn.classList.remove("is-liking"), 900);
+      }
+
+      // Toast confirmation stays outside the reduced-motion guard
+      // above on purpose - it is core "your like was registered"
+      // feedback, not decoration (same distinction the file's own
+      // reduced-motion comment already draws for the color/state
+      // change). It only ever fires on like, never on unlike, so it
+      // stays a positive, non-repetitive signal.
+      if (becomingLiked) {
+        showLikeSuccessToast();
       }
 
       const likedIds = getLikedPostIds();
@@ -1343,6 +1550,17 @@ const breadcrumbSchema = JSON.stringify({
   }
 
   document.addEventListener("astro:page-load", initLikeButton);
+
+  // Cleanup on page swap - same convention as the breadcrumb timer
+  // cleanup earlier in this file - prevents a stale toast-hide timer
+  // from firing after the reader has already navigated to another
+  // page (View Transitions / ClientRouter navigation).
+  document.addEventListener("astro:before-swap", () => {
+    if (likeToastHideTimer) {
+      clearTimeout(likeToastHideTimer);
+      likeToastHideTimer = null;
+    }
+  });
 </script>
 
 <script>
