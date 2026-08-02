@@ -26,11 +26,23 @@ const finalSimilarPosts = smartSimilarPosts.slice(0, 6);
 
 const WORKER_API = "https://comments.wala-katha.workers.dev/api/comments";
 
+// NEW: Like feature API endpoint. This targets the SAME Cloudflare
+// Worker origin that already powers the comment system above
+// (comments.wala-katha.workers.dev), reusing a domain that is already
+// whitelisted in public/_headers' Content-Security-Policy
+// connect-src directive - no CSP changes required for this feature.
+// IMPORTANT: this expects a "/api/likes" route to exist on that same
+// Worker (GET ?postId=... -> { count }, POST { postId, action } ->
+// { count }). That Worker's source code lives in a separate
+// repo/service not included in this project's files, so the actual
+// server-side storage/counting logic must be added there separately.
+const LIKES_API = "https://comments.wala-katha.workers.dev/api/likes";
+
 const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
-// 🎯 OG:URL / CANONICAL MISMATCH FIX (Ahrefs "Open graph URL not matching
+// OG:URL / CANONICAL MISMATCH FIX (Ahrefs "Open graph URL not matching
 // canonical URL"): postUrl previously had NO trailing slash while
 // blog/[single].astro's canonicalUrl (passed into Base.astro) DOES have
-// one — Cloudflare Pages serves this site's directory-style URLs with a
+// one - Cloudflare Pages serves this site's directory-style URLs with a
 // trailing slash by default (see wrangler.jsonc / Base.astro comments),
 // so the canonical URL is the source of truth. withTrailingSlash() is the
 // same central helper already used site-wide (Posts.astro, Header.astro,
@@ -42,19 +54,19 @@ const authorName = allAuthors.find((a) =>
   authors.map((au: string) => slugify(au)).includes(slugify(a.data.title))
 )?.data.title ?? "Wala Katha";
 
-// 🎯 2026 "LAST UPDATED" LOGIC: content.config.ts එකට එකතු කරන ලද
+// 2026 "LAST UPDATED" LOGIC: content.config.ts එකට එකතු කරන ලද
 // optional "updated" field එක පාවිච්චි කරලා, publish date එකට වඩා
 // different modified date එකක් තියෙනවා නම් විතරක් "Updated" badge එක
-// පෙන්වයි. "updated" field එක නැති posts (existing 4ම post ඇතුළුව) —
+// පෙන්වයි. "updated" field එක නැති posts (existing 4ම post ඇතුළුව) -
 // මෙය silently false වී, publish date එක විතරක් පෙන්වයි, කිසිම build
 // error එකක් හෝ UI glitch එකක් ඇති නොකරයි.
 const hasUpdatedDate = updated && date && new Date(updated).getTime() !== new Date(date).getTime();
 
-// 🎯 NEW (SEO Enhancement Pass #2): og:image:type MIME-type detection —
+// NEW (SEO Enhancement Pass #2): og:image:type MIME-type detection -
 // same helper logic as Base.astro's detectImageMimeType(), duplicated
 // here in this file's own scope since PostSingle.astro renders its own
 // independent set of OG/Twitter meta tags (isArticle=true bypasses
-// Base.astro's default meta block entirely — see Base.astro's
+// Base.astro's default meta block entirely - see Base.astro's
 // {!isArticle && (...)} guard). Kept as a local, self-contained function
 // rather than a shared import to avoid introducing a new cross-file
 // utility module for a single three-line helper; if a third usage site
@@ -80,7 +92,7 @@ function detectImageMimeType(url: string): string {
 }
 const postImageMimeType = image ? detectImageMimeType(`${siteUrl}${image}`) : undefined;
 
-// 🎯 BREADCRUMB DATA — single source of truth used by BOTH the JSON-LD
+// BREADCRUMB DATA - single source of truth used by BOTH the JSON-LD
 // schema below AND the visible <nav> UI further down. Building one array
 // here and rendering it twice (script + nav) guarantees the visible trail
 // and the JSON-LD can never drift apart.
@@ -93,7 +105,7 @@ const breadcrumbItems = [
   { name: title, item: postUrl },
 ];
 
-// ✅ BreadcrumbList Schema only — Article schema blog/[single].astro handles
+// BreadcrumbList Schema only - Article schema blog/[single].astro handles
 const breadcrumbSchema = JSON.stringify({
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
@@ -106,10 +118,10 @@ const breadcrumbSchema = JSON.stringify({
 });
 ---
 
-<!-- ✅ REMOVED: canonical, description, robots — Base.astro handles these (no duplicates) -->
-<!-- ✅ KEPT: Article-specific OG/Twitter tags — Base.astro isArticle=true නිසා render නොකරයි -->
+<!-- REMOVED: canonical, description, robots - Base.astro handles these (no duplicates) -->
+<!-- KEPT: Article-specific OG/Twitter tags - Base.astro isArticle=true නිසා render නොකරයි -->
 
-<!-- Open Graph — Article specific -->
+<!-- Open Graph - Article specific -->
 <meta property="og:type" content="article" />
 <meta property="og:title" content={title} />
 <meta property="og:description" content={description ?? title} />
@@ -118,7 +130,7 @@ const breadcrumbSchema = JSON.stringify({
 {image && <meta property="og:image:alt" content={title} />}
 {image && <meta property="og:image:width" content="1200" />}
 {image && <meta property="og:image:height" content="630" />}
-{/* 🎯 NEW (SEO Enhancement Pass #2): og:image:type — see rationale in
+{/* NEW (SEO Enhancement Pass #2): og:image:type - see rationale in
     Base.astro's identical addition. Article pages previously had
     width/height but no MIME type declared. */}
 {image && postImageMimeType && <meta property="og:image:type" content={postImageMimeType} />}
@@ -130,7 +142,7 @@ const breadcrumbSchema = JSON.stringify({
 {categories?.map((c: string) => <meta property="article:section" content={humanize(c)} />)}
 {tags?.map((t: string) => <meta property="article:tag" content={humanize(t)} />)}
 
-<!-- Twitter Card — Article specific -->
+<!-- Twitter Card - Article specific -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content={title} />
 <meta name="twitter:description" content={description ?? title} />
@@ -138,7 +150,7 @@ const breadcrumbSchema = JSON.stringify({
 {image && <meta name="twitter:image:alt" content={title} />}
 <meta name="twitter:site" content="@WalaKatha" />
 
-<!-- Keywords & Author — article specific, Base.astro isArticle=true නිසා render නොකරයි -->
+<!-- Keywords & Author - article specific, Base.astro isArticle=true නිසා render නොකරයි -->
 <meta name="keywords" content={tags?.join(", ") ?? ""} />
 <meta name="author" content={authorName} />
 <meta name="language" content="Sinhala" />
@@ -150,22 +162,22 @@ const breadcrumbSchema = JSON.stringify({
 <section class="section !pt-6 sm:!pt-8 bg-[#010203] relative">
   <div class="container">
 
-    {/* 🎯 2026 AUTO-COLLAPSING VISIBLE BREADCRUMB UI (v3 — HEADER GAP
+    {/* 2026 AUTO-COLLAPSING VISIBLE BREADCRUMB UI (v3 - HEADER GAP
         FIX & TOGGLE ICON COLOR FIX):
 
         FIXES APPLIED (from user-reported screenshot issues, round 2):
-        1. 🎯 CRITICAL FIX — HEADER-TO-TITLE GAP: The parent <section>
+        1. CRITICAL FIX - HEADER-TO-TITLE GAP: The parent <section>
            tag uses the global ".section { @apply py-20; }" utility
            (defined in src/styles/components.css), which adds 5rem
            (80px) of TOP padding on every page that uses this class
            (404.astro, contact.astro, categories/[category].astro,
            etc). In v2 this was documented as being overridden but the
            override class was never actually added to the <section>
-           tag — that was the root cause of the large visible gap
+           tag - that was the root cause of the large visible gap
            between the Header and the Path/Title seen in the user's
            screenshot. Now "!pt-6 sm:!pt-8" is applied directly on
            THIS <section> tag only (Tailwind's "!" important-modifier
-           scopes the override to this exact element's classlist —
+           scopes the override to this exact element's classlist -
            it does not touch the shared ".section" utility definition
            itself, so every OTHER page still using ".section" for its
            default 80px top padding is completely unaffected).
@@ -173,19 +185,19 @@ const breadcrumbSchema = JSON.stringify({
            -> "mt-0 mb-3" to remove the remaining vertical gap between
            the (now-closer) top of the section and the Path pill, and
            between the Path pill and the H1 title below it.
-        3. 🎯 TOGGLE ICON COLOR FIX: The collapsed-state "Path" pill's
+        3. TOGGLE ICON COLOR FIX: The collapsed-state "Path" pill's
            icon (BiMapPin) and its chevron arrow were rendering in a
            dim white tone (text-[#F8F8FF]/70). Per user request, both
            are now recolored to the site's signature emerald/green
            theme color (#01AD9F, already used throughout Header.astro,
            Logo.astro, Pagination.astro active-state, etc.) so the
            icon stands out clearly on the dark background as either
-           green — matching the established site-wide accent color
+           green - matching the established site-wide accent color
            convention (no new color introduced; reuses the existing
            theme primary).
 
         SEO SAFETY: full breadcrumb <a> links සහ text සියල්ල DOM එකේ
-        සම්පූර්ණයෙන්ම present වේ (display:none කිසිවිටෙකත් යොදා නැත) —
+        සම්පූර්ණයෙන්ම present වේ (display:none කිසිවිටෙකත් යොදා නැත) -
         visually collapse කරන්නේ max-height/opacity CSS transition එකකින්
         පමණි, එබැවින් Googlebot/crawlers වලට content එක සම්පූර්ණයෙන් පෙනී
         යාම සහතික වේ, JSON-LD schema සමග visible-match signal එකත් රැඳේ.
@@ -197,7 +209,7 @@ const breadcrumbSchema = JSON.stringify({
         NAVIGATION SAFETY: Astro View Transitions (ClientRouter) සක්‍රීය
         site එකක් නිසා DOMContentLoaded නොව, site-wide already-established
         pattern එකම (astro:page-load, Header.astro/PostSingle.astro comment
-        system එකේම pattern එක) භාවිතා කර ඇත — SPA navigation කිහිපයකින්
+        system එකේම pattern එක) භාවිතා කර ඇත - SPA navigation කිහිපයකින්
         පසුවත් timer/toggle logic එක නිවැරදිව reset වී වැඩ කරයි.
 
         SELF-HEALING AUTO-COLLAPSE: expand කිරීමෙන් පසුවත්
@@ -207,13 +219,13 @@ const breadcrumbSchema = JSON.stringify({
       <div class="md:col-10 flex justify-center sm:justify-start">
         <div id="breadcrumb-shell" class="relative min-h-[42px] flex items-center">
 
-          {/* COLLAPSED-STATE TOGGLE BUTTON — auto-collapse කළ පසු පමණක්
+          {/* COLLAPSED-STATE TOGGLE BUTTON - auto-collapse කළ පසු පමණක්
               visible වේ (JS එකෙන් "is-collapsed" class එක parent එකට
               add කරයි). No-JS fallback: JS disable නම් මෙය කිසිවිටෙකත්
               පෙනෙන්නේ නැත, full breadcrumb එකම සැමවිටම පෙනී පවතී.
-              🎯 ICON COLOR FIX: BiMapPin icon සහ arrow SVG දෙකම දැන්
+              ICON COLOR FIX: BiMapPin icon සහ arrow SVG දෙකම දැන්
               "text-[#01AD9F]" (site theme emerald/green) වර්ණයෙන්
-              — කලින් තිබූ "text-[#F8F8FF]/70" (dim white) වෙනුවට. */}
+              - කලින් තිබූ "text-[#F8F8FF]/70" (dim white) වෙනුවට. */}
           <button
             id="breadcrumb-toggle"
             type="button"
@@ -229,7 +241,7 @@ const breadcrumbSchema = JSON.stringify({
             </svg>
           </button>
 
-          {/* FULL BREADCRUMB NAV — always in DOM, always crawlable.
+          {/* FULL BREADCRUMB NAV - always in DOM, always crawlable.
               breadcrumbItems array එකම (schema එකට use කරන) reuse කරන
               නිසා, schema එකයි UI එකයි කවදාවත් desync නොවෙන්න. */}
           <nav
@@ -253,7 +265,7 @@ const breadcrumbSchema = JSON.stringify({
                         {crumb.name}
                       </span>
                     ) : (
-                      <a
+                      
                         href={
                           i === 0
                             ? "/"
@@ -277,17 +289,17 @@ const breadcrumbSchema = JSON.stringify({
 
     <article class="row justify-center">
       <div class="md:col-10 text-center">
-        {/* 🎯 GOOGLE "SPEAKABLE" SCHEMA FIX: id="speakable-headline"
+        {/* GOOGLE "SPEAKABLE" SCHEMA FIX: id="speakable-headline"
             එකතු කරන ලද්දේ, blog/[single].astro හි JSON-LD
             "speakable.cssSelector" array එක මෙම exact H1 element එකටම
-            point කිරීමට. Design/CSS classes කිසිවක් වෙනස් වී නැත —
+            point කිරීමට. Design/CSS classes කිසිවක් වෙනස් වී නැත -
             id attribute එකක් පමණක් එකතු කර ඇත. */}
         <h1 id="speakable-headline" set:html={markdownify(title)} class="h2 text-[#F8F8FF] font-black drop-shadow-md" />
 
-        {/* 🎯 GOOGLE "SPEAKABLE" SCHEMA FIX: post description එක DOM
+        {/* GOOGLE "SPEAKABLE" SCHEMA FIX: post description එක DOM
             එකේ crawlable/selectable content එකක් ලෙස තිබිය යුතු බැවින්
             (schema cssSelector එකකට point කළ හැක්කේ actual DOM එකේ
-            පවතින content එකකට පමණි — meta tags වලට schema selector
+            පවතින content එකකට පමණි - meta tags වලට schema selector
             එකකින් point කළ නොහැක), site එකේ දැනටමත් ස්ථාපිත
             visually-hidden SEO content pattern එකම (index.astro's
             .seo-h1-wrap, search.astro's .seo-visually-hidden)
@@ -307,7 +319,7 @@ const breadcrumbSchema = JSON.stringify({
                 authors.map((a: string) => slugify(a)).includes(slugify(author.data.title))
               )
               .map((author) => (
-                <a
+                
                   href={withTrailingSlash(`/authors/${slugify(author.id)}`)}
                   class="flex items-center hover:text-primary font-bold text-[#F8F8FF]"
                 >
@@ -328,10 +340,10 @@ const breadcrumbSchema = JSON.stringify({
             <BiCalendarEdit className="mr-1 h-5 w-5 text-[#01AD9F]" />
             {dateFormat(date)}
           </li>
-          {/* 🎯 2026 "LAST UPDATED" UI BADGE: publish date එකට වඩා
+          {/* 2026 "LAST UPDATED" UI BADGE: publish date එකට වඩා
               different "updated" date එකක් content.config.ts frontmatter
               එකේ තියෙනවා නම් විතරක් පෙන්වයි. Existing posts (updated
-              field නැති) මේ badge එක render වෙන්නේම නෑ — layout එකට
+              field නැති) මේ badge එක render වෙන්නේම නෑ - layout එකට
               කිසිම gap/spacing issue එකක් ඇති නොකරයි. */}
           {hasUpdatedDate && (
             <li class="mx-3 flex items-center flex-wrap font-semibold text-emerald-400">
@@ -340,7 +352,7 @@ const breadcrumbSchema = JSON.stringify({
               {dateFormat(updated)}
             </li>
           )}
-          {/* 🎯 2026 READING TIME BADGE: post header meta row එකේ,
+          {/* 2026 READING TIME BADGE: post header meta row එකේ,
               existing date/category badges pattern එකටම සමාන styling
               එකෙන් reading time එක පෙන්වයි. */}
           <li class="mx-3 flex items-center flex-wrap font-semibold text-[#F8F8FF]">
@@ -352,7 +364,7 @@ const breadcrumbSchema = JSON.stringify({
             <ul>
               {categories.map((category: string, i: number) => (
                 <li class="inline-block">
-                  <a
+                  
                     href={withTrailingSlash(`/categories/${slugify(category)}`)}
                     class="mr-2 hover:text-primary font-bold bg-white/10 px-2 py-0.5 rounded text-[#F8F8FF]"
                   >
@@ -362,6 +374,47 @@ const breadcrumbSchema = JSON.stringify({
                 </li>
               ))}
             </ul>
+          </li>
+          {/* NEW: LIKE BUTTON WIDGET
+              WHY: readers previously had no way to "like" a post. Rather
+              than adding a fake AggregateRating/star schema (which is
+              NOT eligible for Google rich-snippet stars on Article-type
+              content, and risks a spammy-structured-data flag), this is
+              a genuine, transparent interaction widget - a heart toggle
+              plus a real count fetched from the same Cloudflare Worker
+              origin that already powers the comment system
+              (comments.wala-katha.workers.dev, already whitelisted in
+              public/_headers' CSP connect-src). No schema.org rating
+              claim is made anywhere on this page for this feature - it
+              is purely a UI/engagement element.
+              data-post-id carries post.id so the script below can target
+              the correct like-count bucket per story. */}
+          <li class="mx-3 flex items-center">
+            <button
+              id="like-button"
+              type="button"
+              class="like-btn-wrap flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1.5 transition-all duration-300"
+              aria-pressed="false"
+              aria-label="මෙම කතාවට කැමතියි කියලා සලකුණු කරන්න"
+              data-post-id={post.id}
+            >
+              <svg
+                id="like-heart-icon"
+                class="h-4 w-4 text-[#F8F8FF]/60 transition-all duration-300"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                />
+              </svg>
+              <span id="like-count" class="text-xs sm:text-sm font-bold text-[#F8F8FF]/70">--</span>
+            </button>
           </li>
         </ul>
       </div>
@@ -389,7 +442,7 @@ const breadcrumbSchema = JSON.stringify({
           <ul class="mr-4 mb-4 space-x-3">
             {tags.map((tag: string) => (
               <li class="inline-block">
-                <a
+                
                   href={withTrailingSlash(`/tags/${slugify(tag)}`)}
                   class="block rounded-lg bg-[#FFCC00] border border-[#FFCC00] px-4 py-2 font-black text-[#010203] text-sm hover:bg-[#E6B800] transition duration-300"
                 >
@@ -700,8 +753,8 @@ const breadcrumbSchema = JSON.stringify({
     box-shadow: -2px 2px 0px rgba(0,0,0,0.3), 0 32px 60px rgba(0,0,0,0.65), 0 0 0 1px rgba(1,173,159,0.3), inset 3px 0 0 rgba(1,173,159,0.4);
   }
 
-  /* 🎯 AUTO-COLLAPSING BREADCRUMB — SEO-SAFE STYLES
-     max-height + opacity transition එකක් පමණි — display:none කිසිවිටෙකත්
+  /* AUTO-COLLAPSING BREADCRUMB - SEO-SAFE STYLES
+     max-height + opacity transition එකක් පමණි - display:none කිසිවිටෙකත්
      යොදා නැත, එබැවින් content එක DOM/accessibility tree එකෙන් කිසිවිටෙකත්
      ඉවත් නොවේ (Googlebot/crawlers සම්පූර්ණ breadcrumb එකම දකී). */
   .breadcrumb-collapsible-content {
@@ -724,7 +777,7 @@ const breadcrumbSchema = JSON.stringify({
     transform: rotate(-90deg);
   }
 
-  /* 🎯 Collapsed-state toggle button — subtle pulse-glow animation
+  /* Collapsed-state toggle button - subtle pulse-glow animation
      to make it more noticeable/discoverable once breadcrumb auto-hides.
      Animation is gentle (opacity/shadow only, no layout-affecting
      transform), so it cannot cause any CLS or layout shift. */
@@ -739,17 +792,29 @@ const breadcrumbSchema = JSON.stringify({
       box-shadow: 0 0 0 6px rgba(1, 173, 159, 0);
     }
   }
+
+  /* NEW: LIKE BUTTON - small, self-contained styling additions. Only
+     appended here, nothing above this block is touched. */
+  .like-btn-wrap svg {
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease;
+  }
+  .like-btn-wrap:active svg {
+    transform: scale(0.85);
+  }
+  .like-btn-wrap[aria-pressed="true"] svg {
+    transform: scale(1.15);
+  }
 </style>
 
 <script>
-  // 🎯 AUTO-COLLAPSING BREADCRUMB LOGIC — site-wide astro:page-load
+  // AUTO-COLLAPSING BREADCRUMB LOGIC - site-wide astro:page-load
   // pattern එකම (Header.astro/comment system එකේම convention) භාවිතා
-  // කරයි, DOMContentLoaded නොව — Astro View Transitions (ClientRouter)
+  // කරයි, DOMContentLoaded නොව - Astro View Transitions (ClientRouter)
   // සක්‍රීය නිසා SPA navigation කිහිපයකින් පසුවත් නිවැරදිව වැඩ කරයි.
   //
   // SELF-HEALING RECURSIVE TIMER: "scheduleAutoCollapse()" reusable
   // function එකක් හරහා, collapse හෝ expand ඕනෑම action එකකින් පසු
-  // නැවත 5 තත්පරයේ timer එක ස්වයංක්‍රීයව reschedule වේ — collapse/
+  // නැවත 5 තත්පරයේ timer එක ස්වයංක්‍රීයව reschedule වේ - collapse/
   // expand cycle එක කොපමණ වාරයක් සිදු වුවත් (permanent, self-healing
   // loop), සෑම expand එකකින් පසුවත් නැවත ස්වයංක්‍රීයව hide වේ.
   let breadcrumbAutoCollapseTimer: ReturnType<typeof setTimeout> | null = null;
@@ -782,7 +847,7 @@ const breadcrumbSchema = JSON.stringify({
       toggleBtn?.setAttribute("aria-expanded", "true");
     }
 
-    // 🎯 SELF-HEALING RECURSIVE SCHEDULER: collapse කිරීමට පෙර සෑම
+    // SELF-HEALING RECURSIVE SCHEDULER: collapse කිරීමට පෙර සෑම
     // විටම පවතින timer එක clear කර, තත්පර 5කින් නැවත auto-collapse
     // කිරීමට schedule කරයි. මෙය initial load එකේදීත්, expand click
     // කිරීමෙන් පසුවත් එකම function එකෙන්ම call වන නිසා, cycle එක
@@ -793,13 +858,13 @@ const breadcrumbSchema = JSON.stringify({
       breadcrumbAutoCollapseTimer = setTimeout(collapseBreadcrumb, 5000);
     }
 
-    // තත්පර 5කින් auto-collapse — පරිශීලකයාට URL/category path එක
+    // තත්පර 5කින් auto-collapse - පරිශීලකයාට URL/category path එක
     // කියවීමට ප්‍රමාණවත් වේලාවක් දී, පසුව article content එකට වැඩි
     // ඉඩක් සලසයි.
     scheduleAutoCollapse();
 
     // Fresh listener (clone-replace pattern, site-wide comment system
-    // එකේම භාවිතා වන freshEl() convention එකට සමාන) — SPA navigation
+    // එකේම භාවිතා වන freshEl() convention එකට සමාන) - SPA navigation
     // කිහිපයකින් පසු duplicate event listeners එකතු වීම වළක්වයි.
     const freshToggle = toggleBtn.cloneNode(true) as HTMLButtonElement;
     toggleBtn.parentNode?.replaceChild(freshToggle, toggleBtn);
@@ -807,8 +872,8 @@ const breadcrumbSchema = JSON.stringify({
     freshToggle.addEventListener("click", () => {
       if (shell.classList.contains("is-collapsed")) {
         expandBreadcrumb();
-        // 🎯 CRITICAL FIX: expand කළ පසු, නැවත ස්වයංක්‍රීයව 5
-        // තත්පරයකින් auto-collapse වීමට timer එක reschedule කරයි —
+        // CRITICAL FIX: expand කළ පසු, නැවත ස්වයංක්‍රීයව 5
+        // තත්පරයකින් auto-collapse වීමට timer එක reschedule කරයි -
         // මෙය නොකළොත් expand කළාට පස්සේ breadcrumb එක සදහටම open
         // state එකේම රැඳී, "දිගහැරිය විටදිත් යම් තප්පර ගානකින්
         // ස්වයංක්‍රීයව හැකිලිය යුතුයි" requirement එක ඉටු නොවේ.
@@ -822,7 +887,7 @@ const breadcrumbSchema = JSON.stringify({
 
   document.addEventListener("astro:page-load", initBreadcrumbToggle);
 
-  // Timer cleanup on page swap — Header.astro එකේම pattern එක,
+  // Timer cleanup on page swap - Header.astro එකේම pattern එක,
   // memory leak/stale-timer-firing-on-new-page වළක්වයි.
   document.addEventListener("astro:before-swap", () => {
     if (breadcrumbAutoCollapseTimer) {
@@ -830,6 +895,166 @@ const breadcrumbSchema = JSON.stringify({
       breadcrumbAutoCollapseTimer = null;
     }
   });
+</script>
+
+<script>
+  // NEW: LIKE BUTTON LOGIC.
+  //
+  // WHAT THIS DOES: toggles a heart icon and a numeric count for the
+  // current post. Uses localStorage (per-browser, not per-account -
+  // this site has no user accounts) to remember which posts THIS
+  // browser has already liked, so clicking again unlikes (toggle
+  // behavior), same convention as most simple like widgets.
+  //
+  // NETWORK CALLS: GET .../api/likes?postId=X to fetch the current
+  // count on page load, POST .../api/likes with { postId, action } to
+  // register a like/unlike. Both are best-effort and fully
+  // non-blocking - if the Worker endpoint is not yet implemented or
+  // is temporarily unreachable, the button still toggles its visual
+  // state locally (optimistic UI) and simply shows "0" for the count,
+  // never breaking the page or throwing a visible error to the
+  // reader.
+  //
+  // NO SCHEMA CLAIM: this feature intentionally does NOT emit any
+  // AggregateRating/Review JSON-LD. Article/BlogPosting content is
+  // not eligible for Google's rich-snippet star display, and adding
+  // a self-serving rating schema to non-eligible content risks a
+  // "spammy structured data" flag. This is a pure UI/engagement
+  // feature only.
+  const LIKES_API_URL = "https://comments.wala-katha.workers.dev/api/likes";
+  const LIKED_POSTS_STORAGE_KEY = "wk-liked-posts";
+
+  function getLikedPostIds(): string[] {
+    try {
+      const raw = localStorage.getItem(LIKED_POSTS_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function setLikedPostIds(ids: string[]) {
+    try {
+      localStorage.setItem(LIKED_POSTS_STORAGE_KEY, JSON.stringify(ids));
+    } catch {
+      // Storage unavailable (private browsing edge cases, etc.) -
+      // the like toggle still works for this page view, it just
+      // won't persist across a reload. Non-fatal.
+    }
+  }
+
+  function initLikeButton() {
+    const btn = document.getElementById("like-button");
+    if (!btn) return;
+
+    const postId = btn.getAttribute("data-post-id") ?? "";
+    const heartIcon = document.getElementById("like-heart-icon");
+    const countEl = document.getElementById("like-count");
+
+    function isPostLiked(): boolean {
+      return getLikedPostIds().includes(postId);
+    }
+
+    function renderLikedState(liked: boolean) {
+      btn?.setAttribute("aria-pressed", liked ? "true" : "false");
+      if (!heartIcon) return;
+      if (liked) {
+        heartIcon.setAttribute("fill", "currentColor");
+        heartIcon.classList.remove("text-[#F8F8FF]/60");
+        heartIcon.classList.add("text-rose-500");
+      } else {
+        heartIcon.setAttribute("fill", "none");
+        heartIcon.classList.remove("text-rose-500");
+        heartIcon.classList.add("text-[#F8F8FF]/60");
+      }
+    }
+
+    // Fresh listener via clone-replace, same convention used
+    // elsewhere in this file (breadcrumb toggle) - prevents duplicate
+    // handlers from stacking across repeated View Transition
+    // navigations back to the same post.
+    const freshBtn = btn.cloneNode(true) as HTMLButtonElement;
+    btn.parentNode?.replaceChild(freshBtn, btn);
+    const freshHeartIcon = freshBtn.querySelector("#like-heart-icon");
+    const freshCountEl = freshBtn.querySelector("#like-count");
+
+    function renderFreshLikedState(liked: boolean) {
+      freshBtn.setAttribute("aria-pressed", liked ? "true" : "false");
+      if (!freshHeartIcon) return;
+      if (liked) {
+        freshHeartIcon.setAttribute("fill", "currentColor");
+        freshHeartIcon.classList.remove("text-[#F8F8FF]/60");
+        freshHeartIcon.classList.add("text-rose-500");
+      } else {
+        freshHeartIcon.setAttribute("fill", "none");
+        freshHeartIcon.classList.remove("text-rose-500");
+        freshHeartIcon.classList.add("text-[#F8F8FF]/60");
+      }
+    }
+
+    renderFreshLikedState(isPostLiked());
+    if (freshCountEl) freshCountEl.textContent = "0";
+
+    if (postId) {
+      fetch(`${LIKES_API_URL}?postId=${encodeURIComponent(postId)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && typeof data.count === "number" && freshCountEl) {
+            freshCountEl.textContent = String(data.count);
+          }
+        })
+        .catch(() => {
+          // Best-effort only - count silently stays at "0" on failure.
+        });
+    }
+
+    let isSubmitting = false;
+    freshBtn.addEventListener("click", async () => {
+      if (isSubmitting || !postId) return;
+      isSubmitting = true;
+
+      const wasLiked = isPostLiked();
+      const nextAction = wasLiked ? "unlike" : "like";
+
+      // Optimistic UI update - toggles instantly, doesn't wait for
+      // the network round-trip.
+      renderFreshLikedState(!wasLiked);
+      if (freshCountEl) {
+        const current = parseInt(freshCountEl.textContent || "0", 10) || 0;
+        freshCountEl.textContent = String(wasLiked ? Math.max(0, current - 1) : current + 1);
+      }
+
+      const likedIds = getLikedPostIds();
+      if (wasLiked) {
+        setLikedPostIds(likedIds.filter((id) => id !== postId));
+      } else {
+        setLikedPostIds([...likedIds, postId]);
+      }
+
+      try {
+        const res = await fetch(LIKES_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ postId, action: nextAction }),
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data && typeof data.count === "number" && freshCountEl) {
+            freshCountEl.textContent = String(data.count);
+          }
+        }
+      } catch (err) {
+        console.error("Like submit error:", err);
+        // Non-blocking - the optimistic local toggle/localStorage
+        // state remains; worst case the count re-syncs on next visit.
+      } finally {
+        isSubmitting = false;
+      }
+    });
+  }
+
+  document.addEventListener("astro:page-load", initLikeButton);
 </script>
 
 <script>
@@ -855,7 +1080,7 @@ const breadcrumbSchema = JSON.stringify({
     const fullText =
       "ඔබ comment එකක් දැමූ පසුව එය නැවත වෙනස් කිරීමට හෝ මැකීමට නොහැකිය. " +
       "අදහස් පළ කිරීමේදී අන් අයට හානියක් නොවන පරිදි සහ links දැමීමෙන් වැළකී සිටිය යුතුය. " +
-      "නීති කඩන සියලු දෙනාගේ devices සදහටම block කිරීමට හැකියාව ඇත — නැවත ඔබට මෙම අඩවියට පැමිණීමට නොහැකි ලෙස.";
+      "නීති කඩන සියලු දෙනාගේ devices සදහටම block කිරීමට හැකියාව ඇත - නැවත ඔබට මෙම අඩවියට පැමිණීමට නොහැකි ලෙස.";
 
     let i = 0;
     el.textContent = "";
