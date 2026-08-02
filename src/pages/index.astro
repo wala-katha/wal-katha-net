@@ -268,69 +268,85 @@ const homePageSchema = {
       
     </div>
   </div>
+
+  <style>
+    /*
+      Auto-collapsing homepage H1 - see the template comment above for
+      full rationale. max-height starts generous (200px) so the heading
+      never clips while visible across any viewport width/line-wrap
+      count; it only matters as a ceiling during the collapse animation
+      itself, since the div's real height while visible is driven by its
+      actual content, not this ceiling value.
+
+      FIXED (Nu Html Checker "Stray start tag script" / Fatal Error):
+      this <style> block, and the <script> block right below it, used
+      to be placed OUTSIDE the <Base>...</Base> tags (as siblings after
+      the closing </Base>). Base.astro's own template renders the
+      COMPLETE <html>...</html> document, so anything written as a
+      sibling after </Base> in this file was landing AFTER the closing
+      </html> tag in the final rendered output - Astro hoists <style>
+      blocks to <head> automatically regardless of position, but does
+      NOT relocate <script> tags the same way, so the script rendered
+      exactly where authored: right after </html>. Moving both blocks
+      here, inside <Base>'s default slot, guarantees they are nested
+      correctly inside <body> in the final HTML - zero behavioral
+      change (style scoping and the astro:page-load/astro:before-swap
+      listeners below are position-independent), purely a structural
+      fix.
+    */
+    .home-heading-collapsible {
+      max-height: 200px;
+      opacity: 1;
+      margin-bottom: 1rem;
+      overflow: hidden;
+      transition:
+        max-height 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.5s ease,
+        margin-bottom 0.6s ease;
+    }
+    #home-heading-shell.is-collapsed {
+      max-height: 0;
+      opacity: 0;
+      margin-bottom: 0;
+      pointer-events: none;
+    }
+  </style>
+
+  <script>
+    // Auto-collapsing homepage H1 timer logic. Follows the same
+    // astro:page-load / astro:before-swap convention already used by
+    // PostSingle.astro's breadcrumb auto-collapse, Header.astro, and
+    // FeaturedSlider.astro, so this works correctly across Astro View
+    // Transitions (ClientRouter) client-side navigations, not just a
+    // hard page load.
+    let homeHeadingCollapseTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function initHomeHeadingAutoCollapse() {
+      const shell = document.getElementById("home-heading-shell");
+      if (!shell) return;
+
+      // Reset to visible state on every load (handles back/forward nav
+      // and repeated client-side visits to "/").
+      shell.classList.remove("is-collapsed");
+
+      if (homeHeadingCollapseTimer) {
+        clearTimeout(homeHeadingCollapseTimer);
+      }
+
+      homeHeadingCollapseTimer = setTimeout(() => {
+        shell.classList.add("is-collapsed");
+      }, 5000);
+    }
+
+    document.addEventListener("astro:page-load", initHomeHeadingAutoCollapse);
+
+    // Cleanup on page swap so a stale timer from a previous visit to "/"
+    // can never fire after the user has navigated elsewhere.
+    document.addEventListener("astro:before-swap", () => {
+      if (homeHeadingCollapseTimer) {
+        clearTimeout(homeHeadingCollapseTimer);
+        homeHeadingCollapseTimer = null;
+      }
+    });
+  </script>
 </Base>
-
-<style>
-  /*
-    Auto-collapsing homepage H1 - see the template comment above for
-    full rationale. max-height starts generous (200px) so the heading
-    never clips while visible across any viewport width/line-wrap
-    count; it only matters as a ceiling during the collapse animation
-    itself, since the div's real height while visible is driven by its
-    actual content, not this ceiling value.
-  */
-  .home-heading-collapsible {
-    max-height: 200px;
-    opacity: 1;
-    margin-bottom: 1rem;
-    overflow: hidden;
-    transition:
-      max-height 0.6s cubic-bezier(0.4, 0, 0.2, 1),
-      opacity 0.5s ease,
-      margin-bottom 0.6s ease;
-  }
-  #home-heading-shell.is-collapsed {
-    max-height: 0;
-    opacity: 0;
-    margin-bottom: 0;
-    pointer-events: none;
-  }
-</style>
-
-<script>
-  // Auto-collapsing homepage H1 timer logic. Follows the same
-  // astro:page-load / astro:before-swap convention already used by
-  // PostSingle.astro's breadcrumb auto-collapse, Header.astro, and
-  // FeaturedSlider.astro, so this works correctly across Astro View
-  // Transitions (ClientRouter) client-side navigations, not just a
-  // hard page load.
-  let homeHeadingCollapseTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function initHomeHeadingAutoCollapse() {
-    const shell = document.getElementById("home-heading-shell");
-    if (!shell) return;
-
-    // Reset to visible state on every load (handles back/forward nav
-    // and repeated client-side visits to "/").
-    shell.classList.remove("is-collapsed");
-
-    if (homeHeadingCollapseTimer) {
-      clearTimeout(homeHeadingCollapseTimer);
-    }
-
-    homeHeadingCollapseTimer = setTimeout(() => {
-      shell.classList.add("is-collapsed");
-    }, 5000);
-  }
-
-  document.addEventListener("astro:page-load", initHomeHeadingAutoCollapse);
-
-  // Cleanup on page swap so a stale timer from a previous visit to "/"
-  // can never fire after the user has navigated elsewhere.
-  document.addEventListener("astro:before-swap", () => {
-    if (homeHeadingCollapseTimer) {
-      clearTimeout(homeHeadingCollapseTimer);
-      homeHeadingCollapseTimer = null;
-    }
-  });
-</script>
