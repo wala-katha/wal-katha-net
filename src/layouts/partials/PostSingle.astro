@@ -312,70 +312,96 @@ const breadcrumbSchema = JSON.stringify({
           {description ?? title}
         </p>
 
-        <ul class="mt-4 flex flex-wrap items-center justify-center text-[#F8F8FF]/90">
-          <li class="mx-3">
-            {allAuthors
-              .filter((author) =>
-                authors.map((a: string) => slugify(a)).includes(slugify(author.data.title))
-              )
-              .map((author) => (
-                <a
-                  href={withTrailingSlash(`/authors/${slugify(author.id)}`)}
-                  class="flex items-center hover:text-primary font-bold text-[#F8F8FF]"
-                >
-                  {author.data.image && (
-                    <Image
-                      src={author.data.image}
-                      alt={author.data.title}
-                      height={50}
-                      width={50}
-                      class="mr-2 h-6 w-6 rounded-full border border-white/20"
-                    />
-                  )}
-                  <span>{author.data.title}</span>
-                </a>
-              ))}
-          </li>
-          <li class="mx-3 flex items-center flex-wrap font-semibold text-[#F8F8FF]">
-            <BiCalendarEdit className="mr-1 h-5 w-5 text-[#01AD9F]" />
+        {/* 2026 POST-META CARD REDESIGN: the previous version was a plain
+            flex-wrap <ul> with no visual grouping - author, date, updated
+            badge, reading time, categories, and the like button all sat
+            loose on the page with nothing tying them together. This
+            replaces it with a single glass "meta card": one bordered,
+            backdrop-blurred container holding every info chip, so the
+            whole block reads as one cohesive unit instead of scattered
+            text. Every chip shares one visual language (rounded-full
+            pill, subtle bg, 4px icon) so the row stays calm even with six
+            different pieces of information in it. Fully fluid/wrap-based
+            (no fixed widths, no media-query breakpoints needed) so it
+            reflows cleanly on any screen size automatically. All existing
+            data logic (author filter, hasUpdatedDate condition, category
+            map, like-button ids/classes the script below depends on) is
+            unchanged - only the markup/styling around that data. */}
+        <div class="post-meta-card relative mt-6 inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 sm:px-4 sm:py-3 backdrop-blur-sm shadow-[0_10px_30px_-12px_rgba(0,0,0,0.7)] transition-colors duration-300">
+          {/* Signature hairline: a thin emerald gradient across the card's
+              top edge - the one deliberate accent touch, tying the card
+              back to the site's #01AD9F brand color without introducing a
+              second competing hue. */}
+          <span class="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-[#01AD9F]/70 to-transparent" aria-hidden="true" />
+
+          {allAuthors
+            .filter((author) =>
+              authors.map((a: string) => slugify(a)).includes(slugify(author.data.title))
+            )
+            .map((author) => (
+              <a
+                href={withTrailingSlash(`/authors/${slugify(author.id)}`)}
+                class="post-meta-chip post-meta-chip-author group/author"
+              >
+                {author.data.image && (
+                  <Image
+                    src={author.data.image}
+                    alt={author.data.title}
+                    height={50}
+                    width={50}
+                    class="h-6 w-6 rounded-full object-cover ring-1 ring-white/15 transition-all duration-300 group-hover/author:ring-[#01AD9F]/60"
+                  />
+                )}
+                <span class="font-bold text-[#F8F8FF] transition-colors duration-300 group-hover/author:text-[#01AD9F]">
+                  {author.data.title}
+                </span>
+              </a>
+            ))}
+
+          <span class="post-meta-chip">
+            <BiCalendarEdit className="h-4 w-4 text-[#01AD9F]" />
             {dateFormat(date)}
-          </li>
+          </span>
+
           {/* 2026 "LAST UPDATED" UI BADGE: publish date එකට වඩා
               different "updated" date එකක් content.config.ts frontmatter
               එකේ තියෙනවා නම් විතරක් පෙන්වයි. Existing posts (updated
-              field නැති) මේ badge එක render වෙන්නේම නෑ - layout එකට
+              field නැති) මේ chip එක render වෙන්නේම නෑ - card layout එකට
               කිසිම gap/spacing issue එකක් ඇති නොකරයි. */}
           {hasUpdatedDate && (
-            <li class="mx-3 flex items-center flex-wrap font-semibold text-emerald-400">
-              <BiCalendarEdit className="mr-1 h-5 w-5 text-emerald-400" />
-              <span class="text-[#F8F8FF]/70 mr-1 font-normal text-sm">Updated:</span>
+            <span class="post-meta-chip post-meta-chip-updated">
+              <BiCalendarEdit className="h-4 w-4 text-emerald-400" />
+              <span class="font-normal text-[#F8F8FF]/60">Updated</span>
               {dateFormat(updated)}
-            </li>
+            </span>
           )}
-          {/* 2026 READING TIME BADGE: post header meta row එකේ,
-              existing date/category badges pattern එකටම සමාන styling
-              එකෙන් reading time එක පෙන්වයි. */}
-          <li class="mx-3 flex items-center flex-wrap font-semibold text-[#F8F8FF]">
-            <BiTime className="mr-1 h-5 w-5 text-[#01AD9F]" />
+
+          {/* 2026 READING TIME CHIP: same shared chip language as every
+              other item in this card. */}
+          <span class="post-meta-chip">
+            <BiTime className="h-4 w-4 text-[#01AD9F]" />
             {readingTime(post.body ?? "").toString()}
-          </li>
-          <li class="mx-3 flex items-center flex-wrap">
-            <BiCategoryAlt className="mr-1 h-[18px] w-[18px] text-[#01AD9F]" />
-            <ul>
-              {categories.map((category: string, i: number) => (
-                <li class="inline-block">
-                  <a
-                    href={withTrailingSlash(`/categories/${slugify(category)}`)}
-                    class="mr-2 hover:text-primary font-bold bg-white/10 px-2 py-0.5 rounded text-[#F8F8FF]"
-                  >
-                    {humanize(category)}
-                    {i !== categories.length - 1 && ","}
-                  </a>
-                </li>
+          </span>
+
+          <span class="post-meta-chip post-meta-chip-categories">
+            <BiCategoryAlt className="h-4 w-4 text-[#01AD9F] flex-shrink-0" />
+            <span class="flex flex-wrap items-center gap-1.5">
+              {categories.map((category: string) => (
+                <a
+                  href={withTrailingSlash(`/categories/${slugify(category)}`)}
+                  class="rounded-full bg-white/[0.06] px-2 py-0.5 text-[12.5px] font-bold text-[#F8F8FF]/85 transition-colors duration-200 hover:bg-[#01AD9F]/15 hover:text-[#01AD9F]"
+                >
+                  {humanize(category)}
+                </a>
               ))}
-            </ul>
-          </li>
-          {/* NEW: LIKE BUTTON WIDGET
+            </span>
+          </span>
+
+          {/* Divider before the like action - visible only from sm+ so the
+              card never wraps around an orphaned divider on narrow phones. */}
+          <span class="hidden h-5 w-px bg-white/10 sm:block" aria-hidden="true" />
+
+          {/* LIKE BUTTON WIDGET
               WHY: readers previously had no way to "like" a post. Rather
               than adding a fake AggregateRating/star schema (which is
               NOT eligible for Google rich-snippet stars on Article-type
@@ -388,35 +414,37 @@ const breadcrumbSchema = JSON.stringify({
               claim is made anywhere on this page for this feature - it
               is purely a UI/engagement element.
               data-post-id carries post.id so the script below can target
-              the correct like-count bucket per story. */}
-          <li class="mx-3 flex items-center">
-            <button
-              id="like-button"
-              type="button"
-              class="like-btn-wrap flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1.5 transition-all duration-300"
-              aria-pressed="false"
-              aria-label="මෙම කතාවට කැමතියි කියලා සලකුණු කරන්න"
-              data-post-id={post.id}
+              the correct like-count bucket per story. All ids/classes
+              the like-button script depends on (#like-button,
+              #like-heart-icon, #like-count, .like-btn-wrap,
+              aria-pressed) are preserved exactly - only the visual
+              chip styling around them changed. */}
+          <button
+            id="like-button"
+            type="button"
+            class="like-btn-wrap post-meta-chip post-meta-chip-like"
+            aria-pressed="false"
+            aria-label="මෙම කතාවට කැමතියි කියලා සලකුණු කරන්න"
+            data-post-id={post.id}
+          >
+            <svg
+              id="like-heart-icon"
+              class="h-4 w-4 text-[#F8F8FF]/60 transition-all duration-300"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
             >
-              <svg
-                id="like-heart-icon"
-                class="h-4 w-4 text-[#F8F8FF]/60 transition-all duration-300"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                />
-              </svg>
-              <span id="like-count" class="text-xs sm:text-sm font-bold text-[#F8F8FF]/70">--</span>
-            </button>
-          </li>
-        </ul>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+              />
+            </svg>
+            <span id="like-count" class="text-xs sm:text-sm font-bold text-[#F8F8FF]/70">--</span>
+          </button>
+        </div>
       </div>
 
       <div class="col-12 mt-8 mb-2">
@@ -793,8 +821,52 @@ const breadcrumbSchema = JSON.stringify({
     }
   }
 
-  /* NEW: LIKE BUTTON - small, self-contained styling additions. Only
-     appended here, nothing above this block is touched. */
+  /* 2026 POST-META CARD - shared "chip" language used by every item
+     inside .post-meta-card (author, date, updated, reading time,
+     category group, like button). One base rule keeps every chip
+     visually consistent; a few modifier classes below layer on the
+     per-chip differences (interactive hover, updated tint, like
+     tint) without duplicating the base styles. */
+  .post-meta-card {
+    isolation: isolate;
+  }
+  .post-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: rgba(248, 248, 255, 0.85);
+    transition: background-color 0.25s ease, border-color 0.25s ease,
+      color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  a.post-meta-chip:hover,
+  button.post-meta-chip:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.16);
+    transform: translateY(-1px);
+  }
+  .post-meta-chip-updated {
+    background-color: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.25);
+    color: #34d399;
+  }
+  .post-meta-chip-categories {
+    padding-right: 0.625rem;
+  }
+
+  /* LIKE BUTTON - toggle chip, self-contained styling additions. Ids/
+     classes referenced by the like-button script below (#like-button,
+     #like-heart-icon, #like-count, .like-btn-wrap, aria-pressed) are
+     untouched - these rules are purely additive/visual. */
+  .like-btn-wrap {
+    cursor: pointer;
+  }
   .like-btn-wrap svg {
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease;
   }
@@ -803,6 +875,15 @@ const breadcrumbSchema = JSON.stringify({
   }
   .like-btn-wrap[aria-pressed="true"] svg {
     transform: scale(1.15);
+  }
+  .post-meta-chip-like[aria-pressed="true"] {
+    background-color: rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.35);
+    color: #fb7185;
+  }
+  .post-meta-chip-like[aria-pressed="true"]:hover {
+    background-color: rgba(244, 63, 94, 0.18);
+    border-color: rgba(244, 63, 94, 0.45);
   }
 </style>
 
