@@ -40,7 +40,7 @@ const { posts } = Astro.props;
             data-index={index}
           >
             {post.data.image && (
-              
+              <a
                 href={withTrailingSlash(`/blog/${post.id}`)}
                 class="rounded-lg block overflow-hidden group relative bg-[#161616] mx-auto w-full aspect-[3/4]"
               >
@@ -67,7 +67,7 @@ const { posts } = Astro.props;
                 <ul>
                   {post.data.categories.slice(0, 1).map((category: string) => (
                     <li class="inline-block">
-                      
+                      <a
                         href={withTrailingSlash(`/categories/${slugify(category)}`)}
                         class="hover:text-emerald-400 font-bold text-[10px] sm:text-xs bg-white/5 px-1.5 py-0.5 rounded text-slate-200"
                       >
@@ -90,7 +90,7 @@ const { posts } = Astro.props;
 
             {/* POST TITLE */}
             <h3 class="mb-1 line-clamp-2 leading-tight text-center mx-auto w-full">
-              
+              <a
                 href={withTrailingSlash(`/blog/${post.id}`)}
                 class="block hover:text-emerald-400 transition duration-200 text-xs sm:text-base font-extrabold text-white text-center"
               >
