@@ -49,9 +49,9 @@ export default defineConfig({
   site: config.site.base_url ? config.site.base_url : "https://www.walakatha.net",
   base: config.site.base_path ? config.site.base_path : "/",
   // ==========================================================
-  // 🎯 CONFIRMED DEPLOYMENT TARGET: Cloudflare Pages (Git
+  // CONFIRMED DEPLOYMENT TARGET: Cloudflare Pages (Git
   // integration / auto-deploy on push). This is NOT a Cloudflare
-  // Workers (wrangler deploy) deployment — wrangler.jsonc's
+  // Workers (wrangler deploy) deployment - wrangler.jsonc's
   // "assets.html_handling" setting has ZERO effect on this live
   // site, since that config only applies to Workers Static Assets
   // deployments, not Pages Git-integration builds (confirmed via
@@ -61,7 +61,7 @@ export default defineConfig({
   // Cloudflare Pages ALWAYS 308-redirects a no-trailing-slash
   // directory-style request (e.g. "/blog/foo") to the trailing-slash
   // version ("/blog/foo/") when the build output uses the default
-  // "directory" format (page/index.html files) — this is fixed,
+  // "directory" format (page/index.html files) - this is fixed,
   // non-configurable Pages platform behavior. The site's own
   // src/lib/utils/urlHelper.ts (withTrailingSlash) and Base.astro
   // (ensureTrailingSlash) already generate every internal link,
@@ -71,7 +71,7 @@ export default defineConfig({
   // trailingSlash: "always" here (driven by config.json's
   // site.trailing_slash = true) makes the LOCAL "astro dev" / "astro
   // preview" dev-server route-matching behavior identical to actual
-  // production Cloudflare Pages behavior — Astro's own docs
+  // production Cloudflare Pages behavior - Astro's own docs
   // recommend pairing trailingSlash: "always" with the default
   // build.format: "directory" for exactly this reason. This does
   // NOT change the production static build output (which was already
@@ -80,65 +80,71 @@ export default defineConfig({
   // locally.
   // ==========================================================
   trailingSlash: config.site.trailing_slash ? "always" : "never",
-  // 🎯 EXPLICIT, FUTURE-PROOF DECLARATION: "directory" is already
-  // Astro's default build.format, but declaring it explicitly here
-  // guarantees this pairing (trailingSlash: "always" + directory-style
-  // output) can never silently drift apart if a future Astro major
-  // version ever changes its default — self-healing against upstream
-  // default changes.
+  // 2026-08 UPDATE (SEO Site Checkup "HTML Page Size Test" fix,
+  // root-cause reversal of an earlier over-correction):
   //
-  // 🎯 NEW FIX (2026-07 — PageSpeed Insights "Render-blocking requests"
-  // audit, Est savings 300ms): ROOT CAUSE: Base.astro's global
-  // "@/styles/main.css" import (bundling base.css, components.css,
-  // navigation.css, buttons.css, safe.css, utilities.css, and Tailwind's
-  // compiled output) was being emitted as a separate hashed CSS file
-  // (e.g. "/_astro/Base.[hash].css", ~19.2 KiB) referenced via a
-  // render-blocking <link rel="stylesheet"> tag that Astro injects
-  // automatically into every page's <head>. Because this filename is
-  // build-time-hashed and injected by Astro itself (not authored
-  // manually anywhere in this codebase), it cannot be preloaded via a
-  // hardcoded <link rel="preload"> — the only correct, framework-level
-  // fix is Astro's own documented "build.inlineStylesheets" option.
+  // ROOT CAUSE: "inlineStylesheets: 'always'" was previously set here
+  // to fix a narrower PageSpeed Insights "Render-blocking requests"
+  // audit item, by forcing Astro to embed the ENTIRE compiled CSS
+  // bundle (Tailwind output + base.css/components.css/navigation.css/
+  // buttons.css/safe.css/utilities.css/small-screen-fixes.css) as an
+  // inline <style> block inside every page's HTML <head>, instead of
+  // a separate cacheable .css file.
   //
-  // PERMANENT FIX: "inlineStylesheets: 'always'" forces Astro to emit
-  // this CSS as an inline <style> block directly inside the HTML
-  // document instead of a separate network request — this completely
-  // eliminates the render-blocking stylesheet request (and the
-  // corresponding entry in the Network Dependency Tree) for EVERY page
-  // site-wide, since every page shares the same Base.astro layout and
-  // therefore the same compiled CSS bundle.
+  // This directly caused two confirmed, measured regressions found by
+  // SEO Site Checkup on the live homepage:
+  //   1. "HTML Page Size Test" FAILED - homepage HTML grew to 59.29 KB
+  //      (vs the 33 KB average of top 100 sites, only 23% pass rate).
+  //      A prior fix (see src/styles/index-overrides.css's own
+  //      documented history) had already reduced homepage HTML to
+  //      ~37.35 KB by extracting inline CSS to an external file -
+  //      "inlineStylesheets: always" silently reversed that entire
+  //      win by re-inlining everything.
+  //   2. Lost repeat-visit CSS caching - public/_headers already sets
+  //      "/*.css -> Cache-Control: public, max-age=31536000,
+  //      immutable" for exactly this bundle, but that header is
+  //      useless once the CSS is inlined into HTML instead of served
+  //      as its own file: every single page navigation (home -> post
+  //      -> category -> etc.) now re-downloads the FULL CSS bundle as
+  //      part of that page's HTML, uncompressed-relative-savings,
+  //      instead of loading it once from cache.
+  //   3. Likely contributed to a separate "Media Query Responsive
+  //      Test" false-negative on some automated checkers, which only
+  //      scan external <link rel="stylesheet"> files for "@media"
+  //      rules and do not deep-parse inline <style> block contents.
   //
-  // TRADE-OFF (documented, not hidden): this increases raw HTML
-  // document size by roughly the size of the CSS bundle. Cloudflare
-  // Pages serves all HTML responses with automatic gzip/brotli
-  // compression, so the real-world transferred-byte impact is smaller
-  // than the raw KiB figures suggest — and removing a full
-  // render-blocking round-trip (which directly delays LCP/FCP) is a
-  // stronger performance win than the added inline-CSS parse cost.
-  // Astro's own documentation recommends this exact option for exactly
-  // this Lighthouse/PageSpeed audit.
+  // PERMANENT FIX: reverted to "auto" (Astro's own documented smart
+  // default) - Astro decides per-stylesheet whether to inline (only
+  // for genuinely small stylesheets) or link externally, restoring
+  // both the smaller HTML payload and the year-long immutable CSS
+  // cache for repeat visitors, while still allowing Astro to inline
+  // any small stylesheet automatically. If a future, more targeted
+  // render-blocking-CSS fix is needed, the correct approach is an
+  // async-CSS-loading pattern (rel="preload" + onload swap) scoped to
+  // just the critical-path stylesheet, not a blanket "always inline
+  // everything" site-wide switch.
   build: {
     format: "directory",
-    inlineStylesheets: "always",
+    inlineStylesheets: "auto",
   },
-  // 🎯 ASTRO 7 UPGRADE FIX: Astro 7.0 හි compressHTML default එක
-  // JSX-style whitespace collapsing බවට වෙනස් වී ඇත (span/inline
-  // elements අතර line-break spaces ඉවත් වේ). මෙම site එකේ ඇති Sinhala
-  // prose content සහ comma-separated inline tags (Posts.astro,
-  // PostSingle.astro) වල visual regression risk එකක් වළක්වා ගැනීමට,
-  // Astro 6 හි පැරණි (compress) behavior එකම explicit ලෙස රඳවා ගනී.
+  // ASTRO 7 UPGRADE FIX: Astro 7.0's compressHTML default changed to
+  // JSX-style whitespace collapsing (span/inline elements lose
+  // line-break spaces between them). This site's Sinhala prose content
+  // and comma-separated inline tags (Posts.astro, PostSingle.astro)
+  // carry visual regression risk from that change, so the prior (Astro
+  // 6) compress behavior is explicitly retained here.
   compressHTML: true,
   // ==========================================================
-  // 🎯 CONFIRMED FIX (Astro 7.1.3, verified against installed
-  // node_modules/astro/package.json version — 2026-07):
+  // CONFIRMED FIX (Astro 7.1.3, verified against installed
+  // node_modules/astro/package.json version - 2026-07):
   //
   // ROOT CAUSE: "experimentalResponsiveImages: true" previously sat
   // here inside "image: {}". This was NEVER a valid Astro config
-  // key at ANY point in Astro's history — the old (pre-5.10)
+  // key at ANY point in Astro's history - the old (pre-5.10)
   // experimental syntax lived under a completely separate top-level
   // "experimental: { responsiveImages: true }" object, not under
   // "image.*". Astro's image-config schema silently ignores unknown
-  // keys, so this line has always been a dead no-op — it never
+  // keys, so this line has always been a dead no-op - it never
   // enabled anything, in any Astro version this project has ever
   // run on.
   //
@@ -146,13 +152,13 @@ export default defineConfig({
   // entire experimental system was removed and replaced with a
   // stable "image.layout" + "image.responsiveStyles" API. Astro
   // 7.1.3 (this project's confirmed installed version) only
-  // supports the NEW stable API — there is no experimental flag of
+  // supports the NEW stable API - there is no experimental flag of
   // any kind left to enable.
   //
   // WHY IT IS NOT RE-ENABLED HERE: enabling the real stable feature
   // (image.layout: "constrained" + image.responsiveStyles: true)
   // would auto-inject srcset/sizes/CSS styles onto EVERY <Image>
-  // component site-wide by default — including the ones in
+  // component site-wide by default - including the ones in
   // Posts.astro and SimilarPosts.astro that already have carefully
   // hand-tuned, PageSpeed-driven "widths"/"sizes" props (see the
   // "postGridImageSizes" calculation and its W3C-validator-driven
@@ -160,7 +166,7 @@ export default defineConfig({
   // Posts.astro). Turning this on site-wide without auditing every
   // <Image> usage individually risks silently overriding those
   // deliberate, already-optimized values. Removing the dead key is
-  // therefore the correct, zero-risk fix — it changes nothing
+  // therefore the correct, zero-risk fix - it changes nothing
   // functionally (since the key never worked), while eliminating
   // invalid/confusing configuration from the codebase. If site-wide
   // native responsive images are wanted in the future, that should
