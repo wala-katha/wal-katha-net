@@ -80,52 +80,56 @@ export default defineConfig({
   // locally.
   // ==========================================================
   trailingSlash: config.site.trailing_slash ? "always" : "never",
-  // 2026-08 UPDATE (SEO Site Checkup "HTML Page Size Test" fix,
-  // root-cause reversal of an earlier over-correction):
+  // 2026-08 FINAL DECISION (inlineStylesheets - CSS delivery strategy,
+  // corrected after a confirmed regression):
   //
-  // ROOT CAUSE: "inlineStylesheets: 'always'" was previously set here
-  // to fix a narrower PageSpeed Insights "Render-blocking requests"
-  // audit item, by forcing Astro to embed the ENTIRE compiled CSS
-  // bundle (Tailwind output + base.css/components.css/navigation.css/
-  // buttons.css/safe.css/utilities.css/small-screen-fixes.css) as an
-  // inline <style> block inside every page's HTML <head>, instead of
-  // a separate cacheable .css file.
+  // HISTORY OF THIS SETTING (documented here so the reasoning is never
+  // lost across future edits):
+  //   1. Originally "always" - forced the entire compiled CSS bundle
+  //      to be inlined into every page's HTML <head>, specifically to
+  //      fix a PageSpeed Insights "Render-blocking requests" audit
+  //      item (an external <link rel="stylesheet"> blocks first paint
+  //      until it downloads).
+  //   2. Changed to "auto" to fix a DIFFERENT, third-party "SEO Site
+  //      Checkup" tool's "HTML Page Size Test" (homepage HTML had
+  //      grown to 59.29 KB from all that inlined CSS, vs a 33 KB
+  //      average). "auto" only inlines stylesheets smaller than Vite's
+  //      default assetsInlineLimit (4 KB) and links everything larger
+  //      externally.
+  //   3. CONFIRMED REGRESSION (re-measured via PageSpeed Insights after
+  //      the "auto" change): this project's real compiled CSS bundle
+  //      is 19.6 KiB - roughly 5x larger than the 4 KB "auto" inline
+  //      threshold - so "auto" always links it externally as
+  //      "/_astro/Base.[hash].css", reintroducing the EXACT
+  //      render-blocking-requests problem "always" was originally
+  //      added to fix (confirmed: Est savings 150 ms, flagged again as
+  //      a red/failing item, with Base.css appearing in the Network
+  //      Dependency Tree as a blocking critical-path request).
   //
-  // This directly caused two confirmed, measured regressions found by
-  // SEO Site Checkup on the live homepage:
-  //   1. "HTML Page Size Test" FAILED - homepage HTML grew to 59.29 KB
-  //      (vs the 33 KB average of top 100 sites, only 23% pass rate).
-  //      A prior fix (see src/styles/index-overrides.css's own
-  //      documented history) had already reduced homepage HTML to
-  //      ~37.35 KB by extracting inline CSS to an external file -
-  //      "inlineStylesheets: always" silently reversed that entire
-  //      win by re-inlining everything.
-  //   2. Lost repeat-visit CSS caching - public/_headers already sets
-  //      "/*.css -> Cache-Control: public, max-age=31536000,
-  //      immutable" for exactly this bundle, but that header is
-  //      useless once the CSS is inlined into HTML instead of served
-  //      as its own file: every single page navigation (home -> post
-  //      -> category -> etc.) now re-downloads the FULL CSS bundle as
-  //      part of that page's HTML, uncompressed-relative-savings,
-  //      instead of loading it once from cache.
-  //   3. Likely contributed to a separate "Media Query Responsive
-  //      Test" false-negative on some automated checkers, which only
-  //      scan external <link rel="stylesheet"> files for "@media"
-  //      rules and do not deep-parse inline <style> block contents.
+  // FINAL DECISION: reverted to "always". Rationale for resolving this
+  // conflict permanently in this direction: PageSpeed Insights is
+  // Google's own official tool measuring real Core Web Vitals (LCP is
+  // directly delayed by render-blocking CSS, and LCP is a confirmed
+  // Google ranking factor). The third-party "SEO Site Checkup" tool's
+  // "HTML Page Size Test" is an unscored, generic heuristic (a simple
+  // average-size comparison) that is not a documented Google ranking
+  // signal. When the two conflict, the official, ranking-relevant
+  // Core Web Vitals metric takes priority.
   //
-  // PERMANENT FIX: reverted to "auto" (Astro's own documented smart
-  // default) - Astro decides per-stylesheet whether to inline (only
-  // for genuinely small stylesheets) or link externally, restoring
-  // both the smaller HTML payload and the year-long immutable CSS
-  // cache for repeat visitors, while still allowing Astro to inline
-  // any small stylesheet automatically. If a future, more targeted
-  // render-blocking-CSS fix is needed, the correct approach is an
-  // async-CSS-loading pattern (rel="preload" + onload swap) scoped to
-  // just the critical-path stylesheet, not a blanket "always inline
-  // everything" site-wide switch.
+  // If HTML page size needs revisiting again in the future, the
+  // correct approach is NOT toggling this flag back and forth - it is
+  // a genuinely different technique: an async/non-blocking external
+  // stylesheet load (rel="preload" as="style" + onload swap, with a
+  // <noscript> fallback), which keeps CSS as a separate cacheable file
+  // (solving both the page-size AND the repeat-visit-caching problem)
+  // while never blocking render (solving the Core Web Vitals problem
+  // too). That pattern requires intercepting Astro's own automatic
+  // stylesheet-link injection (a custom integration hook), which is a
+  // larger, deliberately-scoped follow-up task, not a one-line config
+  // flip.
   build: {
     format: "directory",
-    inlineStylesheets: "auto",
+    inlineStylesheets: "always",
   },
   // ASTRO 7 UPGRADE FIX: Astro 7.0's compressHTML default changed to
   // JSX-style whitespace collapsing (span/inline elements lose
@@ -160,18 +164,15 @@ export default defineConfig({
   // would auto-inject srcset/sizes/CSS styles onto EVERY <Image>
   // component site-wide by default - including the ones in
   // Posts.astro and SimilarPosts.astro that already have carefully
-  // hand-tuned, PageSpeed-driven "widths"/"sizes" props (see the
-  // "postGridImageSizes" calculation and its W3C-validator-driven
-  // "densities" -> "widths"+"sizes" migration history in
-  // Posts.astro). Turning this on site-wide without auditing every
-  // <Image> usage individually risks silently overriding those
-  // deliberate, already-optimized values. Removing the dead key is
-  // therefore the correct, zero-risk fix - it changes nothing
-  // functionally (since the key never worked), while eliminating
-  // invalid/confusing configuration from the codebase. If site-wide
-  // native responsive images are wanted in the future, that should
-  // be a deliberate, separately-scoped migration across every
-  // <Image>-using component.
+  // hand-tuned, PageSpeed-driven "widths"/"sizes" props. Turning this
+  // on site-wide without auditing every <Image> usage individually
+  // risks silently overriding those deliberate, already-optimized
+  // values. Removing the dead key is therefore the correct, zero-risk
+  // fix - it changes nothing functionally (since the key never
+  // worked), while eliminating invalid/confusing configuration from
+  // the codebase. If site-wide native responsive images are wanted in
+  // the future, that should be a deliberate, separately-scoped
+  // migration across every <Image>-using component.
   // ==========================================================
   image: {
     service: sharpImageService({
