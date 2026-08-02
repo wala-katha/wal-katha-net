@@ -265,7 +265,7 @@ const breadcrumbSchema = JSON.stringify({
                         {crumb.name}
                       </span>
                     ) : (
-                      
+                      <a
                         href={
                           i === 0
                             ? "/"
@@ -319,7 +319,7 @@ const breadcrumbSchema = JSON.stringify({
                 authors.map((a: string) => slugify(a)).includes(slugify(author.data.title))
               )
               .map((author) => (
-                
+                <a
                   href={withTrailingSlash(`/authors/${slugify(author.id)}`)}
                   class="flex items-center hover:text-primary font-bold text-[#F8F8FF]"
                 >
@@ -364,7 +364,7 @@ const breadcrumbSchema = JSON.stringify({
             <ul>
               {categories.map((category: string, i: number) => (
                 <li class="inline-block">
-                  
+                  <a
                     href={withTrailingSlash(`/categories/${slugify(category)}`)}
                     class="mr-2 hover:text-primary font-bold bg-white/10 px-2 py-0.5 rounded text-[#F8F8FF]"
                   >
@@ -442,7 +442,7 @@ const breadcrumbSchema = JSON.stringify({
           <ul class="mr-4 mb-4 space-x-3">
             {tags.map((tag: string) => (
               <li class="inline-block">
-                
+                <a
                   href={withTrailingSlash(`/tags/${slugify(tag)}`)}
                   class="block rounded-lg bg-[#FFCC00] border border-[#FFCC00] px-4 py-2 font-black text-[#010203] text-sm hover:bg-[#E6B800] transition duration-300"
                 >
