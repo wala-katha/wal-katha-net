@@ -427,22 +427,35 @@ const breadcrumbSchema = JSON.stringify({
             aria-label="මෙම කතාවට කැමතියි කියලා සලකුණු කරන්න"
             data-post-id={post.id}
           >
-            <svg
-              id="like-heart-icon"
-              class="h-4 w-4 text-[#F8F8FF]/60 transition-all duration-300"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-              />
-            </svg>
-            <span id="like-count" class="text-xs sm:text-sm font-bold text-[#F8F8FF]/70">--</span>
+            {/* 2026 LIKE-BURST ANIMATION WRAPPER: like-icon-wrap is a
+                small relatively-positioned box around ONLY the heart
+                icon (not the whole chip), so the ripple/particle/+1
+                effects below can be centered with simple 50%/50%
+                positioning regardless of chip padding or count-digit
+                width - none of this changes the button's flex layout,
+                every added element is absolutely positioned and
+                pointer-events:none so click targeting is untouched. */}
+            <span class="like-icon-wrap">
+              <span class="like-ripple" aria-hidden="true"></span>
+              <span class="like-particles" aria-hidden="true"></span>
+              <svg
+                id="like-heart-icon"
+                class="like-heart-svg h-4 w-4 text-[#F8F8FF]/60 transition-all duration-300"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                />
+              </svg>
+              <span class="like-plus-one" aria-hidden="true">+1</span>
+            </span>
+            <span id="like-count" class="like-count-num text-xs sm:text-sm font-bold text-[#F8F8FF]/70">--</span>
           </button>
         </div>
       </div>
@@ -865,15 +878,16 @@ const breadcrumbSchema = JSON.stringify({
      #like-heart-icon, #like-count, .like-btn-wrap, aria-pressed) are
      untouched - these rules are purely additive/visual. */
   .like-btn-wrap {
+    position: relative;
     cursor: pointer;
   }
-  .like-btn-wrap svg {
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease;
+  .like-btn-wrap svg.like-heart-svg {
+    transition: color 0.3s ease;
   }
-  .like-btn-wrap:active svg {
+  .like-btn-wrap:active svg.like-heart-svg {
     transform: scale(0.85);
   }
-  .like-btn-wrap[aria-pressed="true"] svg {
+  .like-btn-wrap[aria-pressed="true"] svg.like-heart-svg {
     transform: scale(1.15);
   }
   .post-meta-chip-like[aria-pressed="true"] {
@@ -884,6 +898,140 @@ const breadcrumbSchema = JSON.stringify({
   .post-meta-chip-like[aria-pressed="true"]:hover {
     background-color: rgba(244, 63, 94, 0.18);
     border-color: rgba(244, 63, 94, 0.45);
+  }
+
+  /* ==========================================================
+     2026 LIKE-BURST ANIMATION SYSTEM (NEW)
+     WHY: a plain scale/color toggle felt flat for a primary
+     engagement action. This adds a small, tasteful "burst" moment
+     that fires only on the like->liked transition (not on unlike,
+     matching Twitter/Instagram convention), built entirely from
+     CSS keyframes plus a handful of tiny JS-spawned particle spans
+     - no external animation library, no layout shift (every added
+     node is position:absolute + pointer-events:none inside a
+     position:relative icon wrapper, so the button's flex layout,
+     click target, and surrounding chip row are 100% unaffected).
+     ========================================================== */
+  .like-icon-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Heart pop - a short elastic scale-bounce, triggered by JS toggling
+     the "like-pop" class (forced-reflow restart, see script below) so
+     it reliably replays on every single click, not just the first. */
+  .like-heart-svg.like-pop {
+    animation: likeHeartPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes likeHeartPop {
+    0% { transform: scale(1); }
+    30% { transform: scale(0.72); }
+    55% { transform: scale(1.3); }
+    75% { transform: scale(0.95); }
+    100% { transform: scale(1); }
+  }
+
+  /* Ripple - a soft rose ring expanding out from behind the heart,
+     fires only on the like->liked transition via ".is-liking". */
+  .like-ripple {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1.6rem;
+    height: 1.6rem;
+    margin-top: -0.8rem;
+    margin-left: -0.8rem;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(244, 63, 94, 0.5) 0%, rgba(244, 63, 94, 0) 70%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .like-btn-wrap.is-liking .like-ripple {
+    animation: likeRipple 0.55s ease-out;
+  }
+  @keyframes likeRipple {
+    0% { opacity: 0.9; transform: scale(0.3); }
+    100% { opacity: 0; transform: scale(2.8); }
+  }
+
+  /* Particle burst - tiny colored dots spawned by JS (one per click,
+     only on like), each animated outward at its own random angle/
+     distance via CSS custom properties, then removed on animationend. */
+  .like-particles {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+  .like-particle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-radius: 9999px;
+    background: var(--like-particle-color, #fb7185);
+    animation: likeParticleBurst 0.65s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+  }
+  @keyframes likeParticleBurst {
+    0% {
+      opacity: 1;
+      transform: translate(-50%, -50%) rotate(var(--like-particle-angle, 0deg)) translateX(0) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -50%) rotate(var(--like-particle-angle, 0deg)) translateX(var(--like-particle-distance, 24px)) scale(0.4);
+    }
+  }
+
+  /* Floating "+1" - rises and fades above the heart on like only. */
+  .like-plus-one {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translate(-50%, 0);
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #fb7185;
+    opacity: 0;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .like-btn-wrap.is-liking .like-plus-one {
+    animation: likePlusOneFloat 0.8s ease-out;
+  }
+  @keyframes likePlusOneFloat {
+    0% { opacity: 0; transform: translate(-50%, 2px) scale(0.6); }
+    25% { opacity: 1; transform: translate(-50%, -4px) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -18px) scale(0.9); }
+  }
+
+  /* Count pulse - brief scale/color flash whenever the visible number
+     changes (like or unlike), triggered by JS via forced-reflow restart. */
+  .like-count-num.like-count-pulse {
+    display: inline-block;
+    animation: likeCountPulse 0.35s ease-out;
+  }
+  @keyframes likeCountPulse {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.3); color: #fb7185; }
+    100% { transform: scale(1); }
+  }
+
+  /* Accessibility: readers who've asked for reduced motion still get
+     the instant color/state change (that part is core UI feedback,
+     not decorative), but every purely-decorative burst/pop/float
+     animation below is switched off. */
+  @media (prefers-reduced-motion: reduce) {
+    .like-heart-svg.like-pop,
+    .like-btn-wrap.is-liking .like-ripple,
+    .like-btn-wrap.is-liking .like-plus-one,
+    .like-particle,
+    .like-count-num.like-count-pulse {
+      animation: none !important;
+    }
   }
 </style>
 
@@ -1025,30 +1173,65 @@ const breadcrumbSchema = JSON.stringify({
     }
   }
 
+  // 2026 LIKE-BURST HELPERS
+  //
+  // prefersReducedMotion is read once per initLikeButton() call (each
+  // astro:page-load), which is correct since a user's OS-level motion
+  // preference cannot change mid-session without a page reload anyway.
+  // When true, the decorative particle/ripple/+1 DOM churn is skipped
+  // entirely (not just hidden via CSS) - the CSS media query below is
+  // a second, independent safety net in case this check is ever
+  // bypassed.
+  function prefersReducedMotion(): boolean {
+    return (
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+  }
+
+  // Restarts a CSS animation reliably by removing the class, forcing a
+  // synchronous reflow (reading offsetWidth), then re-adding it - the
+  // standard technique for replaying the same keyframe animation on
+  // every click instead of only the first time the class is added.
+  function replayAnimationClass(el: Element, className: string) {
+    el.classList.remove(className);
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    (el as HTMLElement).offsetWidth;
+    el.classList.add(className);
+  }
+
+  function spawnLikeParticles(container: Element | null) {
+    if (!container) return;
+    const particleCount = 8;
+    const colors = ["#fb7185", "#f472b6", "#facc15", "#fda4af", "#f87171"];
+    for (let i = 0; i < particleCount; i++) {
+      const particle = document.createElement("span");
+      particle.className = "like-particle";
+      const angle = (360 / particleCount) * i + (Math.random() * 18 - 9);
+      const distance = 18 + Math.random() * 12;
+      const size = 3 + Math.random() * 3;
+      particle.style.setProperty("--like-particle-angle", `${angle}deg`);
+      particle.style.setProperty("--like-particle-distance", `${distance}px`);
+      particle.style.setProperty("--like-particle-color", colors[i % colors.length]);
+      particle.style.width = `${size}px`;
+      particle.style.height = `${size}px`;
+      container.appendChild(particle);
+      particle.addEventListener("animationend", () => particle.remove(), { once: true });
+      // Safety-net removal in case animationend never fires (e.g. the
+      // element is detached mid-animation by a fast page navigation).
+      setTimeout(() => particle.remove(), 1200);
+    }
+  }
+
   function initLikeButton() {
     const btn = document.getElementById("like-button");
     if (!btn) return;
 
     const postId = btn.getAttribute("data-post-id") ?? "";
-    const heartIcon = document.getElementById("like-heart-icon");
-    const countEl = document.getElementById("like-count");
 
     function isPostLiked(): boolean {
       return getLikedPostIds().includes(postId);
-    }
-
-    function renderLikedState(liked: boolean) {
-      btn?.setAttribute("aria-pressed", liked ? "true" : "false");
-      if (!heartIcon) return;
-      if (liked) {
-        heartIcon.setAttribute("fill", "currentColor");
-        heartIcon.classList.remove("text-[#F8F8FF]/60");
-        heartIcon.classList.add("text-rose-500");
-      } else {
-        heartIcon.setAttribute("fill", "none");
-        heartIcon.classList.remove("text-rose-500");
-        heartIcon.classList.add("text-[#F8F8FF]/60");
-      }
     }
 
     // Fresh listener via clone-replace, same convention used
@@ -1057,8 +1240,9 @@ const breadcrumbSchema = JSON.stringify({
     // navigations back to the same post.
     const freshBtn = btn.cloneNode(true) as HTMLButtonElement;
     btn.parentNode?.replaceChild(freshBtn, btn);
-    const freshHeartIcon = freshBtn.querySelector("#like-heart-icon");
-    const freshCountEl = freshBtn.querySelector("#like-count");
+    const freshHeartIcon = freshBtn.querySelector("#like-heart-icon") as SVGElement | null;
+    const freshCountEl = freshBtn.querySelector("#like-count") as HTMLElement | null;
+    const freshParticles = freshBtn.querySelector(".like-particles");
 
     function renderFreshLikedState(liked: boolean) {
       freshBtn.setAttribute("aria-pressed", liked ? "true" : "false");
@@ -1071,6 +1255,14 @@ const breadcrumbSchema = JSON.stringify({
         freshHeartIcon.setAttribute("fill", "none");
         freshHeartIcon.classList.remove("text-rose-500");
         freshHeartIcon.classList.add("text-[#F8F8FF]/60");
+      }
+    }
+
+    function updateCount(newValue: number, animate: boolean) {
+      if (!freshCountEl) return;
+      freshCountEl.textContent = String(newValue);
+      if (animate && !prefersReducedMotion()) {
+        replayAnimationClass(freshCountEl, "like-count-pulse");
       }
     }
 
@@ -1097,13 +1289,28 @@ const breadcrumbSchema = JSON.stringify({
 
       const wasLiked = isPostLiked();
       const nextAction = wasLiked ? "unlike" : "like";
+      const becomingLiked = !wasLiked;
 
       // Optimistic UI update - toggles instantly, doesn't wait for
       // the network round-trip.
-      renderFreshLikedState(!wasLiked);
-      if (freshCountEl) {
-        const current = parseInt(freshCountEl.textContent || "0", 10) || 0;
-        freshCountEl.textContent = String(wasLiked ? Math.max(0, current - 1) : current + 1);
+      renderFreshLikedState(becomingLiked);
+
+      if (freshHeartIcon && !prefersReducedMotion()) {
+        replayAnimationClass(freshHeartIcon, "like-pop");
+      }
+
+      const current = freshCountEl ? parseInt(freshCountEl.textContent || "0", 10) || 0 : 0;
+      updateCount(wasLiked ? Math.max(0, current - 1) : current + 1, true);
+
+      // The ripple + floating "+1" + particle burst are a "you just
+      // liked this" celebration - matching Twitter/Instagram/YouTube
+      // convention, they fire ONLY on the like->liked transition, not
+      // on unlike, so the effect stays a positive, non-repetitive
+      // signal instead of firing on every single toggle.
+      if (becomingLiked && !prefersReducedMotion()) {
+        replayAnimationClass(freshBtn, "is-liking");
+        spawnLikeParticles(freshParticles);
+        setTimeout(() => freshBtn.classList.remove("is-liking"), 900);
       }
 
       const likedIds = getLikedPostIds();
