@@ -1,3 +1,4 @@
+---
 import Social from "@/components/Social.astro";
 import config from "@/config/config.json";
 import menu from "@/config/menu.json";
@@ -57,13 +58,8 @@ import { markdownify } from "@/lib/utils/textConverter";
     {/* 📜 COPYRIGHT TEXT */}
     <p 
       set:html={markdownify(config.params.copyright)} 
-      class="text-xs sm:text-sm text-white/40 font-medium tracking-wide prose-a:text-[#01AD9F] prose-a:no-underline hover:prose-a:underline mb-4" 
+      class="text-xs sm:text-sm text-white/40 font-medium tracking-wide prose-a:text-[#01AD9F] prose-a:no-underline hover:prose-a:underline" 
     />
-
-    {/* 🔗 BLOGORAMA BACKLINK */}
-    <div class="text-xs text-white/30">
-      <a href="http://www.blogarama.com/fashion-blogs/1351624-blog/" title="Blogarama.com - Follow me on Blogarama" class="hover:text-white/60 transition-colors">Blogarama - Blog Directory</a>
-    </div>
   </div>
 </footer>
 
