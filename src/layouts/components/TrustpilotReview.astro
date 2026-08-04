@@ -1,8 +1,8 @@
 ---
-// 🌟 TRUSTPILOT REVIEW COLLECTOR — Professional, theme-matched card
+// TRUSTPILOT REVIEW COLLECTOR - Professional, theme-matched card
 // Trustpilot (support.trustpilot.com) විසින්ම දෙන ලද ඔරිජිනල් "TrustBox
 // widget" කේතය (data-locale, data-template-id, data-businessunit-id,
-// data-style-height/width, data-token) කිසිසේත් වෙනස් කර නොමැත —
+// data-style-height/width, data-token) කිසිසේත් වෙනස් කර නොමැත -
 // Trustpilot ගේම නිල උපදෙස පරිදි ("paste the code snippets just as
 // they are, as any change might cause problems") මෙම attributes
 // ටික origin එකෙන් දුන් පරිදිම exact copy කර ඇත. අප එකතු කර ඇත්තේ
@@ -11,9 +11,28 @@
 //
 // SITE-WIDE PLACEMENT: මෙම component එක Footer.astro එකේ render
 // කරන නිසා, site එකේ හැම පිටුවකදීම visitor ට automatic ලෙස review
-// කරන්න ඉගියක් (hint) පෙන්වයි — intrusive popup එකක් නොවී, footer
+// කරන්න ඉගියක් (hint) පෙන්වයි - intrusive popup එකක් නොවී, footer
 // එකේ ලස්සන, natural CTA card එකක් ලෙසයි.
-import { BiStar } from "react-icons/bi";
+//
+// 2026-08 NEW: IN-SITE REVIEW MODAL (SEO-safe, no external navigation)
+// Trustpilot ට යනුවෙන් නිල "Embedded Review Form" එකක් සපයයි, iframe
+// එකකින් embed කරන්නම designed කරන ලද, non-configurable review
+// submission page එකකි (support.trustpilot.com/hc/en-us/articles/
+// 206514477 - "Create an iframe on your website loading this URL").
+// මෙය Trustpilot ගේ star-rating TrustBox widget එකට වඩා COMPLETELY
+// SEPARATE feature එකකි - ඉහත official widget code එකට කිසිවක්
+// නොවෙනස්ව, පහත අලුතින් එකතු කරන ලද "Review Now" button එකෙන් open
+// වන Modal එකක් ඇතුලේ මෙම embed URL එකම iframe එකක් ලෙස පෙන්වයි.
+// මෙයින් visitor ට site එකෙන් කිසිසේත් පිටතට නොගොස්ම review එකක්
+// සම්පූර්ණ කරගත හැක (SEO bounce-rate ආරක්ෂා වේ, page abandonment
+// අඩුවේ).
+//
+// ⚠️ IMPORTANT: මෙම iframe එක load වීමට public/_headers හි CSP
+// header එකේ "frame-src https://www.trustpilot.com" directive එක
+// අවශ්‍යයි (මෙම වෙනස සමගම එකතු කර ඇත).
+import { BiStar, BiX } from "react-icons/bi";
+const reviewDomain = "walakatha.net";
+const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${reviewDomain}`;
 ---
 
 <section class="trustpilot-review-section" aria-label="Trustpilot Reviews">
@@ -31,11 +50,23 @@ import { BiStar } from "react-icons/bi";
 
     <h2 class="tp-heading">ඔබත් අපිව අගය කරන්නද?</h2>
     <p class="tp-subtext">
-      Wala Katha ගැන ඔබේ අත්දැකීම තත්පර කිහිපයකින් Trustpilot හි බෙදාගන්න —
+      Wala Katha ගැන ඔබේ අත්දැකීම තත්පර කිහිපයකින් Trustpilot හි බෙදාගන්න -
       එය අපිට තව හොඳ කරන්නත්, තව දහස් ගණන් පාඨකයන්ට අපිව හඳුනා ගන්නත් ලොකු උදව්වක්!
     </p>
 
-    {/* ⚠️ TRUSTPILOT OFFICIAL WIDGET — id="trustpilot-widget-container"
+    {/* NEW: in-site Review Now button - opens the modal below.
+        Site එකෙන් පිටතට යන්නේ නැතුව, මෙතනින්ම review එක සම්පූර්ණ
+        කරගත හැක. */}
+    <button
+      id="trustpilot-open-modal-btn"
+      type="button"
+      class="tp-review-now-btn"
+    >
+      <BiStar className="tp-review-now-icon" aria-hidden="true" />
+      <span>Review එකක් දෙන්න (Review Now)</span>
+    </button>
+
+    {/* ⚠️ TRUSTPILOT OFFICIAL WIDGET - id="trustpilot-widget-container"
         එකතු කර ඇත්තේ පහත script එකට container එක targeting කිරීමට
         පමණි; data-* attributes සියල්ල Trustpilot ලබාදුන් පරිදිම,
         කිසිවක් වෙනස් කර නොමැත. */}
@@ -55,6 +86,44 @@ import { BiStar } from "react-icons/bi";
     </div>
   </div>
 </section>
+
+{/* NEW: in-site Review Modal - contains Trustpilot's official
+    Embedded Review Form inside an iframe. Visual pattern matches the
+    existing comment-popup-modal established in PostSingle.astro
+    (dark card, teal accent border, Escape/overlay-click to close). */}
+<div
+  id="trustpilot-review-modal"
+  class="tp-modal-overlay hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="trustpilot-modal-title"
+>
+  <div class="tp-modal-card">
+    <div class="tp-modal-header">
+      <h3 id="trustpilot-modal-title" class="tp-modal-title">
+        <span class="tp-modal-dot" aria-hidden="true"></span>
+        ඔබේ Review එක Trustpilot හි දාන්න
+      </h3>
+      <button
+        id="trustpilot-modal-close-btn"
+        type="button"
+        class="tp-modal-close-btn"
+        aria-label="Close review form"
+      >
+        <BiX className="h-6 w-6" aria-hidden="true" />
+      </button>
+    </div>
+    <div class="tp-modal-body">
+      <iframe
+        id="trustpilot-modal-iframe"
+        src=""
+        data-src={embeddedReviewFormUrl}
+        title="Trustpilot Review Form"
+        loading="lazy"
+      ></iframe>
+    </div>
+  </div>
+</div>
 
 <style>
   .trustpilot-review-section {
@@ -126,12 +195,42 @@ import { BiStar } from "react-icons/bi";
     margin-right: auto;
   }
 
+  /* NEW: Review Now CTA button */
+  .tp-review-now-btn {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: #01ad9f;
+    color: #010203;
+    font-size: 0.85rem;
+    font-weight: 800;
+    padding: 0.7rem 1.5rem;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    margin-bottom: 1.25rem;
+    transition: background-color 0.25s ease, transform 0.25s ease;
+    box-shadow: 0 8px 24px -8px rgba(1, 173, 159, 0.5);
+  }
+  .tp-review-now-btn:hover {
+    background-color: #01c4b4;
+    transform: translateY(-1px);
+  }
+  .tp-review-now-btn:active {
+    transform: translateY(0);
+  }
+  .tp-review-now-icon {
+    font-size: 1rem;
+  }
+
   .trustpilot-widget {
     position: relative;
     z-index: 1;
   }
 
-  /* ⭐ "ස්තූතියි" TOAST — site-wide toast language (dark card, teal
+  /* ★ "ස්තූතියි" TOAST - site-wide toast language (dark card, teal
      accent) same convention already used by like/comment success
      toasts elsewhere on this site (PostSingle.astro), reproduced
      here as a standalone, self-contained block since this component
@@ -172,6 +271,96 @@ import { BiStar } from "react-icons/bi";
     flex: 1;
   }
 
+  /* NEW: in-site review modal */
+  .tp-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(1, 2, 3, 0.75);
+    backdrop-filter: blur(6px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .tp-modal-overlay.hidden {
+    display: none;
+  }
+  .tp-modal-overlay.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .tp-modal-card {
+    width: 100%;
+    max-width: 42rem;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    background: #0c0d10;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    overflow: hidden;
+  }
+
+  .tp-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .tp-modal-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    font-weight: 800;
+    color: #f8f8ff;
+    margin: 0;
+  }
+
+  .tp-modal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: #01ad9f;
+    flex-shrink: 0;
+  }
+
+  .tp-modal-close-btn {
+    padding: 0.375rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.02);
+    color: rgba(248, 248, 255, 0.6);
+    cursor: pointer;
+    transition: color 0.2s ease, background-color 0.2s ease;
+  }
+  .tp-modal-close-btn:hover {
+    color: #f87171;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .tp-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    background: #ffffff;
+  }
+
+  .tp-modal-body iframe {
+    width: 100%;
+    height: 70vh;
+    min-height: 420px;
+    border: none;
+    display: block;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .trustpilot-review-card {
       transition: none;
@@ -179,12 +368,15 @@ import { BiStar } from "react-icons/bi";
     :global(#trustpilot-thanks-toast) {
       transition: none;
     }
+    .tp-modal-overlay {
+      transition: none;
+    }
   }
 </style>
 
 <script>
   // ==========================================================
-  // 🌟 TRUSTPILOT WIDGET — SMART SITE-WIDE LOADER + SPA RE-INIT +
+  // TRUSTPILOT WIDGET - SMART SITE-WIDE LOADER + SPA RE-INIT +
   // "THANKS FOR REVIEWING" TOAST
   //
   // WHY THIS EXISTS: this component renders inside Footer.astro,
@@ -216,24 +408,19 @@ import { BiStar } from "react-icons/bi";
   //      stacking up duplicate listeners, which would otherwise cause
   //      the thanks-toast to fire multiple times for a single review.
   //
-  // "THANKS FOR REVIEWING" UX: Trustpilot's review flow opens in a
-  // new tab (target="_blank"), so this site cannot receive a direct
-  // confirmation callback that a review was actually submitted.
-  // Instead, this uses the same well-established pattern used by
-  // major sites for external review/action links: record the moment
-  // the visitor clicks through, then when they return to this tab
-  // (visibilitychange -> "visible") after a plausible minimum delay
-  // (2.5s - long enough to have actually looked at the Trustpilot
-  // page, short enough to still feel like an immediate "thank you"),
-  // show a warm, on-brand thank-you toast. This is intentionally an
-  // optimistic, best-effort acknowledgement (not a guarantee a review
-  // was submitted) - the same honest limitation any client-side-only
-  // integration has, since Trustpilot does not expose a public
-  // "review submitted" webhook/event to the storefront.
+  // "THANKS FOR REVIEWING" UX (legacy new-tab fallback path): if the
+  // official TrustBox widget's own fallback anchor is ever clicked
+  // (e.g. before the script has hydrated it), it still opens a new
+  // tab (target="_blank" is part of Trustpilot's own untouched code).
+  // This path is kept as an honest, optimistic, best-effort fallback:
+  // record the click moment, then when the visitor returns to this
+  // tab after a plausible minimum delay, show the same thank-you
+  // toast used by the new in-site modal flow below.
   // ==========================================================
   const TRUSTPILOT_SCRIPT_SRC = "https://widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js";
   const THANKS_STORAGE_KEY = "wk-trustpilot-clicked-at";
   const THANKS_MIN_AWAY_MS = 2500;
+  const MODAL_MIN_OPEN_MS = 10000;
 
   function ensureTrustpilotScriptLoaded(onReady: () => void) {
     const w = window as any;
@@ -333,10 +520,102 @@ import { BiStar } from "react-icons/bi";
     }
   }
 
+  // ==========================================================
+  // NEW: IN-SITE REVIEW MODAL - open/close logic
+  //
+  // WHY A NEW-TAB IS NOT NEEDED HERE: Trustpilot's official
+  // "Embedded Review Form" URL (data-src on the iframe, set from the
+  // Astro frontmatter) is specifically designed by Trustpilot to be
+  // loaded inside an iframe - see support.trustpilot.com/hc/en-us/
+  // articles/206514477. Setting iframe.src lazily (only on first
+  // open, not on page load) avoids an unnecessary network request on
+  // every page visit for visitors who never open the modal.
+  //
+  // MODAL-OPEN-DURATION HEURISTIC: since the review form now lives
+  // inside our own iframe (not a separate tab), we cannot use the
+  // page's own visibilitychange event to detect a return-to-tab
+  // moment. Instead, the same honest, best-effort spirit is kept: if
+  // the visitor keeps the modal open long enough to plausibly have
+  // written and submitted a review (MODAL_MIN_OPEN_MS) before
+  // closing it, the same thank-you toast is shown. This is
+  // optimistic, not a guarantee - the same limitation any client-side
+  // -only integration has, clearly consistent with this file's own
+  // established pattern for the legacy new-tab flow above.
+  // ==========================================================
+  let modalOpenedAt = 0;
+
+  function openTrustpilotModal() {
+    const overlay = document.getElementById("trustpilot-review-modal");
+    const iframe = document.getElementById("trustpilot-modal-iframe") as HTMLIFrameElement | null;
+    if (!overlay) return;
+
+    if (iframe && !iframe.src) {
+      const dataSrc = iframe.getAttribute("data-src");
+      if (dataSrc) iframe.src = dataSrc;
+    }
+
+    overlay.classList.remove("hidden");
+    requestAnimationFrame(() => overlay.classList.add("is-open"));
+    modalOpenedAt = Date.now();
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeTrustpilotModal() {
+    const overlay = document.getElementById("trustpilot-review-modal");
+    if (!overlay) return;
+
+    overlay.classList.remove("is-open");
+    setTimeout(() => overlay.classList.add("hidden"), 300);
+    document.body.style.overflow = "";
+
+    if (modalOpenedAt && Date.now() - modalOpenedAt > MODAL_MIN_OPEN_MS) {
+      showTrustpilotThanksToast();
+    }
+    modalOpenedAt = 0;
+  }
+
+  function initTrustpilotModal() {
+    const openBtn = document.getElementById("trustpilot-open-modal-btn");
+    const closeBtn = document.getElementById("trustpilot-modal-close-btn");
+    const overlay = document.getElementById("trustpilot-review-modal");
+    if (!openBtn || !closeBtn || !overlay) return;
+
+    // Fresh listeners via clone-replace (same pattern already used
+    // site-wide, e.g. Header.astro's dropdown buttons) so repeated
+    // Astro View Transition navigations never stack duplicate
+    // listeners on the same persisted DOM nodes.
+    const freshOpenBtn = openBtn.cloneNode(true) as HTMLButtonElement;
+    openBtn.parentNode?.replaceChild(freshOpenBtn, openBtn);
+    freshOpenBtn.addEventListener("click", openTrustpilotModal);
+
+    const freshCloseBtn = closeBtn.cloneNode(true) as HTMLButtonElement;
+    closeBtn.parentNode?.replaceChild(freshCloseBtn, closeBtn);
+    freshCloseBtn.addEventListener("click", closeTrustpilotModal);
+
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) closeTrustpilotModal();
+    });
+  }
+
   // Per-page init: safe to call on every astro:page-load since the
   // widget container is a fresh DOM node each navigation (Footer is
   // not transition:persist'ed).
   document.addEventListener("astro:page-load", initTrustpilotWidget);
+  document.addEventListener("astro:page-load", initTrustpilotModal);
+
+  // Escape-key close - document-level, guarded so it is only ever
+  // bound once for the full session (same guard convention already
+  // used below for visibilitychange).
+  if (!(window as any).__wkTrustpilotEscapeBound) {
+    (window as any).__wkTrustpilotEscapeBound = true;
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      const overlay = document.getElementById("trustpilot-review-modal");
+      if (overlay && overlay.classList.contains("is-open")) {
+        closeTrustpilotModal();
+      }
+    });
+  }
 
   // Session-wide, document-level listener: guarded by a window flag
   // so repeated script execution across SPA navigations never stacks
