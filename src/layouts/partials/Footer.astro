@@ -10,17 +10,31 @@ import { markdownify } from "@/lib/utils/textConverter";
 {/* 👑 GLOSSY 3D GLASSMORPHISM FOOTER WRAPPER
     🎯 2026-07 W3C VALIDATOR FIX ("The contentinfo role is unnecessary
     for element footer"): the explicit role="contentinfo" attribute
-    has been removed. Per the HTML5/ARIA-in-HTML spec, a <footer>
-    element that is not a descendant of an <article>, <aside>,
-    <main>, <nav>, or <section> already carries an IMPLICIT
+    has been removed. Per the HTML5/ARIA-in-HTML spec, a footer
+    element that is not a descendant of an article, aside,
+    main, nav, or section element already carries an IMPLICIT
     "contentinfo" landmark role automatically — this footer is a
-    direct child of <body> (via Base.astro), so it already qualifies.
+    direct child of body (via Base.astro), so it already qualifies.
     Declaring role="contentinfo" explicitly is therefore fully
     redundant per the Nu Html Checker's ARIA-in-HTML conformance
     rules. Removing the attribute changes nothing for assistive
     technology (the same implicit landmark role is still exposed by
     every browser/AT combination) — this is a pure spec-conformance
-    fix with zero behavioral or visual regression. */}
+    fix with zero behavioral or visual regression.
+
+    🎯 2026-08 COMPILER-COMPAT FIX (rolldown-based Astro 7.x build
+    toolchain): this comment block previously referenced HTML tag
+    names using literal angle brackets (e.g. "<footer>", "<article>").
+    The newer rolldown/oxc-powered Astro compiler tokenizes more
+    aggressively than the previous compiler and misread those
+    bracketed names as partial tag tokens even though they sat inside
+    a JS block comment — this corrupted the tag-matching stack and
+    caused a false "Closing tag '</a>' has no matching opening tag"
+    build error further down this file, at the footer menu's <a> tag.
+    Tag names below are now written as plain words (no angle brackets)
+    to permanently prevent this class of parser confusion regardless
+    of which compiler/toolchain version builds this file in the
+    future — self-healing against this exact failure mode. */}
 <footer 
   class="relative mt-12 py-12 overflow-hidden border-t border-white/[0.12] bg-gradient-to-b from-white/[0.04] to-white/[0.01] backdrop-blur-xl shadow-[inset_0_2px_4px_rgba(255,255,255,0.15),0_12px_40px_rgba(0,0,0,0.8)]"
 >
@@ -61,7 +75,7 @@ import { markdownify } from "@/lib/utils/textConverter";
       class="text-xs sm:text-sm text-white/40 font-medium tracking-wide prose-a:text-[#01AD9F] prose-a:no-underline hover:prose-a:underline" 
     />
 
-    {/* 🔗 DIRECTORY / RECIPROCAL BACKLINK BADGES
+    {/* 🔗 DIRECTORY / RECIPROCAL BACKLINK BADGE
         Blogarama.com directory listing එකට අදාළ reciprocal backlink
         එක. rel="nofollow noopener" යොදා ඇත්තේ (Button.tsx හි external
         links සඳහා දැනටමත් ඇති site-wide convention එකම අනුගමනය
