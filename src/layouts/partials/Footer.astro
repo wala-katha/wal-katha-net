@@ -1,5 +1,6 @@
 ---
 import Social from "@/components/Social.astro";
+import TrustpilotReview from "@/components/TrustpilotReview.astro";
 import config from "@/config/config.json";
 import menu from "@/config/menu.json";
 import social from "@/config/social.json";
@@ -45,6 +46,17 @@ import { markdownify } from "@/lib/utils/textConverter";
         ))
       }
     </ul>
+
+    {/* 🌟 TRUSTPILOT REVIEW COLLECTOR — site-wide, footer-placed CTA
+        card. Renders on every page (automatic "hint" to every
+        visitor, per user request), without being intrusive — sits
+        naturally in the footer flow between the menu and the social
+        icons block below. The component itself owns all Trustpilot
+        script-loading, SPA re-init, and "thank you" toast logic — see
+        src/layouts/components/TrustpilotReview.astro for full
+        rationale. The official Trustpilot widget code/attributes are
+        preserved byte-for-byte inside that component, unmodified. */}
+    <TrustpilotReview />
 
     {/* 👑 EXPANDED 3D DEEP HORIZONTAL CONTAINER */}
     {/* 🎯 FIX: මුළු පිටුවේම පළල ලස්සනට කවර් වෙන්න max-w-5xl කරලා, ඇතුළත padding වැඩි කළා */}
