@@ -1,0 +1,348 @@
+---
+// 🌟 TRUSTPILOT REVIEW COLLECTOR — Professional, theme-matched card
+// Trustpilot (support.trustpilot.com) විසින්ම දෙන ලද ඔරිජිනල් "TrustBox
+// widget" කේතය (data-locale, data-template-id, data-businessunit-id,
+// data-style-height/width, data-token) කිසිසේත් වෙනස් කර නොමැත —
+// Trustpilot ගේම නිල උපදෙස පරිදි ("paste the code snippets just as
+// they are, as any change might cause problems") මෙම attributes
+// ටික origin එකෙන් දුන් පරිදිම exact copy කර ඇත. අප එකතු කර ඇත්තේ
+// ඒ වටා ලස්සන, theme-matched wrapper card එකක් සහ smart UX layer
+// එකක් පමණි (script auto-load + SPA re-init + "ස්තූතියි" toast).
+//
+// SITE-WIDE PLACEMENT: මෙම component එක Footer.astro එකේ render
+// කරන නිසා, site එකේ හැම පිටුවකදීම visitor ට automatic ලෙස review
+// කරන්න ඉගියක් (hint) පෙන්වයි — intrusive popup එකක් නොවී, footer
+// එකේ ලස්සන, natural CTA card එකක් ලෙසයි.
+import { BiStar } from "react-icons/bi";
+---
+
+<section class="trustpilot-review-section" aria-label="Trustpilot Reviews">
+  <div class="trustpilot-review-card">
+    {/* සියුම් teal glow accent - site-wide brand color (#01AD9F) */}
+    <span class="tp-card-glow" aria-hidden="true"></span>
+
+    <div class="tp-stars" aria-hidden="true">
+      <BiStar className="tp-star" />
+      <BiStar className="tp-star" />
+      <BiStar className="tp-star" />
+      <BiStar className="tp-star" />
+      <BiStar className="tp-star" />
+    </div>
+
+    <h2 class="tp-heading">ඔබත් අපිව අගය කරන්නද?</h2>
+    <p class="tp-subtext">
+      Wala Katha ගැන ඔබේ අත්දැකීම තත්පර කිහිපයකින් Trustpilot හි බෙදාගන්න —
+      එය අපිට තව හොඳ කරන්නත්, තව දහස් ගණන් පාඨකයන්ට අපිව හඳුනා ගන්නත් ලොකු උදව්වක්!
+    </p>
+
+    {/* ⚠️ TRUSTPILOT OFFICIAL WIDGET — id="trustpilot-widget-container"
+        එකතු කර ඇත්තේ පහත script එකට container එක targeting කිරීමට
+        පමණි; data-* attributes සියල්ල Trustpilot ලබාදුන් පරිදිම,
+        කිසිවක් වෙනස් කර නොමැත. */}
+    <div
+      id="trustpilot-widget-container"
+      class="trustpilot-widget"
+      data-locale="en-US"
+      data-template-id="56278e9abfbbba0bdcd568bc"
+      data-businessunit-id="6a718943c72aab296e860f07"
+      data-style-height="52px"
+      data-style-width="100%"
+      data-token="b99ae46b-0b83-4431-9614-313deb05b559"
+    >
+      <a href="https://www.trustpilot.com/review/walakatha.net" target="_blank" rel="noopener">
+        Trustpilot
+      </a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .trustpilot-review-section {
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto 2.5rem auto;
+  }
+
+  .trustpilot-review-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1.25rem;
+    border: 1px solid rgba(1, 173, 159, 0.18);
+    background: linear-gradient(180deg, rgba(1, 173, 159, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+    padding: 1.75rem 1.5rem;
+    text-align: center;
+    box-shadow: 0 12px 34px -14px rgba(0, 0, 0, 0.7);
+    transition: border-color 0.3s ease, transform 0.3s ease;
+  }
+  .trustpilot-review-card:hover {
+    border-color: rgba(1, 173, 159, 0.4);
+    transform: translateY(-2px);
+  }
+
+  .tp-card-glow {
+    position: absolute;
+    top: -40%;
+    left: 50%;
+    width: 70%;
+    height: 70%;
+    transform: translateX(-50%);
+    background: radial-gradient(circle, rgba(1, 173, 159, 0.18) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .tp-stars {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    gap: 0.35rem;
+    margin-bottom: 0.75rem;
+  }
+  .tp-star {
+    color: #01ad9f;
+    font-size: 1.15rem;
+    filter: drop-shadow(0 0 6px rgba(1, 173, 159, 0.45));
+  }
+
+  .tp-heading {
+    position: relative;
+    z-index: 1;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #f8f8ff;
+    margin: 0 0 0.5rem 0;
+  }
+
+  .tp-subtext {
+    position: relative;
+    z-index: 1;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: rgba(248, 248, 255, 0.65);
+    margin: 0 0 1.25rem 0;
+    max-width: 30rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .trustpilot-widget {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ⭐ "ස්තූතියි" TOAST — site-wide toast language (dark card, teal
+     accent) same convention already used by like/comment success
+     toasts elsewhere on this site (PostSingle.astro), reproduced
+     here as a standalone, self-contained block since this component
+     can render on every page via Footer.astro. */
+  :global(#trustpilot-thanks-toast) {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translate(-50%, 16px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: min(90vw, 380px);
+    background: #0c0d10;
+    border: 1px solid rgba(1, 173, 159, 0.4);
+    color: #f8f8ff;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.4;
+    padding: 12px 20px;
+    border-radius: 999px;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  :global(#trustpilot-thanks-toast.show) {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  :global(#trustpilot-thanks-toast .tpt-star) {
+    color: #01ad9f;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  :global(#trustpilot-thanks-toast .tpt-text) {
+    flex: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .trustpilot-review-card {
+      transition: none;
+    }
+    :global(#trustpilot-thanks-toast) {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  // ==========================================================
+  // 🌟 TRUSTPILOT WIDGET — SMART SITE-WIDE LOADER + SPA RE-INIT +
+  // "THANKS FOR REVIEWING" TOAST
+  //
+  // WHY THIS EXISTS: this component renders inside Footer.astro,
+  // which appears on EVERY page. Because this site uses Astro View
+  // Transitions (ClientRouter), the entire <body> (including Footer)
+  // is swapped on every client-side navigation - meaning this
+  // <script> tag itself, and the #trustpilot-widget-container div,
+  // are fresh DOM nodes on every single page visit, not just the
+  // first cold load. This script is written specifically to behave
+  // correctly under that SPA-navigation reality:
+  //
+  //   1. SCRIPT SRC DEDUP: Trustpilot's own bootstrap.js is only ever
+  //      appended to <head> once (checked via querySelector before
+  //      creating a new <script> node) - repeated navigations reuse
+  //      the already-loaded script instead of re-downloading it.
+  //   2. WIDGET RE-INIT: once the script is confirmed loaded (either
+  //      just now, or already loaded from an earlier page),
+  //      window.Trustpilot.loadFromElement(container, true) is
+  //      called - this is Trustpilot's own documented method for
+  //      re-rendering a TrustBox widget against a freshly-inserted
+  //      DOM node in single-page-app style navigation, without which
+  //      the widget would only ever render on the very first page a
+  //      visitor lands on.
+  //   3. DOCUMENT-LEVEL LISTENER GUARD: the "visibilitychange"
+  //      listener below must only ever be attached ONCE for the
+  //      entire session (document itself is not replaced by
+  //      ClientRouter, only its content) - a `window` flag guard
+  //      prevents this script re-executing on every navigation from
+  //      stacking up duplicate listeners, which would otherwise cause
+  //      the thanks-toast to fire multiple times for a single review.
+  //
+  // "THANKS FOR REVIEWING" UX: Trustpilot's review flow opens in a
+  // new tab (target="_blank"), so this site cannot receive a direct
+  // confirmation callback that a review was actually submitted.
+  // Instead, this uses the same well-established pattern used by
+  // major sites for external review/action links: record the moment
+  // the visitor clicks through, then when they return to this tab
+  // (visibilitychange -> "visible") after a plausible minimum delay
+  // (2.5s - long enough to have actually looked at the Trustpilot
+  // page, short enough to still feel like an immediate "thank you"),
+  // show a warm, on-brand thank-you toast. This is intentionally an
+  // optimistic, best-effort acknowledgement (not a guarantee a review
+  // was submitted) - the same honest limitation any client-side-only
+  // integration has, since Trustpilot does not expose a public
+  // "review submitted" webhook/event to the storefront.
+  // ==========================================================
+  const TRUSTPILOT_SCRIPT_SRC = "https://widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js";
+  const THANKS_STORAGE_KEY = "wk-trustpilot-clicked-at";
+  const THANKS_MIN_AWAY_MS = 2500;
+
+  function ensureTrustpilotScriptLoaded(onReady: () => void) {
+    const w = window as any;
+    if (w.Trustpilot) {
+      onReady();
+      return;
+    }
+    const existing = document.querySelector(`script[src="${TRUSTPILOT_SCRIPT_SRC}"]`);
+    if (existing) {
+      existing.addEventListener("load", onReady, { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = TRUSTPILOT_SCRIPT_SRC;
+    script.async = true;
+    script.addEventListener("load", onReady, { once: true });
+    document.head.appendChild(script);
+  }
+
+  function showTrustpilotThanksToast() {
+    let toast = document.getElementById("trustpilot-thanks-toast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "trustpilot-thanks-toast";
+      toast.setAttribute("role", "status");
+      toast.setAttribute("aria-live", "polite");
+
+      const star = document.createElement("span");
+      star.className = "tpt-star";
+      star.setAttribute("aria-hidden", "true");
+      star.textContent = "★";
+
+      const text = document.createElement("span");
+      text.className = "tpt-text";
+      text.textContent = "ඔබගේ අගයන කාලයට ගොඩක් ස්තූතියි! 💚";
+
+      toast.appendChild(star);
+      toast.appendChild(text);
+      document.body.appendChild(toast);
+    }
+
+    toast.classList.add("show");
+    clearTimeout((toast as any)._hideTimer);
+    (toast as any)._hideTimer = setTimeout(() => {
+      toast?.classList.remove("show");
+    }, 4000);
+  }
+
+  function initTrustpilotWidget() {
+    const container = document.getElementById("trustpilot-widget-container");
+    if (!container) return;
+
+    ensureTrustpilotScriptLoaded(() => {
+      const w = window as any;
+      if (w.Trustpilot && typeof w.Trustpilot.loadFromElement === "function") {
+        w.Trustpilot.loadFromElement(container, true);
+      }
+    });
+
+    // Click delegation at the container level - the widget script
+    // may asynchronously replace/restyle the inner <a> after this
+    // runs, so we delegate on the stable parent instead of binding
+    // directly to a child that might not exist yet.
+    container.addEventListener("click", (e) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest && target.closest("a")) {
+        try {
+          sessionStorage.setItem(THANKS_STORAGE_KEY, String(Date.now()));
+        } catch {
+          // Storage unavailable (private browsing edge cases) - the
+          // thanks toast simply won't fire on return; non-fatal.
+        }
+      }
+    });
+  }
+
+  function checkReturnFromTrustpilot() {
+    if (document.visibilityState !== "visible") return;
+
+    let clickedAt: string | null;
+    try {
+      clickedAt = sessionStorage.getItem(THANKS_STORAGE_KEY);
+    } catch {
+      clickedAt = null;
+    }
+    if (!clickedAt) return;
+
+    const elapsed = Date.now() - Number(clickedAt);
+    try {
+      sessionStorage.removeItem(THANKS_STORAGE_KEY);
+    } catch {
+      // Non-fatal.
+    }
+
+    if (elapsed > THANKS_MIN_AWAY_MS) {
+      showTrustpilotThanksToast();
+    }
+  }
+
+  // Per-page init: safe to call on every astro:page-load since the
+  // widget container is a fresh DOM node each navigation (Footer is
+  // not transition:persist'ed).
+  document.addEventListener("astro:page-load", initTrustpilotWidget);
+
+  // Session-wide, document-level listener: guarded by a window flag
+  // so repeated script execution across SPA navigations never stacks
+  // duplicate listeners (see rationale above).
+  if (!(window as any).__wkTrustpilotVisibilityBound) {
+    (window as any).__wkTrustpilotVisibilityBound = true;
+    document.addEventListener("visibilitychange", checkReturnFromTrustpilot);
+  }
+</script>
