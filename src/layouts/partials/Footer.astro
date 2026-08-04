@@ -8,63 +8,69 @@ import { markdownify } from "@/lib/utils/textConverter";
 ---
 
 {/* 👑 GLOSSY 3D GLASSMORPHISM FOOTER WRAPPER
-    2026-07 W3C VALIDATOR FIX: the explicit role attribute value
-    "contentinfo" is unnecessary on this element and has been
-    removed. Per the HTML5/ARIA-in-HTML spec, a footer tag that is
-    not a descendant of an article, aside, main, nav, or section
-    tag already carries an implicit contentinfo landmark role
-    automatically, so declaring it explicitly is redundant.
-
-    2026-08 COMPILER-COMPAT NOTE (rolldown-based Astro build
-    toolchain): this file's comments must never contain a literal
-    angle-bracket tag pattern anywhere, in any form, even quoted or
-    used as an example while describing a fix, since the newer
-    tokenizer treats such sequences as real markup and corrupts tag
-    matching for real tags later in the file. All tag references in
-    this file's comments are written as plain words with no angle
-    brackets, permanently, to avoid ever reintroducing that failure
-    mode again in future edits. */}
+    🎯 2026-07 W3C VALIDATOR FIX ("The contentinfo role is unnecessary
+    for element footer"): the explicit role="contentinfo" attribute
+    has been removed. Per the HTML5/ARIA-in-HTML spec, a <footer>
+    element that is not a descendant of an <article>, <aside>,
+    <main>, <nav>, or <section> already carries an IMPLICIT
+    "contentinfo" landmark role automatically — this footer is a
+    direct child of <body> (via Base.astro), so it already qualifies.
+    Declaring role="contentinfo" explicitly is therefore fully
+    redundant per the Nu Html Checker's ARIA-in-HTML conformance
+    rules. Removing the attribute changes nothing for assistive
+    technology (the same implicit landmark role is still exposed by
+    every browser/AT combination) — this is a pure spec-conformance
+    fix with zero behavioral or visual regression. */}
 <footer 
   class="relative mt-12 py-12 overflow-hidden border-t border-white/[0.12] bg-gradient-to-b from-white/[0.04] to-white/[0.01] backdrop-blur-xl shadow-[inset_0_2px_4px_rgba(255,255,255,0.15),0_12px_40px_rgba(0,0,0,0.8)]"
 >
-  {/* Real glossy reflection layer */}
+  {/* ✨ REAL GLOSSY REFLECTION */}
   <div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.03] to-white/[0.05] pointer-events-none"></div>
   <div class="absolute top-0 left-1/4 w-1/2 h-[1px] bg-gradient-to-r from-transparent via-white/40 to-transparent blur-[0.5px]"></div>
 
   <div class="container relative z-10 text-center select-none">
     
-    {/* Footer menu list */}
+    {/* 📋 FOOTER MENU */}
     <ul class="mb-8 flex flex-wrap justify-center gap-x-2 gap-y-3">
       {
-        menu.footer.map((menuItem) => (
+        menu.footer.map((menu) => (
           <li class="inline-block">
-            
-              href={withTrailingSlash(menuItem.url)}
+            <a
+              href={withTrailingSlash(menu.url)}
               class="px-4 py-2 text-sm font-semibold text-white/80 transition-all duration-300 hover:text-[#01AD9F] hover:drop-shadow-[0_0_8px_rgba(1,173,159,0.5)]"
             >
-              {menuItem.name}
+              {menu.name}
             </a>
           </li>
         ))
       }
     </ul>
 
-    {/* Expanded 3D deep horizontal container for social icons */}
+    {/* 👑 EXPANDED 3D DEEP HORIZONTAL CONTAINER */}
+    {/* 🎯 FIX: මුළු පිටුවේම පළල ලස්සනට කවර් වෙන්න max-w-5xl කරලා, ඇතුළත padding වැඩි කළා */}
     <div class="w-full max-w-5xl mx-auto mb-10 px-2 sm:px-6">
       <div class="w-full py-6 px-4 sm:px-10 rounded-2xl border border-white/[0.06] bg-gradient-to-b from-[#0b0c0e] to-[#040506] shadow-[inset_0_4px_25px_rgba(0,0,0,0.95),0_2px_4px_rgba(255,255,255,0.03)]">
+        {/* Astro Scoping බග් එක නැති කරන්න "social-icons-3d-expanded" ක්ලාස් එක පාවිච්චි කිරීම */}
         <Social source={social.main} className="social-icons-3d-expanded" />
       </div>
     </div>
 
-    {/* Copyright text */}
+    {/* 📜 COPYRIGHT TEXT */}
     <p 
       set:html={markdownify(config.params.copyright)} 
       class="text-xs sm:text-sm text-white/40 font-medium tracking-wide prose-a:text-[#01AD9F] prose-a:no-underline hover:prose-a:underline" 
     />
 
-    {/* Directory reciprocal backlink badge for Blogarama listing */}
+    {/* 🔗 DIRECTORY / RECIPROCAL BACKLINK BADGES
+        Blogarama.com directory listing එකට අදාළ reciprocal backlink
+        එක. rel="nofollow noopener" යොදා ඇත්තේ (Button.tsx හි external
+        links සඳහා දැනටමත් ඇති site-wide convention එකම අනුගමනය
+        කරමින්) link equity site එකෙන් පිටතට leak නොවී, security
+        best-practice එකද (noopener) පවත්වා ගැනීමටයි. target="_blank"
+        යොදා ඇත්තේ visitor ව site එකෙන් පිටතට කෙලින්ම navigate කර
+        නොදමා, අලුත් tab එකක badge/directory page එක විවෘත කිරීමටයි. */}
     <div class="mt-4 flex justify-center">
-      
+      <a
         href="http://www.blogarama.com/fashion-blogs/1351624-blog/"
         title="Blogarama.com - Follow me on Blogarama"
         target="_blank"
@@ -77,16 +83,17 @@ import { markdownify } from "@/lib/utils/textConverter";
   </div>
 </footer>
 
+{/* 🛠️ 100% FIX FOR ASTRO COMPONENT SCOPING BUG (Using :global) */}
 <style is:global>
-  /* Astro scoping fix for the Social component's list markup */
+  /* 🎯 CRUCIAL FIX: Social Component එක ඇතුළේ තියෙන <ul> එකට 100% පළල දීලා අයිකන ඈත් කිරීම */
   .social-icons-3d-expanded,
   .social-icons-3d-expanded ul {
     display: flex !important;
     align-items: center !important;
-    justify-content: space-between !important;
+    justify-content: space-between !important; /* ඈතටම විහිදී යන සේ */
     width: 100% !important;
     gap: 0.75rem !important;
-    flex-wrap: nowrap !important;
+    flex-wrap: nowrap !important; /* මොබයිල් වලදීත් එක පේළියට තියාගැනීමට */
     margin: 0 !important;
     padding: 0 !important;
     list-style: none !important;
@@ -94,7 +101,7 @@ import { markdownify } from "@/lib/utils/textConverter";
   
   .social-icons-3d-expanded li {
     display: block !important;
-    flex: 1 !important;
+    flex: 1 !important; /* හැම එකකටම සමාන පළලක් බෙදා දීම */
     max-w: 75px !important;
   }
   
@@ -117,17 +124,23 @@ import { markdownify } from "@/lib/utils/textConverter";
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8)) !important;
   }
 
-  /* 3D brand colors - normal state */
+  /* ==========================================================
+     👑 3D BRAND COLORS - NORMAL STATE (සාමාන්‍ය වෙලාවට කළු-සුදු 3D Mix)
+     ========================================================== */
   .social-icons-3d-expanded a:not(:hover) {
     background: linear-gradient(135deg, #222428 0%, #0b0c0e 100%) !important;
     box-shadow: 
       0 6px 12px rgba(0, 0, 0, 0.5), 
       inset 0 1px 1px rgba(255, 255, 255, 0.08), 
       inset 0 -3px 6px rgba(0, 0, 0, 0.7) !important;
-    color: #a3a3a3 !important;
+    color: #a3a3a3 !important; /* මෘදු සුදු-අළු මික්ස් */
   }
 
-  /* 3D brand colors - hover state */
+  /* ==========================================================
+     👑 SMART 3D BRAND COLORS - HOVER STATE (ඇත්තම නිල වර්ණ)
+     ========================================================== */
+
+  /* Facebook */
   .social-icons-3d-expanded a[href*="facebook.com"]:hover {
     border-color: #1877F2 !important;
     color: #ffffff !important;
@@ -135,6 +148,7 @@ import { markdownify } from "@/lib/utils/textConverter";
     box-shadow: 0 12px 24px rgba(24, 119, 242, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.4) !important;
   }
 
+  /* Twitter / X */
   .social-icons-3d-expanded a[href*="twitter.com"]:hover,
   .social-icons-3d-expanded a[href*="x.com"]:hover {
     border-color: #ffffff !important;
@@ -143,6 +157,7 @@ import { markdownify } from "@/lib/utils/textConverter";
     box-shadow: 0 12px 24px rgba(255, 255, 255, 0.25), inset 0 1px 2px rgba(255, 255, 255, 0.5) !important;
   }
 
+  /* YouTube */
   .social-icons-3d-expanded a[href*="youtube.com"]:hover {
     border-color: #FF0000 !important;
     color: #ffffff !important;
@@ -150,6 +165,7 @@ import { markdownify } from "@/lib/utils/textConverter";
     box-shadow: 0 12px 24px rgba(255, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
   }
 
+  /* LinkedIn (If exists) */
   .social-icons-3d-expanded a[href*="linkedin.com"]:hover {
     border-color: #0077B5 !important;
     color: #ffffff !important;
@@ -157,6 +173,7 @@ import { markdownify } from "@/lib/utils/textConverter";
     box-shadow: 0 12px 24px rgba(0, 119, 181, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
   }
 
+  /* Instagram */
   .social-icons-3d-expanded a[href*="instagram.com"]:hover {
     border-color: #E1306C !important;
     color: #ffffff !important;
@@ -164,8 +181,9 @@ import { markdownify } from "@/lib/utils/textConverter";
     box-shadow: 0 12px 24px rgba(225, 48, 108, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
   }
 
+  /* ⚡ HOVER POP EFFECT */
   .social-icons-3d-expanded a:hover {
-    transform: translateY(-8px) scale(1.12) !important;
+    transform: translateY(-8px) scale(1.12) !important; /* පට්ට 3D Pop එකක් */
   }
   
   .social-icons-3d-expanded a:hover svg {
