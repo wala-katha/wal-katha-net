@@ -22,217 +22,47 @@ const allGlobalPosts = await getSinglePage("posts");
 const allTags = allGlobalPosts.flatMap((post) => post.data.tags || []);
 const uniqueTags = [...new Set(allTags)].filter(Boolean);
 
-// PAGESPEED "IMPROVE IMAGE DELIVERY" FIX - 2026-08 RE-MEASURED VALUES
-// (root cause found via direct box-model recalculation after a repeat
-// flag on the Nandage Duwa post image: real file served 397x598, actual
-// displayed physical pixels needed only 326x464 - Est savings 12.3 KiB).
-//
-// ROOT CAUSE: the previous "sizes" value ("46vw" mobile / "44vw"
-// tablet) OVER-estimated the true rendered grid-cell width, so the
-// browser's native srcset selection algorithm computed a larger
-// "needed" physical-pixel width than the box actually occupies,
-// causing it to pick the 408w candidate instead of the sufficient
-// 336w candidate that already existed in postGridImageWidths below.
-//
-// CORRECTED BOX-MODEL MATH (re-derived from the actual CSS classes
-// used on this exact grid, not guessed):
-//   Mobile (<640px): .container has px-4 (16px each side) padding at
-//   this breakpoint; .row uses gx-2 (8px total gutter) for a 2-column
-//   (col-6) grid; each card then has p-2 (8px each side) padding
-//   wrapping the image link. For a 360px viewport:
-//     content = 360 - 32 = 328
-//     column  = (328 - 8) / 2 = 160
-//     image   = 160 - 16 = 144   ->  144 / 360 = ~40vw (not 46vw)
-//
-//   Tablet (640-768px): .row switches to sm:gx-4 (16px total gutter)
-//   and the card padding switches to sm:p-3 (12px each side), while
-//   .container padding is still px-4 (md:px-8 only applies at
-//   768px+). For a 700px viewport:
-//     content = 700 - 32 = 668
-//     column  = (668 - 16) / 2 = 326
-//     image   = 326 - 24 = 302  ->  302 / 700 = ~43vw (was 44vw,
-//     already close, tightened slightly for accuracy)
-//
-//   Desktop (768px+): .container switches to md:px-8 (32px each
-//   side) padding, capped at max-w-[1000px], now a 3-column (col-4)
-//   grid with sm:gx-4 gutter and sm:p-3 card padding. At the 1000px
-//   cap:
-//     content = 1000 - 64 = 936
-//     column  = (936 - 32) / 3 = ~301
-//     image   = 301 - 24 = ~277  -> tightened from the previous fixed
-//     "300px" estimate down to "280px" for closer accuracy.
-//
-// These are purely additive precision corrections to the SAME grid
-// and the SAME breakpoints already established - no layout, spacing,
-// or visual change of any kind, only a more accurate "sizes" hint so
-// the browser's own responsive-image selection algorithm can pick the
-// smallest sufficient candidate from postGridImageWidths instead of
-// over-fetching.
-//
-// NOTE: this comment lives in the frontmatter (script) section rather
-// than inline inside the <Image> tag's attribute list - Astro's JSX-like
-// component attribute parser cannot safely contain a raw /* */ block
-// comment between prop values (it previously caused a hard build
-// failure from esbuild). Keeping explanatory comments here in plain
-// JS/TS context avoids that entirely while still documenting the
-// exact value chosen below.
-//
 // ==========================================================
-// 🎯 2026-08 PERMANENT FIX (calc()-BASED EXACT SIZES — SUPERSEDES
-// EVERY PRIOR vw-APPROXIMATION ATTEMPT ABOVE):
+// 2026-08 PERMANENT FIX (PageSpeed "Improve image delivery" -
+// recurring flag on every new post, root-caused and fixed for good):
 //
-// ROOT CAUSE THIS SOLVES (confirmed via a live PageSpeed Insights
-// report on the "Nandage Duwa" post-grid card image, captured AFTER
-// the "40vw / 43vw / 280px" values above were already deployed):
-// the report still showed the SAME recurring over-fetch signature
-// (delivered 397x598 / 33.8 KiB vs a real displayed-box requirement
-// of only 326x464, Est savings 12.3 KiB). Even the tightened vw
-// percentages above are still an APPROXIMATION of the true CSS box
-// width — "vw" only tells the browser a fraction of the raw viewport
-// width, so any small mismatch between the assumed box-model math and
-// the real rendering (different device DPR, container edge-cases,
-// rounding) can push the browser's own "needed physical pixels"
-// calculation just high enough to skip the 336w candidate and select
-// 408w instead, even though the box only ever needs ~326-330px.
+// ROOT CAUSE: post.data.image in content.config.ts is a plain
+// z.string() path into public/images/posts/, not an Astro-imported
+// asset. Astro's <Image> component CANNOT generate real, distinct
+// resized files for such paths at build time (that capability only
+// exists for imported assets or content-collection image() helper
+// fields). Because of this, the previous widths=[204,336,408] +
+// calc()-based sizes setup below (see git history for the extensive
+// prior tuning attempts) was COSMETIC ONLY: every srcset width
+// descriptor pointed at the exact same single ~420px source file, so
+// the browser always downloaded that one full file regardless of
+// which "width" it appeared to select. This is why every previous
+// attempt at perfecting the sizes calc formula had zero real effect -
+// sizes was never the actual bottleneck; the srcset itself was
+// non-functional for this kind of image reference.
 //
-// PERMANENT, DETERMINISTIC FIX: every vw fraction below has been
-// replaced with an exact CSS calc() expression that encodes the
-// SAME box-model formula (container padding + row gutter + card
-// padding, per breakpoint) as a literal subtraction from vw — not an
-// approximation of it. This removes ALL guesswork: for ANY real
-// viewport width and ANY device pixel ratio, the browser computes the
-// exact CSS pixel width of the image slot, multiplies by the real
-// DPR, and picks the smallest sufficient candidate from
-// postGridImageWidths automatically — with zero dependency on which
-// specific device/DPR PageSpeed (or a real visitor) happens to test
-// with. This is what makes the fix self-healing/future-proof rather
-// than a one-off number tweak that can regress again on a different
-// test device.
+// FIX: .github/workflows/optimize-images.yml now generates a
+// genuinely separate, correctly-small physical file
+// ("<name>-thumb.webp", capped at 340px wide - comfortably above the
+// ~326px PageSpeed reported as the real requirement for this grid
+// slot) specifically for this grid card. getPostThumbSrc() below
+// simply derives that file's path from the existing post.data.image
+// value (same base filename, "-thumb" suffix, same folder) - no
+// content.config.ts schema change and no existing post frontmatter
+// edits were needed, and this works automatically for every future
+// post too, since the workflow generates the thumb file for any post
+// image the moment it's committed.
 //
-//   Mobile (<=640px, .container px-4 / .row gx-2 / card p-2):
-//     image_width = 50vw - 44px
-//     (derived: content = V - 32; column = content/2; image =
-//     column - 6(half-gutter*2=12 total gutter, 6px removed per
-//     side by column padding) - 8(half of p-2's 16px total card
-//     padding) - 8 => image = V/2 - 44, matching the exact box-model
-//     algebra used throughout this file's comment history above)
-//
-//   Tablet (641-768px, .row sm:gx-4 / card sm:p-3, container still
-//   px-4 since md:px-8 only starts at 768px):
-//     image_width = 50vw - 72px
-//
-//   Desktop (>768px up to the container's max-w-[1000px] cap,
-//   .container md:px-8 / 3-column md:col-4 / .row sm:gx-4 / card
-//   sm:p-3):
-//     image_width = 33.34vw - 77px
-//
-//   Very wide viewports (>=1128px, i.e. once 100vw - 64px exceeds
-//   the container's 1000px cap): the column width stops growing with
-//   the viewport entirely, so a FIXED 256px is used instead of a vw
-//   formula (a pure vw-based formula would keep growing past the
-//   container's real cap and over-estimate on ultra-wide monitors).
-//
-// Order matters in the "sizes" attribute: the browser evaluates each
-// comma-separated condition left-to-right and uses the FIRST one that
-// matches, so the two most specific max-width conditions come first,
-// the min-width cap comes next, and the unconditional desktop calc()
-// is last as the final fallback for the 769-1127px range.
-//
-// postGridImageWidths below is left unchanged ([204, 336, 408]) since
-// it already brackets the real ~324-330px physical requirement
-// tightly (336w is only ~3% larger) — the previous over-fetch to 408w
-// was purely a "sizes" miscalculation problem, not a missing
-// width-bucket problem, so no bucket changes are needed here.
+// This is deliberately a single, correctly-sized <Image> now, not a
+// multi-width responsive srcset - since there is now exactly one
+// real file that already closely matches every realistic rendering
+// size for this card slot, a responsive srcset would add complexity
+// with no benefit (and risks recreating the same "cosmetic srcset"
+// trap if ever pointed back at a plain public/-string image again).
 // ==========================================================
-const postGridImageSizes = "(max-width: 640px) calc(50vw - 44px), (max-width: 768px) calc(50vw - 72px), (min-width: 1128px) 256px, calc(33.34vw - 77px)";
-
-// 2026-07 W3C VALIDATOR FIX (vnu.validator.w3.org - 4 errors:
-// "Bad value ... for attribute srcset on element img: Expected width
-// descriptor but found 1x ... When the sizes attribute is present,
-// all image candidate strings must specify a width."):
-//
-// ROOT CAUSE: The <Image> component below previously used BOTH
-// `densities={[1, 2]}` AND `sizes={postGridImageSizes}` together.
-// `densities` tells Astro to generate a srcset using density
-// descriptors (e.g. "image.webp 1x, image.webp 2x"), while `sizes`
-// tells the browser how wide the image will be rendered at different
-// viewports. Per the HTML/W3C spec, THESE TWO ARE MUTUALLY EXCLUSIVE
-// within the same srcset attribute: when a `sizes` attribute is
-// present on an <img>, every candidate string inside its `srcset`
-// MUST use a WIDTH descriptor ("NNNw"), never a density descriptor
-// ("Nx") - density descriptors are only valid when `sizes` is absent
-// entirely. Astro's <Image> component faithfully reproduces whatever
-// combination of props it's given, so passing both `densities` and
-// `sizes` together produces exactly the spec-invalid
-// srcset="...webp 1x, ...webp 2x" combined with a sizes attribute
-// that the Nu Html Checker correctly flags as a hard error on every
-// single post-grid image (4 flagged instances in the validator
-// report, one per visible post card image).
-//
-// PERMANENT FIX: `densities={[1, 2]}` has been replaced with
-// `widths={[204, 408]}` - Astro's width-descriptor equivalent, which
-// is 100% spec-compliant when combined with a `sizes` attribute
-// (this is in fact Astro's own documented recommendation: use
-// `widths` + `sizes` together, and `densities` only when `sizes` is
-// NOT used). The two chosen widths (204 = the original @1x display
-// width baseline used by the previous `sizes` calc, 408 = its @2x
-// retina equivalent) preserve the exact same intent as the original
-// densities=[1,2] approach - the browser can still pick either the
-// smaller or larger file depending on the viewport/DPR - while now
-// generating a fully spec-valid width-descriptor srcset
-// (e.g. "image.webp 204w, image.webp 408w"). Zero visual regression:
-// same physical image files, same responsive selection behavior,
-// same PageSpeed "Improve image delivery" savings intent - only the
-// srcset descriptor TYPE changed to satisfy the spec requirement
-// triggered by the co-present `sizes` attribute. This is also
-// self-healing for any future post images added to this same
-// component, since the fix lives at the single shared <Image> call
-// site used by every post-grid card site-wide.
-//
-// 2026-07 PAGESPEED "IMPROVE IMAGE DELIVERY" FOLLOW-UP FIX (Nandage
-// Duwa post flagged again: delivered 397x598 vs displayed-at-DPR2
-// requirement of only 326x464 - Est savings 12.3 KiB):
-//
-// ROOT CAUSE: `widths=[204, 408]` had only TWO buckets. A common
-// mobile phone (2-column grid, DPR2) needs an intrinsic width of
-// roughly 326px to satisfy its rendered CSS box at native pixel
-// density. Since 204 is smaller than that requirement, the browser is
-// FORCED to skip straight to 408 - the next available bucket - even
-// though 408 is far larger than the ~326 actually needed. This is a
-// classic "quantization gap": with only two width buckets spaced 2x
-// apart, any device whose real requirement falls in the middle
-// (between ~205px and ~407px) always over-fetches the larger file.
-//
-// PERMANENT FIX: a THIRD width bucket (336) has been inserted between
-// the existing two. 336 sits just above the ~326px real-world
-// requirement measured for this exact card size on common 2-column
-// mobile layouts (DPR2), so the browser can now select 336 instead of
-// jumping all the way to 408 - closing the quantization gap without
-// removing either of the original buckets (204 still serves smaller/
-// low-DPR phones, 408 still serves the 3-column desktop/tablet slot
-// exactly as before). This is purely additive: no existing srcset
-// candidate is removed, so no other viewport/DPR combination that
-// was already correctly served can regress.
-//
-// 2026-08 REPEAT-FLAG FOLLOW-UP: the width buckets above were already
-// correctly sized (336 is close to the 326px real need). The image
-// STILL over-fetched to 408w because the "sizes" attribute value
-// itself (see postGridImageSizes above) was overstating the real
-// rendered width, causing the browser's own calculation to conclude
-// it needed more than 336px even though it did not. Fixing the sizes
-// value (40vw/43vw/280px, re-derived above) is the actual fix this
-// time; the width-bucket set here is left unchanged since 336 is
-// already a good match once the sizes value is accurate.
-//
-// 2026-08 SECOND REPEAT-FLAG (calc()-based permanent fix, see the
-// large comment block directly above postGridImageSizes): even the
-// re-derived 40vw/43vw/280px values above were STILL approximations
-// and a live PageSpeed report continued to show the identical 12.3
-// KiB over-fetch after that deploy. The width buckets here remain
-// unchanged (336 is still the correct target bucket), only the
-// "sizes" attribute's calculation method changed from vw-approximation
-// to exact calc()-based box-model math.
-const postGridImageWidths = [204, 336, 408];
+function getPostThumbSrc(imagePath: string): string {
+  return imagePath.replace(/\.webp$/i, "-thumb.webp");
+}
 ---
 
 <div class={`w-full ${className} bg-[#050505]`}>
@@ -242,18 +72,16 @@ const postGridImageWidths = [204, 336, 408];
       posts.map((post, i: number) => (
         <div class="col-6 md:col-4 flex flex-col justify-between bg-[#0d0d0d] p-2 sm:p-3 rounded-xl border border-[#1a1a1a] min-w-0">
           {post.data.image && (
-            <a
+            
               href={withTrailingSlash(`/blog/${post.id}`)}
               class="rounded-lg block overflow-hidden group relative border border-white/5 aspect-[2/3]"
             >
               <Image
                 class="group-hover:scale-[1.04] transition duration-300 w-full h-full object-cover"
-                src={post.data.image}
+                src={getPostThumbSrc(post.data.image)}
                 alt={post.data.title}
-                width={408}
-                height={612}
-                widths={postGridImageWidths}
-                sizes={postGridImageSizes}
+                width={340}
+                height={510}
                 loading={i < 3 ? "eager" : "lazy"}
                 decoding="async"
               />
@@ -273,7 +101,7 @@ const postGridImageWidths = [204, 336, 408];
               <ul class="min-w-0">
                 {post.data.categories.slice(0, 1).map((category) => (
                   <li class="inline-block max-w-full">
-                    <a
+                    
                       href={withTrailingSlash(`/categories/${slugify(category)}`)}
                       class="post-card-category-link hover:text-emerald-400 font-bold text-[10px] sm:text-xs bg-white/5 px-1.5 py-0.5 rounded text-slate-200 truncate block max-w-full"
                     >
@@ -291,7 +119,7 @@ const postGridImageWidths = [204, 336, 408];
 
           {/* POST TITLE */}
           <h2 class="mb-1 line-clamp-2 leading-tight">
-            <a
+            
               href={withTrailingSlash(`/blog/${post.id}`)}
               class="block hover:text-emerald-400 transition duration-200 text-xs sm:text-base font-extrabold text-white"
             >
@@ -317,7 +145,7 @@ const postGridImageWidths = [204, 336, 408];
               )
               .slice(0, 1)
               .map((author) => (
-                <a
+                
                   href={withTrailingSlash(`/authors/${slugify(author.data.title)}`)}
                   class="flex items-center hover:text-emerald-400 text-[11px] sm:text-xs font-semibold text-slate-300 min-w-0 flex-shrink-1"
                 >
@@ -334,7 +162,7 @@ const postGridImageWidths = [204, 336, 408];
                 </a>
               ))}
 
-            <a
+            
               href={withTrailingSlash(`/blog/${post.id}`)}
               class="text-[11px] sm:text-xs bg-emerald-500 text-neutral-950 px-3 sm:px-5 py-1 sm:py-1.5 rounded-full hover:bg-emerald-400 transition-colors font-bold whitespace-nowrap text-center flex-shrink-0"
             >
@@ -359,7 +187,7 @@ const postGridImageWidths = [204, 336, 408];
           <ul class="flex flex-wrap gap-2 m-0 p-0 list-none">
             {uniqueTags.map((tag, index) => (
               <li class={`tag-item-wrap ${index >= 12 ? 'hidden-tag hidden' : ''}`}>
-                <a
+                
                   href={withTrailingSlash(`/tags/${slugify(tag)}`)}
                   rel="tag"
                   class="text-[11px] sm:text-xs bg-[#010203] text-white font-black tracking-wide px-2.5 py-1.5 rounded-md border border-black hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center gap-0.5"
