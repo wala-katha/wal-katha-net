@@ -6,7 +6,7 @@ date: 2026-06-17
 image: "/images/posts/Thaththa-Duwa-wal-katha.webp"
 draft: false
 authors: ["WalaKatha"]
-tags: ["thaththa-katha", "duwakatha", "famly-katha"]
+tags: ["thaththa-katha", "duwa-katha", "famly-katha"]
 categories: ["wala-katha"]
 ---
 
