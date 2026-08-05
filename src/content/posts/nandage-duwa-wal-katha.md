@@ -6,7 +6,7 @@ date: 2026-06-18
 image: "/images/posts/Nandage-duwa-wal-katha.webp"
 draft: false
 authors: ["WalKatha"]
-tags: ["akka-katha", "aluth-katha", "famlly-katha"]
+tags: ["akka-katha", "aluth-katha", "family-katha"]
 categories: ["wala-katha"]
 ---
 
