@@ -132,6 +132,8 @@ jobs:
           //    this function EXACTLY ONCE per source file and reuses
           //    the single boolean result for both its desktop and
           //    mobile output decisions, to avoid this exact pitfall.
+          //    The 2026-08 post-thumbnail block (see the "folders"
+          //    loop further below) follows this exact same rule too.
           //
           //    This single mechanism now uniformly covers EVERY image
           //    in every folder + every root/logo/favicon/og-image/
@@ -208,51 +210,157 @@ jobs:
               const input = join(dir, file);
               const outFile = file.replace(/\.[^.]+$/, '.webp');
               const out = join(dir, outFile);
-              const needsReconvert = await shouldReconvert(input, out, maxWidth, square);
-              if (!needsReconvert) {
+              // ==========================================================
+              // 🎯 2026-08 PERMANENT FIX (PageSpeed "Improve image
+              //    delivery" recurring flag on every new post): the
+              //    content-hash guard below is now evaluated EXACTLY
+              //    ONCE per source file and its boolean result
+              //    ("contentChanged") is reused for BOTH the primary
+              //    full-size output decision below AND the new
+              //    post-grid-thumbnail decision further down — calling
+              //    hasSourceContentChanged() a second time for the same
+              //    file would wrongly report "unchanged" on the second
+              //    call, since it writes the updated hash sidecar as a
+              //    side effect on the first call (same rule the slider
+              //    dual-output block already follows — see that
+              //    function's own doc-comment above for the full
+              //    explanation).
+              // ==========================================================
+              const contentChanged = hasSourceContentChanged(input);
+              const primaryUpToDate = contentChanged
+                ? false
+                : await isUpToDate(input, out, maxWidth, square);
+              const needsPrimaryReconvert = contentChanged || !primaryUpToDate;
+              if (needsPrimaryReconvert) {
+                // If the .webp already existed (filename unchanged) but
+                // content forced a reconvert, flag it for the universal
+                // downstream re-verify pass below.
+                if (existsSync(out)) {
+                  forceVerifySet.add(out);
+                }
+                const image = sharp(input);
+                const metadata = await image.metadata();
+                let pipeline = image;
+                if (square) {
+                  pipeline = pipeline.resize({
+                    width: maxWidth,
+                    height: maxWidth,
+                    fit: 'cover',
+                    position: 'attention',
+                    withoutEnlargement: true,
+                    kernel: sharp.kernel.lanczos3,
+                  });
+                } else if (metadata.width && metadata.width > maxWidth) {
+                  pipeline = pipeline.resize({
+                    width: maxWidth,
+                    withoutEnlargement: true,
+                    kernel: sharp.kernel.lanczos3,
+                  });
+                }
+                await pipeline
+                  .webp({ quality: 85, smartSubsample: true, effort: 6 })
+                  .toFile(out);
+                console.log(`[${type.toUpperCase()}] ${file} (${metadata.width}x${metadata.height}) -> ${outFile}`);
+                convertedMap[file] = outFile;
+                processedCount++;
+              } else {
                 skippedCount++;
-                continue;
               }
-              // If the .webp already existed (filename unchanged) but
-              // content forced a reconvert, flag it for the universal
-              // downstream re-verify pass below.
-              if (existsSync(out)) {
-                forceVerifySet.add(out);
+              // ==========================================================
+              // 🎯 NEW (2026-08): POST GRID-THUMBNAIL DUAL-OUTPUT — fixes
+              //    the recurring PageSpeed "Improve image delivery" flag
+              //    on Posts.astro's grid card images (e.g. Wanamalee,
+              //    Nandage Duwa flagged repeatedly: delivered ~397x598
+              //    vs a real displayed-box requirement of only
+              //    ~326x464).
+              //
+              //    ROOT CAUSE THIS SOLVES: post.data.image in
+              //    content.config.ts is a plain z.string() path into
+              //    this exact folder, not an Astro-imported asset.
+              //    Astro's <Image> component cannot generate real,
+              //    distinct-sized files for such string paths at build
+              //    time (that capability only exists for imported
+              //    assets or content-collection image() helper
+              //    fields). Because of this, any responsive
+              //    widths/sizes markup previously applied in
+              //    Posts.astro to this style of image reference was
+              //    COSMETIC ONLY — every srcset width descriptor
+              //    pointed at the exact same single ~420px source
+              //    file, so the browser always downloaded that one
+              //    full file regardless of which width it appeared to
+              //    select. No amount of sizes-attribute tuning could
+              //    ever fix this, since sizes was never the actual
+              //    bottleneck — the srcset itself was non-functional
+              //    for this kind of image reference.
+              //
+              //    THE FIX: generate a genuinely separate, correctly
+              //    small physical file ("<name>-thumb.webp", capped at
+              //    340px wide — comfortably above the ~326px PageSpeed
+              //    reported as the real requirement for this grid
+              //    slot, with headroom for higher-DPR devices)
+              //    specifically for grid-card usage. Posts.astro
+              //    references this exact file directly instead of
+              //    relying on Astro's non-functional responsive
+              //    srcset for public-string image paths.
+              //
+              //    CONTENT-HASH GUARD REUSE: uses the SAME
+              //    "contentChanged" boolean computed once above for
+              //    this source file (see the note directly above the
+              //    primary-output block) — never calls
+              //    hasSourceContentChanged() a second time for the
+              //    same file.
+              //
+              //    SELF-HEALING: any new post image dropped into this
+              //    folder is automatically picked up by this same loop
+              //    and gets BOTH the full-size file (used by
+              //    PostSingle.astro's hero banner and other larger
+              //    contexts) AND this thumb file (used only by the
+              //    grid card) generated with zero manual configuration
+              //    — the exact same self-healing guarantee every other
+              //    image type in this workflow already has. This block
+              //    only runs for type === 'post' — author images are
+              //    completely unaffected.
+              // ==========================================================
+              if (type === 'post') {
+                const thumbMaxWidth = 340;
+                const thumbOutFile = file.replace(/\.[^.]+$/, '-thumb.webp');
+                const thumbOut = join(dir, thumbOutFile);
+                const thumbUpToDate = contentChanged
+                  ? false
+                  : await isUpToDate(input, thumbOut, thumbMaxWidth, false);
+                const needsThumbReconvert = contentChanged || !thumbUpToDate;
+                if (needsThumbReconvert) {
+                  if (existsSync(thumbOut)) {
+                    forceVerifySet.add(thumbOut);
+                  }
+                  const thumbImage = sharp(input);
+                  const thumbMetadata = await thumbImage.metadata();
+                  let thumbPipeline = thumbImage;
+                  if (thumbMetadata.width && thumbMetadata.width > thumbMaxWidth) {
+                    thumbPipeline = thumbPipeline.resize({
+                      width: thumbMaxWidth,
+                      withoutEnlargement: true,
+                      kernel: sharp.kernel.lanczos3,
+                    });
+                  }
+                  await thumbPipeline
+                    .webp({ quality: 82, smartSubsample: true, effort: 6 })
+                    .toFile(thumbOut);
+                  console.log(`[POST-THUMB] ${file} (${thumbMetadata.width}x${thumbMetadata.height}) -> ${thumbOutFile}`);
+                  processedCount++;
+                } else {
+                  skippedCount++;
+                }
               }
-              const image = sharp(input);
-              const metadata = await image.metadata();
-              let pipeline = image;
-              if (square) {
-                pipeline = pipeline.resize({
-                  width: maxWidth,
-                  height: maxWidth,
-                  fit: 'cover',
-                  position: 'attention',
-                  withoutEnlargement: true,
-                  kernel: sharp.kernel.lanczos3,
-                });
-              } else if (metadata.width && metadata.width > maxWidth) {
-                pipeline = pipeline.resize({
-                  width: maxWidth,
-                  withoutEnlargement: true,
-                  kernel: sharp.kernel.lanczos3,
-                });
-              }
-              await pipeline
-                .webp({ quality: 85, smartSubsample: true, effort: 6 })
-                .toFile(out);
-              console.log(`[${type.toUpperCase()}] ${file} (${metadata.width}x${metadata.height}) -> ${outFile}`);
-              convertedMap[file] = outFile;
-              processedCount++;
             }
           }
           // ==========================================================
-          // 🎯 NEW (2026-07): SLIDER DUAL-OUTPUT PIPELINE — fixes
-          //    PageSpeed Insights "Improve image delivery" flag
-          //    (slide-2.webp: 86.6 KiB delivered vs ~11.7 KiB needed
-          //    on mobile). ROOT CAUSE: FeaturedSlider.astro previously
-          //    used a single plain <img src="/images/slider/slide-N.webp">
-          //    with NO responsive srcset/picture element at all — every
+          // 🎯 SLIDER DUAL-OUTPUT PIPELINE — fixes PageSpeed Insights
+          //    "Improve image delivery" flag (slide-2.webp: 86.6 KiB
+          //    delivered vs ~11.7 KiB needed on mobile). ROOT CAUSE:
+          //    FeaturedSlider.astro previously used a single plain
+          //    <img src="/images/slider/slide-N.webp"> with NO
+          //    responsive srcset/picture element at all — every
           //    device, including small phones, always downloaded the
           //    same full 1200px-wide master file regardless of the
           //    actual rendered slot size.
@@ -294,22 +402,18 @@ jobs:
             for (const file of readdirSync(sliderDir)) {
               if (!/\.(jpg|jpeg|png)$/i.test(file)) continue;
               const input = join(sliderDir, file);
-
               const desktopOutFile = file.replace(/\.[^.]+$/, '.webp');
               const desktopOut = join(sliderDir, desktopOutFile);
               const mobileOutFile = file.replace(/\.[^.]+$/, '-mobile.webp');
               const mobileOut = join(sliderDir, mobileOutFile);
-
               // Compute the content-change status ONCE, reuse for both
               // outputs below (see rationale in the block comment above).
               const contentChanged = hasSourceContentChanged(input);
-
               // --- Desktop variant (existing filename/behavior, unchanged) ---
               const desktopUpToDate = contentChanged
                 ? false
                 : await isUpToDate(input, desktopOut, sliderDesktopMaxWidth, false);
               const needsDesktopReconvert = contentChanged || !desktopUpToDate;
-
               if (needsDesktopReconvert) {
                 if (existsSync(desktopOut)) {
                   forceVerifySet.add(desktopOut);
@@ -333,13 +437,11 @@ jobs:
               } else {
                 skippedCount++;
               }
-
               // --- Mobile variant (NEW — lightweight ~700w companion) ---
               const mobileUpToDate = contentChanged
                 ? false
                 : await isUpToDate(input, mobileOut, sliderMobileMaxWidth, false);
               const needsMobileReconvert = contentChanged || !mobileUpToDate;
-
               if (needsMobileReconvert) {
                 if (existsSync(mobileOut)) {
                   forceVerifySet.add(mobileOut);
@@ -633,5 +735,5 @@ jobs:
           git add src/content/contact/*.md || true
           git add src/content/pages/*.md || true
           git add src/config/config.json || true
-          git diff --staged --quiet || git commit -m "Auto: Slider mobile-optimized WebP variants (PageSpeed 'Improve image delivery' fix) + universal content-hash guard + frontmatter/config/manifest sync"
+          git diff --staged --quiet || git commit -m "Auto: Slider mobile-optimized WebP variants (PageSpeed 'Improve image delivery' fix) + post grid-thumbnail dual-output + universal content-hash guard + frontmatter/config/manifest sync"
           git push
