@@ -44,6 +44,27 @@
 // Footer.astro's own visual design (backdrop-blur stays exactly as
 // it was). The move happens once per page load and is idempotent -
 // re-opening the modal on the same page does not move it again.
+//
+// 2026-08 THIRD FIX ROUND (PageSpeed - critical network dependency
+// chain + inefficient cache lifetime, both flagged against
+// widget.trustpilot.com's main.js/bootstrap.min.js files):
+// ROOT CAUSE: the Trustpilot bootstrap script was previously loaded
+// unconditionally the moment the page finished loading, via
+// initTrustpilotWidget() running on every astro:page-load event. This
+// script sits below the fold inside Footer.astro, so fetching it
+// eagerly on every single page view added it to the initial critical
+// request chain for no real benefit - most visitors never scroll far
+// enough to see the small inline star rating widget it renders.
+// This site does not control widget.trustpilot.com's own
+// Cache-Control headers (that part of the PageSpeed finding is a
+// third-party limitation, not fixable from this codebase), but it
+// does control WHEN the script is requested.
+// FIX: the bootstrap script now loads lazily via IntersectionObserver,
+// only once the review card scrolls within 300px of the viewport.
+// This removes the script entirely from the initial page-load network
+// chain for the common case, while the modal (open on click) is
+// unaffected since it uses the embedded review-form iframe directly
+// and never depended on the bootstrap script.
 import { BiStar } from "react-icons/bi";
 const reviewDomain = "walakatha.net";
 const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${reviewDomain}`;
@@ -528,6 +549,7 @@ const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${revie
   const THANKS_MIN_AWAY_MS = 2500;
   const MODAL_MIN_OPEN_MS = 8000;
   const MODAL_LOAD_TIMEOUT_MS = 8000;
+  const WIDGET_LAZY_ROOT_MARGIN = "300px 0px";
 
   function ensureTrustpilotScriptLoaded(onReady: () => void) {
     const w = window as any;
@@ -576,16 +598,59 @@ const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${revie
     }, 4000);
   }
 
+  // NEW (PageSpeed - Network dependency tree + cache lifetime fix):
+  // module-scoped observer reference so it can be disconnected on
+  // every astro:before-swap, same cleanup convention already used
+  // elsewhere in this codebase (Header.astro's outsideClickHandler,
+  // PostSingle.astro's timers) to avoid a stale observer referencing
+  // a detached DOM node after a client-side navigation.
+  let trustpilotWidgetObserver: IntersectionObserver | null = null;
+
   function initTrustpilotWidget() {
     const container = document.getElementById("trustpilot-widget-container");
     if (!container) return;
 
-    ensureTrustpilotScriptLoaded(() => {
-      const w = window as any;
-      if (w.Trustpilot && typeof w.Trustpilot.loadFromElement === "function") {
-        w.Trustpilot.loadFromElement(container, true);
-      }
-    });
+    function loadWidgetScript() {
+      ensureTrustpilotScriptLoaded(() => {
+        const w = window as any;
+        if (w.Trustpilot && typeof w.Trustpilot.loadFromElement === "function") {
+          w.Trustpilot.loadFromElement(container, true);
+        }
+      });
+    }
+
+    // Disconnect any observer left over from a previous page (View
+    // Transitions navigation) before creating a new one for the
+    // current page's container element.
+    if (trustpilotWidgetObserver) {
+      trustpilotWidgetObserver.disconnect();
+      trustpilotWidgetObserver = null;
+    }
+
+    // LAZY LOAD: the bootstrap script is only requested once this
+    // card scrolls within 300px of the viewport, instead of on every
+    // page load regardless of scroll position. This removes the
+    // script from the initial critical network dependency chain for
+    // the common case where a visitor never scrolls to the footer.
+    if (typeof IntersectionObserver === "function") {
+      trustpilotWidgetObserver = new IntersectionObserver(
+        (entries, observer) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              loadWidgetScript();
+              observer.disconnect();
+            }
+          }
+        },
+        { rootMargin: WIDGET_LAZY_ROOT_MARGIN }
+      );
+      trustpilotWidgetObserver.observe(container);
+    } else {
+      // Older browsers without IntersectionObserver support - fall
+      // back to the previous eager-load behavior so the widget still
+      // renders correctly.
+      loadWidgetScript();
+    }
 
     container.addEventListener("click", (e) => {
       const target = e.target as HTMLElement | null;
@@ -774,6 +839,16 @@ const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${revie
 
   document.addEventListener("astro:page-load", initTrustpilotWidget);
   document.addEventListener("astro:page-load", initTrustpilotModal);
+
+  // NEW: disconnect the lazy-load observer when navigating away via
+  // View Transitions, so it never keeps watching a detached container
+  // element from a previous page.
+  document.addEventListener("astro:before-swap", () => {
+    if (trustpilotWidgetObserver) {
+      trustpilotWidgetObserver.disconnect();
+      trustpilotWidgetObserver = null;
+    }
+  });
 
   if (!(window as any).__wkTrustpilotEscapeBound) {
     (window as any).__wkTrustpilotEscapeBound = true;
