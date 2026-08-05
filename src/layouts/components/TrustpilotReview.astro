@@ -65,9 +65,63 @@
 // chain for the common case, while the modal (open on click) is
 // unaffected since it uses the embedded review-form iframe directly
 // and never depended on the bootstrap script.
+//
+// 2026-08 FOURTH FIX ROUND (Trustpilot's own Cloudflare verification
+// challenge stuck on "Verifying your connection... Unable to
+// verify"):
+// ROOT CAUSE: the Trustpilot review-form iframe loads trustpilot.com
+// content, and trustpilot.com fronts that page with its own
+// Cloudflare bot-check challenge (this is Trustpilot's own
+// infrastructure, not code in this repo). That challenge needs to set
+// a cookie to prove the browser passed the check. Per Chrome's own
+// documented third-party storage partitioning rules, a cross-origin
+// iframe does not get that storage/cookie access by default - the
+// parent page must explicitly opt the iframe in via the
+// `allow="storage-access"` permission on the <iframe> element itself.
+// Without it, the challenge can loop forever showing "Unable to
+// verify your connection right now."
+// FIX (two parts, both are things this codebase CAN actually
+// control):
+//   1. `allow="storage-access"` added directly on the iframe tag
+//      below - this is the standards-documented way to delegate
+//      storage access to a cross-origin iframe, giving Trustpilot's
+//      own challenge script the chance to set its verification
+//      cookie correctly.
+//   2. A permanent, always-visible "open on Trustpilot itself" link
+//      in the modal header (next to the close button) - this does
+//      NOT depend on the loading/timeout state, so even if a
+//      person's specific browser/network still blocks the challenge
+//      after fix #1, they always have an instant, one-tap way out to
+//      the real trustpilot.com review page in a new tab, with zero
+//      dead-end.
+//
+// 2026-08 FIFTH FIX ROUND (shine-sweep animation not animating on
+// some devices):
+// ROOT CAUSE: the "Review Now" button's shine-sweep effect
+// (`.tp-review-now-btn::after` / `@keyframes tpShineSweep`) animated
+// the `left` CSS property. `left` is a layout-affecting property (it
+// changes the box's position in normal flow terms), so every
+// animation frame forces the browser to recompute layout - this is a
+// non-composited animation. Browsers running in a reduced-power state
+// (Battery Saver / Data Saver mode, common on budget Android devices)
+// routinely throttle or fully skip non-composited animations as a
+// performance optimization, while true compositor-only animations
+// (transform / opacity) are never throttled this way. This is why the
+// shine line visually never moved on some devices even though the
+// animation was correctly declared and running.
+// FIX: the keyframes now animate `transform: translateX(...)` instead
+// of `left`, combined with the button's existing static `skewX(-20deg)`
+// tilt in the same transform value. `translateX()` percentages are
+// relative to the element's own box size (the pseudo-element is 40% of
+// the button's width), so `translateX(475%)` reproduces the exact same
+// visual travel distance as the original `left: -60% -> 130%` sweep
+// (a total of 190% of the button width, which is 475% of the
+// pseudo-element's own 40%-wide box). This is a pure GPU/compositor
+// animation now, so it can no longer be silently skipped.
 import { BiStar } from "react-icons/bi";
 const reviewDomain = "walakatha.net";
 const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${reviewDomain}`;
+const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
 ---
 
 <section class="trustpilot-review-section" aria-label="Trustpilot Reviews">
@@ -127,17 +181,33 @@ const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${revie
         <span class="tp-modal-dot" aria-hidden="true"></span>
         ඔබේ Review එක Trustpilot හි දාන්න
       </h3>
-      <button
-        id="trustpilot-modal-close-btn"
-        type="button"
-        class="tp-modal-close-btn"
-        aria-label="Close review form"
-      >
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-          <path d="M6 6l12 12M18 6L6 18"></path>
-        </svg>
-        <span class="tp-modal-close-label">වහන්න</span>
-      </button>
+      <div class="tp-modal-header-actions">
+        
+          href={directReviewPageUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="tp-modal-external-link"
+          aria-label="Trustpilot එකේම කෙලින්ම විවෘත කරන්න"
+          title="Trustpilot එකේම කෙලින්ම විවෘත කරන්න"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"></path>
+            <path d="M15 3h6v6"></path>
+            <path d="M10 14L21 3"></path>
+          </svg>
+        </a>
+        <button
+          id="trustpilot-modal-close-btn"
+          type="button"
+          class="tp-modal-close-btn"
+          aria-label="Close review form"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18"></path>
+          </svg>
+          <span class="tp-modal-close-label">වහන්න</span>
+        </button>
+      </div>
     </div>
     <div class="tp-modal-body">
       <div id="trustpilot-modal-loading" class="tp-modal-loading">
@@ -146,7 +216,7 @@ const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${revie
       </div>
       <div id="trustpilot-modal-fallback" class="tp-modal-fallback hidden">
         <p>මෙය පූරණය වීමට වැඩි කාලයක් ගතවෙයි.</p>
-        <a
+        
           href={embeddedReviewFormUrl}
           target="_blank"
           rel="noopener noreferrer"
@@ -162,6 +232,7 @@ const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${revie
         data-loaded="false"
         title="Trustpilot Review Form"
         loading="lazy"
+        allow="storage-access"
       ></iframe>
     </div>
   </div>
@@ -275,6 +346,10 @@ const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${revie
     position: relative;
     z-index: 1;
   }
+  /* Compositor-only shine sweep (transform-based, not left-based).
+     See the frontmatter comment above (2026-08 FIFTH FIX ROUND) for
+     the full root-cause explanation of why this replaced the old
+     left-property animation. */
   .tp-review-now-btn::after {
     content: "";
     position: absolute;
@@ -283,15 +358,15 @@ const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${revie
     width: 40%;
     height: 100%;
     background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.55), transparent);
-    transform: skewX(-20deg);
+    transform: skewX(-20deg) translateX(0%);
     animation: tpShineSweep 3.2s ease-in-out infinite;
     pointer-events: none;
     z-index: 0;
   }
   @keyframes tpShineSweep {
-    0% { left: -60%; }
-    45% { left: 130%; }
-    100% { left: 130%; }
+    0% { transform: skewX(-20deg) translateX(0%); }
+    45% { transform: skewX(-20deg) translateX(475%); }
+    100% { transform: skewX(-20deg) translateX(475%); }
   }
 
   .trustpilot-widget {
@@ -409,6 +484,40 @@ const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${revie
     border-radius: 999px;
     background: #01ad9f;
     flex-shrink: 0;
+  }
+
+  /* Header actions wrapper - groups the new "open on Trustpilot
+     itself" escape-hatch link and the existing close button together,
+     so the header keeps its two-item space-between layout regardless
+     of how many action icons live in the right-hand group. */
+  :global(.tp-modal-header-actions) {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  /* Escape-hatch link - always visible regardless of the iframe's
+     loading/timeout state, so a person stuck on Trustpilot's own
+     verification challenge always has an instant way out to the real
+     trustpilot.com review page in a new tab. */
+  :global(.tp-modal-external-link) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(1, 173, 159, 0.3);
+    background: rgba(1, 173, 159, 0.08);
+    color: #01ad9f;
+    text-decoration: none;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+  }
+  :global(.tp-modal-external-link:hover) {
+    color: #01c4b4;
+    background: rgba(1, 173, 159, 0.16);
+    border-color: rgba(1, 173, 159, 0.5);
   }
 
   :global(.tp-modal-close-btn) {
