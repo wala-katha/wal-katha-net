@@ -14,13 +14,13 @@ import { markdownify } from "@/lib/utils/textConverter";
     has been removed. Per the HTML5/ARIA-in-HTML spec, a <footer>
     element that is not a descendant of an <article>, <aside>,
     <main>, <nav>, or <section> already carries an IMPLICIT
-    "contentinfo" landmark role automatically — this footer is a
+    "contentinfo" landmark role automatically - this footer is a
     direct child of <body> (via Base.astro), so it already qualifies.
     Declaring role="contentinfo" explicitly is therefore fully
     redundant per the Nu Html Checker's ARIA-in-HTML conformance
     rules. Removing the attribute changes nothing for assistive
     technology (the same implicit landmark role is still exposed by
-    every browser/AT combination) — this is a pure spec-conformance
+    every browser/AT combination) - this is a pure spec-conformance
     fix with zero behavioral or visual regression. */}
 <footer 
   class="relative mt-12 py-12 overflow-hidden border-t border-white/[0.12] bg-gradient-to-b from-white/[0.04] to-white/[0.01] backdrop-blur-xl shadow-[inset_0_2px_4px_rgba(255,255,255,0.15),0_12px_40px_rgba(0,0,0,0.8)]"
@@ -36,7 +36,7 @@ import { markdownify } from "@/lib/utils/textConverter";
       {
         menu.footer.map((menu) => (
           <li class="inline-block">
-            <a
+            
               href={withTrailingSlash(menu.url)}
               class="px-4 py-2 text-sm font-semibold text-white/80 transition-all duration-300 hover:text-[#01AD9F] hover:drop-shadow-[0_0_8px_rgba(1,173,159,0.5)]"
             >
@@ -47,12 +47,12 @@ import { markdownify } from "@/lib/utils/textConverter";
       }
     </ul>
 
-    {/* 🌟 TRUSTPILOT REVIEW COLLECTOR — site-wide, footer-placed CTA
+    {/* 🌟 TRUSTPILOT REVIEW COLLECTOR - site-wide, footer-placed CTA
         card. Renders on every page (automatic "hint" to every
-        visitor, per user request), without being intrusive — sits
+        visitor, per user request), without being intrusive - sits
         naturally in the footer flow between the menu and the social
         icons block below. The component itself owns all Trustpilot
-        script-loading, SPA re-init, and "thank you" toast logic — see
+        script-loading, SPA re-init, and "thank you" toast logic - see
         src/layouts/components/TrustpilotReview.astro for full
         rationale. The official Trustpilot widget code/attributes are
         preserved byte-for-byte inside that component, unmodified. */}
@@ -73,25 +73,6 @@ import { markdownify } from "@/lib/utils/textConverter";
       class="text-xs sm:text-sm text-white/40 font-medium tracking-wide prose-a:text-[#01AD9F] prose-a:no-underline hover:prose-a:underline" 
     />
 
-    {/* 🔗 DIRECTORY / RECIPROCAL BACKLINK BADGES
-        Blogarama.com directory listing එකට අදාළ reciprocal backlink
-        එක. rel="nofollow noopener" යොදා ඇත්තේ (Button.tsx හි external
-        links සඳහා දැනටමත් ඇති site-wide convention එකම අනුගමනය
-        කරමින්) link equity site එකෙන් පිටතට leak නොවී, security
-        best-practice එකද (noopener) පවත්වා ගැනීමටයි. target="_blank"
-        යොදා ඇත්තේ visitor ව site එකෙන් පිටතට කෙලින්ම navigate කර
-        නොදමා, අලුත් tab එකක badge/directory page එක විවෘත කිරීමටයි. */}
-    <div class="mt-4 flex justify-center">
-      <a
-        href="http://www.blogarama.com/fashion-blogs/1351624-blog/"
-        title="Blogarama.com - Follow me on Blogarama"
-        target="_blank"
-        rel="nofollow noopener"
-        class="text-[11px] text-white/30 hover:text-[#01AD9F] transition-colors duration-300 underline decoration-white/10 hover:decoration-[#01AD9F]"
-      >
-        Blogarama - Blog Directory
-      </a>
-    </div>
   </div>
 </footer>
 
