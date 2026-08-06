@@ -183,8 +183,14 @@ function getPostThumbSrc(imagePath: string): string {
       </div>
 
       <div class="relative flex flex-col">
+        {/* FIX: "justify-center" එකතු කිරීමෙන් ටැග් badges සියල්ල
+            හැම පේළියකම (row එකකම) මැදට align වී, එක පැත්තකට ඇදිලා
+            හිස් තැනක් ඉතුරු වීම (screenshot එකේ පෙනුනු ප්‍රශ්නය)
+            ස්වයංක්‍රීයව සදහටම විසඳේ. flex-wrap + gap-2 එලෙසම පවතී -
+            spacing/wrap logic එකට කිසිදු වෙනසක් නැත, alignment
+            විතරයි වෙනස් කළේ. */}
         <nav aria-label="Tags Cloud" class="transition-all duration-300 ease-in-out overflow-hidden max-h-[110px]" id="tags-toggle-container">
-          <ul class="flex flex-wrap gap-2 m-0 p-0 list-none">
+          <ul class="flex flex-wrap justify-center gap-2 m-0 p-0 list-none">
             {uniqueTags.map((tag, index) => (
               <li class={`tag-item-wrap ${index >= 12 ? 'hidden-tag hidden' : ''}`}>
                 <a
