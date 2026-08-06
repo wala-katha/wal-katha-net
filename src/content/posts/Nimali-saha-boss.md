@@ -1,5 +1,5 @@
 ---
-title: "නිමාලි සහ බොස් - office katha"
+title: "නිමාලි සහ බොස් - office wal katha"
 meta_title: "Office Wal Katha Sinhala - New Wal Katha Collection"
 description: "මගේ වයිෆ් නිමාලි වයස 28යි. එයා වැඩ කරන්නෙ ප්‍රසිද්ධ රක්‍ෂණ සමාගමක​. එයාගෙ ඔෆිස් එකේ බොස් මිස්ටර් රන්ජිත්."
 date: 2026-08-06
