@@ -118,38 +118,6 @@
 // (a total of 190% of the button width, which is 475% of the
 // pseudo-element's own 40%-wide box). This is a pure GPU/compositor
 // animation now, so it can no longer be silently skipped.
-//
-// 2026-08 SIXTH FIX ROUND (PageSpeed Insights - "Forced reflow" and
-// "Network dependency tree" flagged this component's own script chunk
-// as part of the critical initial-load path):
-// ROOT CAUSE: initTrustpilotWidget() and initTrustpilotModal() were
-// both invoked directly on every "astro:page-load" event, meaning
-// this component's own JS (including teleportModalToBody(), which
-// performs a document.body.appendChild DOM move, and the
-// IntersectionObserver setup for the widget bootstrap script) ran
-// synchronously during the critical initial-render window on every
-// single page load - competing for main-thread time and network
-// priority with LCP-critical resources, even though none of this
-// work is actually needed until the reader scrolls to the footer or
-// clicks "Review Now".
-// FIX: both calls are now wrapped in a runWhenIdle() helper that uses
-// the browser's native requestIdleCallback API (falling back to a
-// short setTimeout on browsers without it, e.g. older Safari), so
-// this component's setup work runs only after the browser has
-// finished its critical rendering work for the current frame, instead
-// of competing with it. A capped timeout (2000ms) on
-// requestIdleCallback guarantees the widget/modal still initialize
-// promptly even on a busy page - this is not a functional delay a
-// reader would notice, since the widget/modal are both below-the-fold
-// or interaction-triggered anyway. The script tag itself also now
-// carries fetchpriority="low" so the browser also deprioritizes the
-// network fetch of this chunk relative to LCP-critical resources
-// (the homepage's hero image, main CSS bundle, etc.), directly
-// reducing this component's weight in the page's critical request
-// chain. Widget.trustpilot.com's own Cache-Control headers (a
-// separate PageSpeed finding) remain outside this codebase's control,
-// since that response comes from Trustpilot's own third-party origin
-// and cannot be modified via this project's _headers file.
 import { BiStar } from "react-icons/bi";
 const reviewDomain = "walakatha.net";
 const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${reviewDomain}`;
@@ -684,34 +652,13 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
   }
 </style>
 
-<script fetchpriority="low">
+<script>
   const TRUSTPILOT_SCRIPT_SRC = "https://widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js";
   const THANKS_STORAGE_KEY = "wk-trustpilot-clicked-at";
   const THANKS_MIN_AWAY_MS = 2500;
   const MODAL_MIN_OPEN_MS = 8000;
   const MODAL_LOAD_TIMEOUT_MS = 8000;
   const WIDGET_LAZY_ROOT_MARGIN = "300px 0px";
-
-  // 2026-08 SIXTH FIX ROUND (PageSpeed "Forced reflow" + "Network
-  // dependency tree"): runs a callback only once the browser is idle
-  // (after it has finished critical rendering work for the current
-  // frame), instead of running it synchronously on astro:page-load.
-  // requestIdleCallback is not supported in every browser (notably
-  // older Safari), so a short setTimeout is used as a fallback -
-  // still deferring the work off the immediate load path, just
-  // without the "wait until truly idle" guarantee. The timeout option
-  // on requestIdleCallback guarantees this still runs within 2
-  // seconds even on a very busy page, so the widget/modal remain
-  // reliably ready well before a reader could scroll to the footer or
-  // tap "Review Now".
-  function runWhenIdle(callback: () => void) {
-    const w = window as any;
-    if (typeof w.requestIdleCallback === "function") {
-      w.requestIdleCallback(callback, { timeout: 2000 });
-    } else {
-      setTimeout(callback, 200);
-    }
-  }
 
   function ensureTrustpilotScriptLoaded(onReady: () => void) {
     const w = window as any;
@@ -760,7 +707,8 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     }, 4000);
   }
 
-  // Module-scoped observer reference so it can be disconnected on
+  // NEW (PageSpeed - Network dependency tree + cache lifetime fix):
+  // module-scoped observer reference so it can be disconnected on
   // every astro:before-swap, same cleanup convention already used
   // elsewhere in this codebase (Header.astro's outsideClickHandler,
   // PostSingle.astro's timers) to avoid a stale observer referencing
@@ -978,7 +926,7 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     const openBtn = document.getElementById("trustpilot-open-modal-btn");
     const closeBtn = document.getElementById("trustpilot-modal-close-btn");
     const overlay = document.getElementById("trustpilot-review-modal");
-    const iframe = document.getElementById("trustpilot-modal-iframe");
+    const iframe = document.getElementById("trustpilot-modal-iframe") as HTMLIFrameElement | null;
     if (!openBtn || !closeBtn || !overlay) return;
 
     const freshOpenBtn = openBtn.cloneNode(true) as HTMLButtonElement;
@@ -998,14 +946,8 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     }
   }
 
-  // 2026-08 SIXTH FIX ROUND: both init functions now run through
-  // runWhenIdle() instead of firing synchronously on astro:page-load.
-  // This keeps this component's DOM work (including the
-  // teleportModalToBody DOM move) and network fetch (the widget
-  // container's IntersectionObserver setup) out of the critical
-  // initial-render window on every page view.
-  document.addEventListener("astro:page-load", () => runWhenIdle(initTrustpilotWidget));
-  document.addEventListener("astro:page-load", () => runWhenIdle(initTrustpilotModal));
+  document.addEventListener("astro:page-load", initTrustpilotWidget);
+  document.addEventListener("astro:page-load", initTrustpilotModal);
 
   // NEW: disconnect the lazy-load observer when navigating away via
   // View Transitions, so it never keeps watching a detached container
