@@ -1,5 +1,5 @@
 ---
-title: "අක්කයි නංගියි - Akkai NangiWal Katha"
+title: "අක්කයි නංගියි - Akkai Nangi Wal Katha"
 meta_title: "අක්කයි නංගියි වැල කතා | sinhala akkage wal katha"
 description: "මම සිතුම්, වයස 24යි. මගේ ගම මොණරාගල . හැබැයි මම වැඩ කරන්නේ නුගේගොඩ."
 date: 2026-08-06
