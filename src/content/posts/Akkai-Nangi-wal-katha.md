@@ -3,7 +3,7 @@ title: "අක්කයි නංගියි - Akkai NangiWal Katha"
 meta_title: "අක්කයි නංගියි වැල කතා | sinhala akkage wal katha"
 description: "මම සිතුම්, වයස 24යි. මගේ ගම මොණරාගල . හැබැයි මම වැඩ කරන්නේ නුගේගොඩ."
 date: 2026-08-06
-image: "/images/posts/Akkai-Nangi-Wal-Katha-thumb.webp"
+image: "/images/posts/Akkai-Nangi-Wal-Katha.webp"
 draft: false
 authors: ["WalaKatha"]
 tags: ["wala-katha", "akka-katha", "family-katha", "nangi-katha"]
