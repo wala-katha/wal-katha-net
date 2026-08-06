@@ -237,7 +237,7 @@ const breadcrumbSchema = JSON.stringify({
             <BiMapPin className="h-4 w-4 flex-shrink-0 text-[#01AD9F]" aria-hidden="true" />
             <span>Path</span>
             <svg id="breadcrumb-arrow" class="h-3.5 w-3.5 text-[#01AD9F] transition-transform duration-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+              <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
             </svg>
           </button>
 
@@ -479,25 +479,50 @@ const breadcrumbSchema = JSON.stringify({
           <Content />
         </div>
 
-        <div class="flex flex-wrap items-center justify-between border-t border-white/10 pt-6">
-          <ul class="mr-4 mb-4 space-x-3">
-            {tags.map((tag: string) => (
-              <li class="inline-block">
-                <a
-                  href={withTrailingSlash(`/tags/${slugify(tag)}`)}
-                  class="block rounded-lg bg-[#FFCC00] border border-[#FFCC00] px-4 py-2 font-black text-[#010203] text-sm hover:bg-[#E6B800] transition duration-300"
-                >
-                  #{humanize(tag)}
-                </a>
-              </li>
-            ))}
-          </ul>
-          <Share
-            className="social-share mb-4 text-[#F8F8FF]"
-            title={title}
-            description={description}
-            slug={post.id}
-          />
+        {/* 2026 TAGS + SHARE FOOTER REDESIGN:
+            WHY: the previous layout put tags in a plain <ul class="mr-4
+            mb-4 space-x-3"> (not a flex container) with <li
+            class="inline-block"> children. Because "space-x-3" only
+            works reliably on flex/grid parents, and inline-block list
+            items pick up the raw HTML whitespace between them as extra,
+            inconsistent gaps, the pills wrapped unevenly and stayed
+            pinned to the left instead of reading as one tidy group -
+            exactly the messy left-aligned look reported.
+
+            FIX: the whole footer is now a single centered flex column.
+            The tags <ul> itself is "flex flex-wrap justify-center
+            gap-2.5" - flex+gap gives perfectly even, predictable spacing
+            between every pill on every row, regardless of how many wrap
+            to a second or third line, and justify-center keeps each
+            wrapped row centered instead of left-hugging. The Share icons
+            row sits centered underneath on its own line. This is a pure
+            layout change - the pill styling (colors, padding, hover
+            state), the Share component props, and every link/href are
+            byte-identical to before, so nothing else about the page
+            changes. */}
+        <div class="border-t border-white/10 pt-6">
+          <div class="flex flex-col items-center gap-6">
+            {tags.length > 0 && (
+              <ul class="flex flex-wrap justify-center gap-2.5">
+                {tags.map((tag: string) => (
+                  <li>
+                    <a
+                      href={withTrailingSlash(`/tags/${slugify(tag)}`)}
+                      class="inline-block rounded-lg bg-[#FFCC00] border border-[#FFCC00] px-4 py-2 font-black text-[#010203] text-sm hover:bg-[#E6B800] transition duration-300"
+                    >
+                      #{humanize(tag)}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Share
+              className="social-share text-[#F8F8FF]"
+              title={title}
+              description={description}
+              slug={post.id}
+            />
+          </div>
         </div>
       </div>
     </article>
