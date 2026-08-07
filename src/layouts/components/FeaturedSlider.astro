@@ -67,7 +67,7 @@ const demoSlides = [
           or a stray tab-stop. initSlider() below keeps this in sync
           every time the active slide changes.
         */}
-        
+        <a
           href={withTrailingSlash(`/blog/${sanitizeUrlPath(slide.id)}`)}
           class={`slide-link block w-full h-full group ${index !== 0 ? "pointer-events-none" : ""}`}
           aria-label={`Read story: ${slide.title}`}
@@ -266,4 +266,3 @@ const demoSlides = [
   document.addEventListener('astro:page-load', initSlider);
   initSlider();
 </script>
-</file>
