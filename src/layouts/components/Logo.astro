@@ -4,14 +4,10 @@ import config from "@/config/config.json";
 const { src } = Astro.props;
 const {
   logo,
-  logo_width,
-  logo_height,
   logo_text,
   title,
 }: {
   logo: string;
-  logo_width: any;
-  logo_height: any;
   logo_text: string;
   title: string;
 } = config.site;
@@ -21,56 +17,37 @@ const textWords = currentLogoText.split(" ");
 const firstWord = textWords[0];
 const remainingText = textWords.slice(1).join(" ");
 
-// 🎯 FIXED (Lighthouse "Displays images with incorrect aspect ratio" +
-// "Serves images with low resolution"):
+// 🎯 FIXED (PageSpeed Insights — "Image display dimensions should match
+// natural aspect ratio" + "Serves images with low resolution"):
 //
-// ROOT CAUSE: logo.webp හි REAL file dimensions 300x50px (aspect ratio
-// 6:1) වන අතර, කලින් <Image> component එකට සහ inline style එකට දෙන ලද
-// width/height දෙකම config.json හි logo_width="300" / logo_height="50"
-// වශයෙන් සෘජුවම pass කර තිබුණි. src/styles/navigation.css හි
-// ".navbar-brand img { max-width: 170px }" rule එක නිසා, mobile
-// screens වල logo එකේ ඇත්තටම DISPLAYED (visual) width එක 170px දක්වා
-// CSS මගින් constrain වේ (height: auto නිසා height එකද ඒ අනුව අඩු විය
-// යුතුය) — නමුත් HTML height="50" attribute එක ස්ථිරව 50px ලෙසම
-// රැඳී තිබූ නිසා, browser එකට පෙනෙන "displayed aspect ratio" එක
-// 170:50 = 3.4:1 බවට පත් විය, ඇත්තම file එකේ aspect ratio 300:50 = 6:1
-// එකට නොගැලපී.
+// ROOT CAUSE: මීට කලින් මෙතන <Image> component එකට inline
+// style={{ height: correctedHeight+"px", width: configuredWidth+"px" }}
+// එකක් දාල තිබුණි. src/styles/navigation.css හි .navbar-brand img
+// rule එකේ දැනටමත් "h-auto max-w-[170px] sm:max-w-full" (height:auto)
+// නිවැරදිව define කර තිබුණත්, INLINE style එකට CSS class එකකට වඩා
+// වැඩි specificity/priority එකක් තියෙන නිසා, height:auto CSS rule එක
+// සම්පූර්ණයෙන්ම override වී, height එක සදහටම 50px ට fix වුනා.
+// ප්‍රතිඵලයක් විදිහට, mobile screen එකේදී max-width:170px නිසා width
+// එක හැකිලෙනකොට height එක 50px ම නොවෙනස්ව ඉතිරි වුනා — 170x50
+// (ratio 3.40) කියන distorted box එකක්, real file එකේ ratio එකට
+// (300x50 = 6.0) නොගැලපෙන විදිහට. මේ vertical-stretch එකම "low
+// resolution" flag එකටත් හේතුව විය.
 //
-// ✅ PERMANENT FIX: Image එකේ VISUAL/DISPLAYED size එක (170px width,
-// CSS-driven, .navbar-brand img rule එක හරහා) කිසිසේත් වෙනස් කර නැත —
-// logo එක screen එකේ පෙනෙන ප්‍රමාණය 100% එලෙසම පවතී. විසඳුම යොදා
-// ඇත්තේ <Image> component එකට සහ inline style එකට දෙන width/height
-// attributes, logo.webp හි ඇත්තම (intrinsic) 300x50 aspect ratio එකට
-// ගැලපෙන පරිදි ස්වයංක්‍රීයව ගණනය කිරීමෙනි:
+// ✅ PERMANENT FIX: inline style එක සම්පූර්ණයෙන්ම ඉවත් කර ඇත. දැන්
+// <img> tag එකට width/height HTML ATTRIBUTES විතරක් (logo.webp හි
+// සැබෑ intrinsic dimensions) දෙනවා — මේවා CSS visual size එක override
+// කරන්නේ නැත, browser එකට intrinsic aspect-ratio (6:1) infer කරගන්න
+// පමණක් උපකාරී වේ. .navbar-brand img CSS rule එකේම height:auto සමග
+// මෙය ඒකාබද්ධ වී, mobile (max-width:170px) සහ desktop (sm:max-w-full)
+// දෙකේදීම, ඕනෑම width එකකදී browser එකෙන්ම proportional height එකක්
+// ස්වයංක්‍රීයව ගණනය කරයි — distortion කිසිවක් නැතුව, CLS ආරක්ෂාවත්
+// (attributes තිබෙන නිසා) සම්පූර්ණයෙන් රැදී පවතී.
 //
-//   - configuredWidth/configuredHeight (170x50 වැනි config අගයන්)
-//     "displayed size" එක ලෙස රැඳී තිබේ — CSS max-width එකම එය
-//     control කරයි, මෙතන කිසිවක් වෙනස් නොවේ.
-//   - INTRINSIC_ASPECT_RATIO = 300/50 = 6 (logo.webp හි සැබෑ file
-//     aspect ratio) ස්ථිරව define කර ඇත.
-//   - correctedHeight = configuredWidth / INTRINSIC_ASPECT_RATIO
-//     ලෙස ගණනය කර, <Image> attribute එකට සහ inline style height එකට
-//     දෙකටම මෙම නිවැරදි අගයම යොදයි — දැන් width:height ratio එක සෑම
-//     තැනකදීම 6:1 ලෙසම ගැලපේ (Lighthouse displayed-vs-actual aspect
-//     ratio mismatch permanently resolved).
-//   - Config.json හි logo_width/logo_height අගයන් අනාගතයේ වෙනස් වුවත්
-//     (logo file එකක් replace කළත්), මෙම aspect-ratio-derived logic
-//     එකම ස්වයංක්‍රීයව නිවැරදි height එකක් ගණනය කරන නිසා, manual
-//     recalculation කිසිවක් අවශ්‍ය නොවේ (self-healing).
-const configuredWidth = Number(logo_width.replace("px", ""));
-const configuredHeight = Number(logo_height.replace("px", ""));
-
-// logo.webp හි සැබෑ (intrinsic) file dimensions — 300x50px.
-// public/images/logo.webp file එක replace කරන විට මෙම constant එකද
-// අලුත් file එකේ actual width/height අනුව යාවත්කාලීන කළ යුතුය.
+// public/images/logo.webp file එක අනාගතයේ replace කරන විට, මෙම
+// constants දෙක අලුත් file එකේ ඇත්තම (actual) width/height අගයන්ට
+// යාවත්කාලීන කළ යුතුය.
 const LOGO_INTRINSIC_WIDTH = 300;
 const LOGO_INTRINSIC_HEIGHT = 50;
-const INTRINSIC_ASPECT_RATIO = LOGO_INTRINSIC_WIDTH / LOGO_INTRINSIC_HEIGHT;
-
-// Displayed width එක (config/CSS-driven, visual size) එලෙසම තබාගෙන,
-// height එක පමණක් intrinsic aspect ratio එකට ගැලපෙන පරිදි නැවත ගණනය
-// කරයි. Math.round() මගින් sub-pixel දශම අගයන් වළක්වයි.
-const correctedHeight = Math.round(configuredWidth / INTRINSIC_ASPECT_RATIO);
 ---
 
 <div itemscope itemtype="https://schema.org/Organization" class="inline-block">
@@ -85,10 +62,6 @@ const correctedHeight = Math.round(configuredWidth / INTRINSIC_ASPECT_RATIO);
           itemprop="logo"
           loading="eager"
           fetchpriority="high"
-          style={{
-            height: correctedHeight + "px",
-            width: configuredWidth + "px",
-          }}
         />
       ) : (
         <span
