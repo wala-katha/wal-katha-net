@@ -83,7 +83,17 @@ const { posts } = Astro.props;
               </li>
             </ul>
 
-            <p class="mb-1 flex items-center justify-center text-[10px] sm:text-xs text-slate-500 font-medium">
+            {/* 2026-08 CONTRAST FIX (PageSpeed Insights "Background and
+                foreground colours do not have a sufficient contrast
+                ratio" - same root cause and same fix as Posts.astro's
+                reading-time chip: this card's background is #0d0d0d, and
+                the previous text-slate-500 (#64748b) color only reached
+                roughly 4.2:1 contrast at this chip's small font size,
+                just under the 4.5:1 WCAG AA minimum for normal text.
+                Changed to text-slate-300 (#cbd5e1), which yields well
+                over 10:1 contrast on this same background - a
+                color-value-only change, no layout/spacing/icon changes. */}
+            <p class="mb-1 flex items-center justify-center text-[10px] sm:text-xs text-slate-300 font-medium">
               <BiTime className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 text-emerald-500/70 flex-shrink-0" />
               {readingTime(post.body ?? "").toString()}
             </p>
