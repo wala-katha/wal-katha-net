@@ -1,13 +1,13 @@
 ---
 title: "බස් ජැක් - Bus Jack Wal katha"
-meta_title: "Office Wal Katha Sinhala - New Wal Katha Collection"
+meta_title: "Bus Wal Katha Sinhala - Best Sri Lankan Bus Stories"
 description: "මම බස් එකේ තමයි වැඩ ඉවර වෙලා එන්නේ. එදත් මම පුරුදුවිදිහට බස් එකට නැග්ග."
 date: 2026-08-07
-image: "/images/posts/​​​Bus-jack-wal-katha.webp"
+image: "/images/posts/bus-jack-wal-katha.webp"
 draft: false
 authors: ["WalKatha"]
-tags: ["bus-wal-katha", "sinhala-bus-katha", "bus-wal-katha-sinhala", "​sri-lankan-wal-katha", "​latest-bus-wal-katha"]
-categories: ["​Bus-Wal-Katha"]
+tags: ["bus-wal-katha", "sinhala-bus-katha", "bus-wal-katha-sinhala", "sri-lankan-wal-katha", "latest-bus-wal-katha"]
+categories: ["bus-wal-katha"]
 ---
 
  මම පුබුදු. දැනට රත්මලානේ ඇගලුම් කම්හලක සේවයකරනවා. මම හැමදාම off වෙන්නේ රෑ 7ට විතර. බෝඩ් වෙලා ඉන්නේ පිළියන්දල නිසා 255 බස් එකේ තමයි වැඩ ඉවර වෙලා එන්නේ. එදත් මම පුරුදුවිදිහට බස් එකට නැග්ග. කට කපල සෙනග.try කරලා foot board එකේ එල්ලුනා. 
