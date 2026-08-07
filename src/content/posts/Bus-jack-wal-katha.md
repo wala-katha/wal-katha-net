@@ -2,7 +2,7 @@
 title: "බස් ජැක් - Bus Jack Wal katha"
 meta_title: "Office Wal Katha Sinhala - New Wal Katha Collection"
 description: "මම බස් එකේ තමයි වැඩ ඉවර වෙලා එන්නේ. එදත් මම පුරුදුවිදිහට බස් එකට නැග්ග."
-date: 2026-08-06
+date: 2026-08-07
 image: "/images/posts/​​​Bus-jack-wal-katha.webp"
 draft: false
 authors: ["WalKatha"]
