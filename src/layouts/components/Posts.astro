@@ -130,7 +130,26 @@ function getPostThumbSrc(imagePath: string): string {
           {/* EXCERPT TEXT */}
           <p class="text-slate-400 text-[11px] sm:text-sm line-clamp-2 mb-1 leading-relaxed">{plainify(post.body ?? "")}</p>
 
-          <p class="mb-2 flex items-center text-[10px] sm:text-xs text-slate-500 font-medium">
+          {/* 2026-08 CONTRAST FIX (PageSpeed Insights "Background and
+              foreground colours do not have a sufficient contrast
+              ratio" - flagged specifically on this reading-time chip
+              across every post card on the homepage/category grid).
+
+              ROOT CAUSE: this card's background is #0d0d0d (near-black).
+              The previous text color here, text-slate-500 (#64748b), on
+              that background yields roughly 4.2:1 contrast at this
+              chip's small 10px/xs font size - just under the 4.5:1
+              minimum WCAG AA requires for normal-weight text at this
+              size, which is exactly what PageSpeed's axe-core-based
+              contrast audit flagged.
+
+              FIX: text-slate-500 changed to text-slate-300 (#cbd5e1).
+              Against the same #0d0d0d background this yields well over
+              10:1 contrast, clearing both WCAG AA and AAA thresholds
+              with a large margin. This is a color-value-only change -
+              no layout, spacing, icon, or size properties are touched,
+              so the card's visual design is otherwise unchanged. */}
+          <p class="mb-2 flex items-center text-[10px] sm:text-xs text-slate-300 font-medium">
             <BiTime className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 text-emerald-500/70 flex-shrink-0" />
             {readingTime(post.body ?? "").toString()}
           </p>
