@@ -56,7 +56,24 @@ const demoSlides = [
   <div class="flex transition-transform duration-500 ease-in-out" id="slider-wrapper" style="width: 400%;">
     {demoSlides.map((slide, index) => (
       <div class="w-full flex-shrink-0 relative" style="width: 25%;">
-        <a href={withTrailingSlash(`/blog/${sanitizeUrlPath(slide.id)}`)} class="block w-full h-full group" aria-label={`Read story: ${slide.title}`}>
+        {/*
+          2026-08 TOUCH-TARGET / OVERLAP FIX (PageSpeed "Touch targets
+          do not have sufficient size or spacing"): only the currently
+          ACTIVE slide's link stays interactive/focusable. Every other
+          slide's link (visually off-screen due to the wrapper's
+          transform, but still a full w-full h-full box in the DOM)
+          gets pointer-events-none + aria-hidden + tabindex="-1" so it
+          can never register as an overlapping/duplicate touch target
+          or a stray tab-stop. initSlider() below keeps this in sync
+          every time the active slide changes.
+        */}
+        
+          href={withTrailingSlash(`/blog/${sanitizeUrlPath(slide.id)}`)}
+          class={`slide-link block w-full h-full group ${index !== 0 ? "pointer-events-none" : ""}`}
+          aria-label={`Read story: ${slide.title}`}
+          aria-hidden={index !== 0 ? "true" : undefined}
+          tabindex={index !== 0 ? -1 : 0}
+        >
           <div class="relative w-full aspect-[16/8] sm:aspect-[21/8] md:aspect-[24/8] bg-[#010203] overflow-hidden">
             {/* <picture> + <source media> - serves the lightweight
                 ~700w "-mobile.webp" variant to any viewport at or
@@ -110,13 +127,40 @@ const demoSlides = [
     ))}
   </div>
 
-  <div class="absolute bottom-3 right-4 flex gap-1.5 z-20">
+  {/*
+    2026-08 TOUCH-TARGET FIX (PageSpeed "Touch targets do not have
+    sufficient size or spacing" - Failing elements: "Go to slide N"
+    buttons at w-2 h-2 = 8x8 CSS px, well under the 24x24 CSS px
+    minimum required by WCAG 2.5.8 / Lighthouse's target-size audit).
+
+    ROOT CAUSE: the button itself WAS the visible 8px dot, so its real
+    DOM bounding box (what Lighthouse measures) was only 8x8.
+
+    FIX: the button is now a 24x24 (w-6 h-6) real clickable box with
+    NO visible background of its own. The small visible dot moved into
+    a nested <span class="slider-dot-visual"> sized exactly like the
+    original dot (w-2 h-2), centered via flex. This means:
+      - getBoundingClientRect() on the button now reports 24x24,
+        satisfying the audit.
+      - The on-screen appearance is unchanged - visitors still see the
+        same small dot indicator.
+    Since each button now already meets the 24x24 minimum on its own,
+    a small gap-1 (4px) between buttons is enough spacing - no
+    "insufficient spacing" flag either.
+  */}
+  <div class="absolute bottom-3 right-4 flex items-center gap-1 z-20">
     {demoSlides.map((_, index) => (
       <button
-        class={`w-2 h-2 rounded-full transition-all duration-300 slider-dot ${index === 0 ? 'bg-[#01AD9F] scale-125' : 'bg-white/40'}`}
+        type="button"
+        class="slider-dot relative flex h-6 w-6 items-center justify-center rounded-full transition-all duration-300"
         data-index={index}
         aria-label={`Go to slide ${index + 1}`}
-      ></button>
+      >
+        <span
+          class={`slider-dot-visual block h-2 w-2 rounded-full transition-all duration-300 ${index === 0 ? 'bg-[#01AD9F] scale-125' : 'bg-white/40'}`}
+          aria-hidden="true"
+        ></span>
+      </button>
     ))}
   </div>
 </div>
@@ -126,6 +170,8 @@ const demoSlides = [
     const slider = document.getElementById('astro-featured-slider');
     const wrapper = document.getElementById('slider-wrapper');
     const dots = document.querySelectorAll('.slider-dot');
+    const dotVisuals = document.querySelectorAll('.slider-dot-visual');
+    const slideLinks = document.querySelectorAll('.slide-link');
 
     if (!slider || !wrapper || dots.length === 0) return;
 
@@ -138,13 +184,30 @@ const demoSlides = [
       currentIndex = index;
       wrapper.style.transform = `translateX(-${index * 25}%)`;
 
-      dots.forEach((dot, i) => {
+      // Visual dot state now lives on the inner span, not the button
+      // itself (button is the 24x24 hit area, span is the 8x8 dot).
+      dotVisuals.forEach((dotVisual, i) => {
         if (i === index) {
-          dot.classList.add('bg-[#01AD9F]', 'scale-125');
-          dot.classList.remove('bg-white/40');
+          dotVisual.classList.add('bg-[#01AD9F]', 'scale-125');
+          dotVisual.classList.remove('bg-white/40');
         } else {
-          dot.classList.remove('bg-[#01AD9F]', 'scale-125');
-          dot.classList.add('bg-white/40');
+          dotVisual.classList.remove('bg-[#01AD9F]', 'scale-125');
+          dotVisual.classList.add('bg-white/40');
+        }
+      });
+
+      // Keep only the active slide's link interactive/focusable so
+      // off-screen slides never register as overlapping/duplicate
+      // touch targets or stray tab-stops.
+      slideLinks.forEach((link, i) => {
+        if (i === index) {
+          link.classList.remove('pointer-events-none');
+          link.removeAttribute('aria-hidden');
+          link.setAttribute('tabindex', '0');
+        } else {
+          link.classList.add('pointer-events-none');
+          link.setAttribute('aria-hidden', 'true');
+          link.setAttribute('tabindex', '-1');
         }
       });
     }
@@ -163,7 +226,12 @@ const demoSlides = [
     dots.forEach((dot) => {
       dot.addEventListener('click', (e) => {
         stopInterval();
-        const index = parseInt((e.target as HTMLElement).getAttribute('data-index') || '0');
+        // FIX: use e.currentTarget (the button, which always carries
+        // data-index) instead of e.target - now that the button has a
+        // nested <span>, a tap landing exactly on the visible dot
+        // would set e.target to the span, which has no data-index
+        // attribute, silently breaking navigation to a wrong slide.
+        const index = parseInt((e.currentTarget as HTMLElement).getAttribute('data-index') || '0');
         updateSlider(index);
         startInterval();
       });
@@ -198,3 +266,4 @@ const demoSlides = [
   document.addEventListener('astro:page-load', initSlider);
   initSlider();
 </script>
+</file>
