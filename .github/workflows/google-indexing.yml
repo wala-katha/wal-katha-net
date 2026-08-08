@@ -1,5 +1,5 @@
 name: Google Indexing API Auto-Submit
-# මෙම workflow එක post files add/modify වුනාම විතරක් run වේ
+# මෙම workflow එක post files add/modify/delete වුනාම විතරක් run වේ
 # (site-wide convention එකම - optimize-images.yml, indexnow-ping.yml
 # වගේ paths filter එකක් සමගින්)
 #
@@ -9,10 +9,23 @@ name: Google Indexing API Auto-Submit
 # මෙයින් post එකක් add/edit වුනාම, එයාගේ category/tag listing pages
 # වලත් content එක වෙනස් වුනා කියලා Google ට signal එකක් යයි.
 #
+# NEW: URL REMOVAL (URL_DELETED) AUTO-PING — post file එකක් delete
+# කළොත් හෝ slug එකක් (filename එක) වෙනස් කළොත් (rename = delete-old +
+# add-new git diff pattern එකක්), පරණ /blog/{slug}/ URL එකට Google
+# Indexing API එකෙන්ම URL_DELETED type එකෙන් වෙනම signal එකක් යවනු
+# ලැබේ. මීට කලින්, delete කරපු posts වල URL මෙම workflow එකෙන් silent
+# ලෙස skip වුනා (existsSync check එකක් නිසා) — Google index එකේ ඒවා
+# stale/broken link ලෙස සති ගණනක් රැඳී පැවතුනා. දැන් git diff එකෙන්ම
+# --diff-filter=D හරහා deleted post files වෙනම detect කරලා, ඒවායේ
+# slug එකෙන් හදන URL එකට URL_DELETED ping එකක් යවනු ලැබේ. Category/Tag
+# archive pages කවදාවත් delete signal එකක් නොලබයි (ඒ pages තවමත් valid
+# content එකක් සමඟ පවතින නිසා) - post URL එකට විතරයි.
+#
 # NOTE: Google Indexing API එක officially JobPosting/BroadcastEvent
 # structured data content සඳහාම කියලා Google ගේ Terms of Service එකේ
 # සඳහන් වෙතත්, practical වශයෙන් අනිත් page types වලටත් crawl-priority
-# hint එකක් විදිහට වැඩ කරනවා. ඒක guaranteed indexing එකක් නෙවෙයි.
+# hint එකක් විදිහට වැඩ කරනවා. ඒක guaranteed indexing/de-indexing එකක්
+# නෙවෙයි.
 #
 # googleapis package එක root project එකට touch නොකර, isolated /tmp
 # folder එකක install කරයි - optimize-images.yml (Sharp) එකේම pattern
@@ -35,25 +48,36 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Detect changed post files
+      - name: Detect changed (added/modified) post files
         id: changed-posts
         run: |
-          echo "Detecting changed post files in this push..."
+          echo "Detecting added/modified post files in this push..."
           if git rev-parse HEAD~1 >/dev/null 2>&1; then
-            git diff --name-only HEAD~1 HEAD -- 'src/content/posts/*.md' 'src/content/posts/*.mdx' > /tmp/changed-posts.txt || true
+            git diff --name-only --diff-filter=ACMR HEAD~1 HEAD -- 'src/content/posts/*.md' 'src/content/posts/*.mdx' > /tmp/changed-posts.txt || true
           else
             echo "No parent commit found - skipping diff-based detection."
             : > /tmp/changed-posts.txt
           fi
-          echo "---- Changed post files ----"
+          echo "---- Added/modified post files ----"
           cat /tmp/changed-posts.txt 2>/dev/null || echo "(none)"
+      - name: Detect deleted post files
+        id: deleted-posts
+        run: |
+          echo "Detecting deleted post files in this push..."
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            git diff --name-only --diff-filter=D HEAD~1 HEAD -- 'src/content/posts/*.md' 'src/content/posts/*.mdx' > /tmp/deleted-posts.txt || true
+          else
+            echo "No parent commit found - skipping diff-based detection."
+            : > /tmp/deleted-posts.txt
+          fi
+          echo "---- Deleted post files ----"
+          cat /tmp/deleted-posts.txt 2>/dev/null || echo "(none)"
       - name: Extract post slugs categories and tags
         id: extract
         run: |
           node --input-type=module << 'EOF'
           import { readFileSync, existsSync, appendFileSync } from 'fs';
           import { basename } from 'path';
-
           const changedFilesRaw = existsSync('/tmp/changed-posts.txt')
             ? readFileSync('/tmp/changed-posts.txt', 'utf-8')
             : '';
@@ -61,11 +85,9 @@ jobs:
             .split('\n')
             .map((line) => line.trim())
             .filter(Boolean);
-
           const postSlugs = new Set();
           const categorySlugs = new Set();
           const tagSlugs = new Set();
-
           function extractArrayField(content, fieldName) {
             const regex = new RegExp(fieldName + '\\s*:\\s*\\[([\\s\\S]*?)\\]');
             const match = content.match(regex);
@@ -75,74 +97,98 @@ jobs:
               .map((item) => item.trim().replace(/^["']|["']$/g, ''))
               .filter(Boolean);
           }
-
           for (const filePath of changedFiles) {
             const base = basename(filePath);
             if (base.startsWith('-')) continue;
             if (!existsSync(filePath)) continue;
-
             const slug = base.replace(/\.[^.]+$/, '');
             postSlugs.add(slug);
-
             const content = readFileSync(filePath, 'utf-8');
             extractArrayField(content, 'categories').forEach((c) => categorySlugs.add(c));
             extractArrayField(content, 'tags').forEach((t) => tagSlugs.add(t));
           }
-
           console.log('Posts:', [...postSlugs].join(', ') || '(none)');
           console.log('Categories:', [...categorySlugs].join(', ') || '(none)');
           console.log('Tags:', [...tagSlugs].join(', ') || '(none)');
-
           const output =
             'post_slugs=' + [...postSlugs].join(' ') + '\n' +
             'category_slugs=' + [...categorySlugs].join(' ') + '\n' +
             'tag_slugs=' + [...tagSlugs].join(' ') + '\n';
-
+          appendFileSync(process.env.GITHUB_OUTPUT, output);
+          EOF
+      - name: Extract deleted post slugs
+        id: extract-deleted
+        run: |
+          node --input-type=module << 'EOF'
+          import { readFileSync, existsSync, appendFileSync } from 'fs';
+          import { basename } from 'path';
+          const deletedFilesRaw = existsSync('/tmp/deleted-posts.txt')
+            ? readFileSync('/tmp/deleted-posts.txt', 'utf-8')
+            : '';
+          const deletedFiles = deletedFilesRaw
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+          const deletedSlugs = new Set();
+          for (const filePath of deletedFiles) {
+            const base = basename(filePath);
+            // "-index.md" වගේ special/system files delete signal එකට
+            // ඇතුළත් කරන්නේ නෑ - මේවා real post pages නොවේ.
+            if (base.startsWith('-')) continue;
+            const slug = base.replace(/\.[^.]+$/, '');
+            deletedSlugs.add(slug);
+          }
+          console.log('Deleted post slugs:', [...deletedSlugs].join(', ') || '(none)');
+          const output = 'deleted_slugs=' + [...deletedSlugs].join(' ') + '\n';
           appendFileSync(process.env.GITHUB_OUTPUT, output);
           EOF
       - name: Install googleapis in isolated temp folder
-        if: steps.extract.outputs.post_slugs != '' || steps.extract.outputs.category_slugs != '' || steps.extract.outputs.tag_slugs != ''
+        if: steps.extract.outputs.post_slugs != '' || steps.extract.outputs.category_slugs != '' || steps.extract.outputs.tag_slugs != '' || steps.extract-deleted.outputs.deleted_slugs != ''
         run: |
           mkdir -p /tmp/google-indexing-tool
           cd /tmp/google-indexing-tool
           npm init -y
           npm install googleapis@144
-      - name: Submit URLs to Google Indexing API
-        if: steps.extract.outputs.post_slugs != '' || steps.extract.outputs.category_slugs != '' || steps.extract.outputs.tag_slugs != ''
+      - name: Submit URL updates and deletions to Google Indexing API
+        if: steps.extract.outputs.post_slugs != '' || steps.extract.outputs.category_slugs != '' || steps.extract.outputs.tag_slugs != '' || steps.extract-deleted.outputs.deleted_slugs != ''
         env:
           GOOGLE_INDEXING_KEY: ${{ secrets.GOOGLE_INDEXING_KEY }}
           POST_SLUGS: ${{ steps.extract.outputs.post_slugs }}
           CATEGORY_SLUGS: ${{ steps.extract.outputs.category_slugs }}
           TAG_SLUGS: ${{ steps.extract.outputs.tag_slugs }}
+          DELETED_SLUGS: ${{ steps.extract-deleted.outputs.deleted_slugs }}
         run: |
           node --input-type=module << 'EOF'
           import { createRequire } from 'module';
           const require = createRequire('/tmp/google-indexing-tool/package.json');
           const { google } = require('googleapis');
-
           const key = JSON.parse(process.env.GOOGLE_INDEXING_KEY);
           const postSlugs = (process.env.POST_SLUGS || '').trim().split(/\s+/).filter(Boolean);
           const categorySlugs = (process.env.CATEGORY_SLUGS || '').trim().split(/\s+/).filter(Boolean);
           const tagSlugs = (process.env.TAG_SLUGS || '').trim().split(/\s+/).filter(Boolean);
-
+          const deletedSlugs = (process.env.DELETED_SLUGS || '').trim().split(/\s+/).filter(Boolean);
           const MAX_URLS_PER_RUN = 100;
-
           const postUrls = postSlugs.map((slug) => `https://www.walakatha.net/blog/${slug}/`);
           const categoryUrls = categorySlugs.map((slug) => `https://www.walakatha.net/categories/${slug}/`);
           const tagUrls = tagSlugs.map((slug) => `https://www.walakatha.net/tags/${slug}/`);
-
-          let urls = [...new Set([...postUrls, ...categoryUrls, ...tagUrls])];
-
-          if (urls.length === 0) {
+          let updateUrls = [...new Set([...postUrls, ...categoryUrls, ...tagUrls])];
+          let deleteUrls = [...new Set(deletedSlugs.map((slug) => `https://www.walakatha.net/blog/${slug}/`))];
+          // Safety: deleted post URL එකක්ම accidentally update list එකේත්
+          // ආවොත් (edge case), delete list එකෙන් priority දෙනවා - update
+          // list එකෙන් ඒක ඉවත් කරනවා.
+          deleteUrls = deleteUrls.filter((url) => !updateUrls.includes(url));
+          if (updateUrls.length === 0 && deleteUrls.length === 0) {
             console.log('No URLs to submit.');
             process.exit(0);
           }
-
-          if (urls.length > MAX_URLS_PER_RUN) {
-            console.warn('URL count ' + urls.length + ' exceeds per-run cap ' + MAX_URLS_PER_RUN + '. Trimming.');
-            urls = urls.slice(0, MAX_URLS_PER_RUN);
+          if (updateUrls.length > MAX_URLS_PER_RUN) {
+            console.warn('URL_UPDATED count ' + updateUrls.length + ' exceeds per-run cap ' + MAX_URLS_PER_RUN + '. Trimming.');
+            updateUrls = updateUrls.slice(0, MAX_URLS_PER_RUN);
           }
-
+          if (deleteUrls.length > MAX_URLS_PER_RUN) {
+            console.warn('URL_DELETED count ' + deleteUrls.length + ' exceeds per-run cap ' + MAX_URLS_PER_RUN + '. Trimming.');
+            deleteUrls = deleteUrls.slice(0, MAX_URLS_PER_RUN);
+          }
           const jwtClient = new google.auth.JWT(
             key.client_email,
             null,
@@ -150,31 +196,38 @@ jobs:
             ['https://www.googleapis.com/auth/indexing'],
             null
           );
-
-          async function submitUrl(url) {
+          async function submitUrl(url, type) {
             await jwtClient.authorize();
             const indexing = google.indexing({ version: 'v3', auth: jwtClient });
             try {
               const res = await indexing.urlNotifications.publish({
                 requestBody: {
                   url,
-                  type: 'URL_UPDATED',
+                  type,
                 },
               });
-              console.log('OK: ' + url + ' -> status ' + res.status);
+              const label = type === 'URL_DELETED' ? 'DELETED' : 'OK';
+              console.log(label + ': ' + url + ' -> status ' + res.status);
             } catch (err) {
-              console.error('FAILED: ' + url + ' -> ' + err.message);
+              console.error('FAILED (' + type + '): ' + url + ' -> ' + err.message);
             }
           }
-
           (async () => {
-            console.log('Submitting ' + urls.length + ' URL(s): ' + postUrls.length + ' post(s), ' + categoryUrls.length + ' category page(s), ' + tagUrls.length + ' tag page(s)');
-            for (const url of urls) {
-              await submitUrl(url);
+            console.log(
+              'Submitting ' + updateUrls.length + ' updated URL(s) [' +
+              postUrls.length + ' post(s), ' + categoryUrls.length + ' category page(s), ' +
+              tagUrls.length + ' tag page(s)] and ' + deleteUrls.length + ' deleted URL(s)'
+            );
+            for (const url of updateUrls) {
+              await submitUrl(url, 'URL_UPDATED');
+              await new Promise((r) => setTimeout(r, 1000));
+            }
+            for (const url of deleteUrls) {
+              await submitUrl(url, 'URL_DELETED');
               await new Promise((r) => setTimeout(r, 1000));
             }
           })();
           EOF
       - name: No changes detected
-        if: steps.extract.outputs.post_slugs == '' && steps.extract.outputs.category_slugs == '' && steps.extract.outputs.tag_slugs == ''
-        run: echo "No new/modified posts, categories, or tags detected in this push - skipping Google Indexing submission."
+        if: steps.extract.outputs.post_slugs == '' && steps.extract.outputs.category_slugs == '' && steps.extract.outputs.tag_slugs == '' && steps.extract-deleted.outputs.deleted_slugs == ''
+        run: echo "No new/modified/deleted posts, categories, or tags detected in this push - skipping Google Indexing submission."
