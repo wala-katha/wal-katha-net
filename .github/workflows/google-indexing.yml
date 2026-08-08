@@ -9,17 +9,13 @@ name: Google Indexing API Auto-Submit
 # මෙයින් post එකක් add/edit වුනාම, එයාගේ category/tag listing pages
 # වලත් content එක වෙනස් වුනා කියලා Google ට signal එකක් යයි.
 #
-# NEW: URL REMOVAL (URL_DELETED) AUTO-PING — post file එකක් delete
+# NEW: URL REMOVAL (URL_DELETED) AUTO-PING - post file එකක් delete
 # කළොත් හෝ slug එකක් (filename එක) වෙනස් කළොත් (rename = delete-old +
 # add-new git diff pattern එකක්), පරණ /blog/{slug}/ URL එකට Google
 # Indexing API එකෙන්ම URL_DELETED type එකෙන් වෙනම signal එකක් යවනු
-# ලැබේ. මීට කලින්, delete කරපු posts වල URL මෙම workflow එකෙන් silent
-# ලෙස skip වුනා (existsSync check එකක් නිසා) — Google index එකේ ඒවා
-# stale/broken link ලෙස සති ගණනක් රැඳී පැවතුනා. දැන් git diff එකෙන්ම
-# --diff-filter=D හරහා deleted post files වෙනම detect කරලා, ඒවායේ
-# slug එකෙන් හදන URL එකට URL_DELETED ping එකක් යවනු ලැබේ. Category/Tag
-# archive pages කවදාවත් delete signal එකක් නොලබයි (ඒ pages තවමත් valid
-# content එකක් සමඟ පවතින නිසා) - post URL එකට විතරයි.
+# ලැබේ. Category/Tag archive pages කවදාවත් delete signal එකක් නොලබයි
+# (ඒ pages තවමත් valid content එකක් සමඟ පවතින නිසා) - post URL එකට
+# විතරයි.
 #
 # NOTE: Google Indexing API එක officially JobPosting/BroadcastEvent
 # structured data content සඳහාම කියලා Google ගේ Terms of Service එකේ
@@ -30,6 +26,45 @@ name: Google Indexing API Auto-Submit
 # googleapis package එක root project එකට touch නොකර, isolated /tmp
 # folder එකක install කරයි - optimize-images.yml (Sharp) එකේම pattern
 # එකම, root package.json/node_modules dependency conflict වළක්වයි.
+#
+# 2026-08 ROUND 1 FIX (Update/Delete Conflict Resolution + Slug
+# Normalization): updateUrls list එකෙන් deleteUrls list එකේ ඇති URLs
+# bidirectional ලෙස ඉවත් කර, delete signal එකට priority තහවුරු කරන
+# ලදී. Category/Tag frontmatter values slugify කිරීමේ logic එකකුත්
+# එකතු කරන ලදී.
+#
+# 2026-08 ROUND 2 FIX (4 Additional Edge Cases + Hardening):
+#
+# 1. SLUGIFY REGEX UNDERSCORE FIX: slugifyValue() එකේ character-class
+#    එකට "_" (underscore) එකතු කරන ලදී - මීට කලින් content slug
+#    එකක/tag එකක "_" තිබුණොත් Regex එකෙන් silently strip වී, real
+#    Astro-generated slug එකට නොගැලපෙන URL එකක් හැදෙන ඉඩක් තිබුණි.
+#    අමතරව, consecutive dashes ("--") එකකට collapse කිරීමත්,
+#    leading/trailing dashes trim කිරීමත් එකතු කරන ලදී (defense-in-
+#    depth, spacing/formatting inconsistencies වලින් broken URLs
+#    හැදීම වළක්වයි).
+#
+# 2. MULTI-COMMIT PUSH DIFF FIX (fetch-depth): checkout step එකේ
+#    fetch-depth: 0 (සම්පූර්ණ git history එක) දක්වා වැඩි කර ඇත.
+#    "Detect changed" සහ "Detect deleted" steps දෙකම දැන් GitHub's
+#    own push-event context (github.event.before / github.event.after)
+#    පාවිච්චි කරයි - මේවා push event එකකදී ඇත්තටම push වූ මුළු commit
+#    පරාසයම (එකවර commits කිහිපයක් push වුවත්) නිවැරදිව ග්‍රහණය කරයි.
+#    workflow_dispatch (manual trigger) හෝ පළමු commit වගේ event.before
+#    valid නොවන අවස්ථා සඳහා HEAD~1-based fallback එකක් රඳවා ඇත.
+#
+# 3. YAML MULTILINE/BULLET FRONTMATTER SUPPORT: extractArrayField()
+#    දැන් inline "[a, b]" style එකට අමතරව, standard YAML block-list
+#    style එකත් (fieldName: ⏎  - item1 ⏎  - item2) හඳුනාගනී - inline
+#    pattern එක match නොවුනොත් පමණක් block-list fallback එකට යයි.
+#
+# 4. CONCURRENT SUBMISSION (Performance): URLs එකින් එක 1000ms delay
+#    එකක් සමඟ serial ලෙස submit කිරීම වෙනුවට, bounded worker-pool
+#    (concurrency: 5) එකකින් parallel ලෙස submit කරයි - URLs 50ක්
+#    තිබුණත් Workflow run time එක තත්පර 50-60 සිට තත්පර 10කට වඩා අඩු
+#    කාලයකට අඩු කරයි. Google Indexing API එකේ rate limit එක per-second
+#    throttle එකක් නොව per-day quota එකක් නිසා, bounded concurrency
+#    එකක් ආරක්ෂිතයි.
 on:
   push:
     branches: [main]
@@ -44,15 +79,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Detect changed (added/modified) post files
         id: changed-posts
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.event.after }}
         run: |
           echo "Detecting added/modified post files in this push..."
-          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+          if [ "$EVENT_NAME" = "push" ] && [ -n "$BEFORE_SHA" ] && git rev-parse "$BEFORE_SHA" >/dev/null 2>&1; then
+            echo "Using push-event range: $BEFORE_SHA -> $AFTER_SHA"
+            git diff --name-only --diff-filter=ACMR "$BEFORE_SHA" "$AFTER_SHA" -- 'src/content/posts/*.md' 'src/content/posts/*.mdx' > /tmp/changed-posts.txt || true
+          elif git rev-parse HEAD~1 >/dev/null 2>&1; then
+            echo "Falling back to HEAD~1..HEAD range."
             git diff --name-only --diff-filter=ACMR HEAD~1 HEAD -- 'src/content/posts/*.md' 'src/content/posts/*.mdx' > /tmp/changed-posts.txt || true
           else
             echo "No parent commit found - skipping diff-based detection."
@@ -62,9 +105,17 @@ jobs:
           cat /tmp/changed-posts.txt 2>/dev/null || echo "(none)"
       - name: Detect deleted post files
         id: deleted-posts
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.event.after }}
         run: |
           echo "Detecting deleted post files in this push..."
-          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+          if [ "$EVENT_NAME" = "push" ] && [ -n "$BEFORE_SHA" ] && git rev-parse "$BEFORE_SHA" >/dev/null 2>&1; then
+            echo "Using push-event range: $BEFORE_SHA -> $AFTER_SHA"
+            git diff --name-only --diff-filter=D "$BEFORE_SHA" "$AFTER_SHA" -- 'src/content/posts/*.md' 'src/content/posts/*.mdx' > /tmp/deleted-posts.txt || true
+          elif git rev-parse HEAD~1 >/dev/null 2>&1; then
+            echo "Falling back to HEAD~1..HEAD range."
             git diff --name-only --diff-filter=D HEAD~1 HEAD -- 'src/content/posts/*.md' 'src/content/posts/*.mdx' > /tmp/deleted-posts.txt || true
           else
             echo "No parent commit found - skipping diff-based detection."
@@ -88,14 +139,54 @@ jobs:
           const postSlugs = new Set();
           const categorySlugs = new Set();
           const tagSlugs = new Set();
+          // Astro's actual slugify convention (github-slugger based,
+          // see src/lib/utils/textConverter.ts) lowercases and dashes
+          // the value. Frontmatter values may contain capital letters,
+          // spaces, or underscores (e.g. "Web_Dev Story"), so this
+          // normalizes each raw extracted item to match the real, live
+          // /categories/{slug}/ and /tags/{slug}/ URL structure before
+          // it is used to build a submission URL below. Underscore is
+          // preserved in the character class (previously stripped),
+          // consecutive dashes are collapsed to one, and leading/
+          // trailing dashes are trimmed to avoid malformed URLs like
+          // "web--dev-" from spacing inconsistencies in frontmatter.
+          function slugifyValue(value) {
+            return value
+              .toLowerCase()
+              .trim()
+              .replace(/\s+/g, '-')
+              .replace(/[^a-z0-9\u0D80-\u0DFF_-]/g, '')
+              .replace(/-{2,}/g, '-')
+              .replace(/^-+|-+$/g, '');
+          }
+          // Supports two frontmatter array formats:
+          //   1. Inline:      categories: ["a", "b"]
+          //   2. YAML block:  categories:
+          //                     - a
+          //                     - "b"
+          // Inline format is tried first (most common in this repo's
+          // existing content files); the block-list format is only
+          // attempted as a fallback if no inline match is found, so
+          // existing inline-array posts are completely unaffected.
           function extractArrayField(content, fieldName) {
-            const regex = new RegExp(fieldName + '\\s*:\\s*\\[([\\s\\S]*?)\\]');
-            const match = content.match(regex);
-            if (!match) return [];
-            return match[1]
-              .split(',')
-              .map((item) => item.trim().replace(/^["']|["']$/g, ''))
-              .filter(Boolean);
+            const inlineMatch = content.match(new RegExp(fieldName + '\\s*:\\s*\\[([^\\]]*)\\]'));
+            if (inlineMatch) {
+              return inlineMatch[1]
+                .split(',')
+                .map((item) => item.trim().replace(/^["']|["']$/g, ''))
+                .filter(Boolean);
+            }
+            const blockRegex = new RegExp(fieldName + '\\s*:\\s*\\n((?:[ \\t]*-[ \\t]*.+\\n?)+)');
+            const blockMatch = content.match(blockRegex);
+            if (blockMatch) {
+              return blockMatch[1]
+                .split('\n')
+                .map((line) => line.trim())
+                .filter((line) => line.startsWith('-'))
+                .map((line) => line.replace(/^-\s*/, '').trim().replace(/^["']|["']$/g, ''))
+                .filter(Boolean);
+            }
+            return [];
           }
           for (const filePath of changedFiles) {
             const base = basename(filePath);
@@ -104,8 +195,14 @@ jobs:
             const slug = base.replace(/\.[^.]+$/, '');
             postSlugs.add(slug);
             const content = readFileSync(filePath, 'utf-8');
-            extractArrayField(content, 'categories').forEach((c) => categorySlugs.add(c));
-            extractArrayField(content, 'tags').forEach((t) => tagSlugs.add(t));
+            extractArrayField(content, 'categories').forEach((c) => {
+              const s = slugifyValue(c);
+              if (s) categorySlugs.add(s);
+            });
+            extractArrayField(content, 'tags').forEach((t) => {
+              const s = slugifyValue(t);
+              if (s) tagSlugs.add(s);
+            });
           }
           console.log('Posts:', [...postSlugs].join(', ') || '(none)');
           console.log('Categories:', [...categorySlugs].join(', ') || '(none)');
@@ -168,15 +265,20 @@ jobs:
           const tagSlugs = (process.env.TAG_SLUGS || '').trim().split(/\s+/).filter(Boolean);
           const deletedSlugs = (process.env.DELETED_SLUGS || '').trim().split(/\s+/).filter(Boolean);
           const MAX_URLS_PER_RUN = 100;
+          const SUBMIT_CONCURRENCY = 5;
           const postUrls = postSlugs.map((slug) => `https://www.walakatha.net/blog/${slug}/`);
           const categoryUrls = categorySlugs.map((slug) => `https://www.walakatha.net/categories/${slug}/`);
           const tagUrls = tagSlugs.map((slug) => `https://www.walakatha.net/tags/${slug}/`);
           let updateUrls = [...new Set([...postUrls, ...categoryUrls, ...tagUrls])];
           let deleteUrls = [...new Set(deletedSlugs.map((slug) => `https://www.walakatha.net/blog/${slug}/`))];
-          // Safety: deleted post URL එකක්ම accidentally update list එකේත්
-          // ආවොත් (edge case), delete list එකෙන් priority දෙනවා - update
-          // list එකෙන් ඒක ඉවත් කරනවා.
+          // Bidirectional conflict resolution: a URL scheduled for
+          // deletion must never also be submitted as an update within
+          // the same run, and vice versa. Filtering both directions
+          // guarantees the delete signal always wins regardless of
+          // which list a URL happened to land in first.
+          updateUrls = updateUrls.filter((url) => !deleteUrls.includes(url));
           deleteUrls = deleteUrls.filter((url) => !updateUrls.includes(url));
+          deleteUrls = [...new Set(deleteUrls)];
           if (updateUrls.length === 0 && deleteUrls.length === 0) {
             console.log('No URLs to submit.');
             process.exit(0);
@@ -212,20 +314,35 @@ jobs:
               console.error('FAILED (' + type + '): ' + url + ' -> ' + err.message);
             }
           }
+          // Bounded worker-pool concurrency: instead of a strict
+          // serial loop with a fixed 1000ms delay per URL (which
+          // scaled linearly with URL count, e.g. ~50-60s for 50
+          // URLs), a small fixed number of workers (SUBMIT_CONCURRENCY)
+          // pull from a shared queue and submit in parallel. Google's
+          // Indexing API quota is enforced per-day, not per-second, so
+          // bounded parallelism here does not risk hitting a rate
+          // limit any differently than serial submission would - it
+          // only changes wall-clock run time.
+          async function submitQueue(urls, type) {
+            let index = 0;
+            async function worker() {
+              while (index < urls.length) {
+                const current = index++;
+                await submitUrl(urls[current], type);
+              }
+            }
+            const workerCount = Math.min(SUBMIT_CONCURRENCY, urls.length);
+            const workers = Array.from({ length: workerCount }, () => worker());
+            await Promise.all(workers);
+          }
           (async () => {
             console.log(
               'Submitting ' + updateUrls.length + ' updated URL(s) [' +
               postUrls.length + ' post(s), ' + categoryUrls.length + ' category page(s), ' +
               tagUrls.length + ' tag page(s)] and ' + deleteUrls.length + ' deleted URL(s)'
             );
-            for (const url of updateUrls) {
-              await submitUrl(url, 'URL_UPDATED');
-              await new Promise((r) => setTimeout(r, 1000));
-            }
-            for (const url of deleteUrls) {
-              await submitUrl(url, 'URL_DELETED');
-              await new Promise((r) => setTimeout(r, 1000));
-            }
+            await submitQueue(updateUrls, 'URL_UPDATED');
+            await submitQueue(deleteUrls, 'URL_DELETED');
           })();
           EOF
       - name: No changes detected
