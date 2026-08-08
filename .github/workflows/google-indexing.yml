@@ -2,6 +2,19 @@ name: Google Indexing API Auto-Submit
 # මෙම workflow එක post files add/modify වුනාම විතරක් run වේ
 # (site-wide convention එකම - optimize-images.yml, indexnow-ping.yml
 # වගේ paths filter එකක් සමගින්)
+#
+# FIXED (npm ERESOLVE build failure): googleapis package එක කලින්
+# root project එකේම (package.json/node_modules) install කරපු නිසා,
+# npm එකට root project එකේ මුළු dependency tree එකම resolve කරන්න
+# සිද්ධ වුනා. ඒ ගමන් astro-auto-import@0.5.1 (peer: astro ^5/^6)
+# සහ astro@7.1.0 අතර දැනටමත් තිබෙන known incompatibility එක නිසා
+# ERESOLVE error එකක් ඇතිවුනා - googleapis එකට කිසිම සම්බන්ධයක් නැති
+# unrelated conflict එකක්. optimize-images.yml (Sharp install) එකේම
+# established pattern එකම දැන් මෙතනටත් apply කර ඇත - isolated /tmp
+# folder එකක වෙනම package.json එකක් හදලා, ඒකේම googleapis install
+# කරයි. මෙයින් root project එකේ package.json/node_modules කිසිවකට
+# කිසිසේත් touch වෙන්නේ නැති නිසා, dependency conflict එකම
+# permanent ලෙස වළක්වයි.
 on:
   push:
     branches: [main]
@@ -43,9 +56,13 @@ jobs:
           done
           echo "slugs=$SLUGS" >> "$GITHUB_OUTPUT"
           echo "Detected post slugs: $SLUGS"
-      - name: Install googleapis package
+      - name: Install googleapis in isolated temp folder
         if: steps.changed-posts.outputs.slugs != ''
-        run: npm install googleapis@144 --no-save
+        run: |
+          mkdir -p /tmp/google-indexing-tool
+          cd /tmp/google-indexing-tool
+          npm init -y
+          npm install googleapis@144
       - name: Submit URLs to Google Indexing API
         if: steps.changed-posts.outputs.slugs != ''
         env:
@@ -53,7 +70,9 @@ jobs:
           POST_SLUGS: ${{ steps.changed-posts.outputs.slugs }}
         run: |
           node --input-type=module << 'EOF'
-          import { google } from 'googleapis';
+          import { createRequire } from 'module';
+          const require = createRequire('/tmp/google-indexing-tool/package.json');
+          const { google } = require('googleapis');
 
           const key = JSON.parse(process.env.GOOGLE_INDEXING_KEY);
           const slugs = process.env.POST_SLUGS.trim().split(/\s+/).filter(Boolean);
@@ -92,7 +111,6 @@ jobs:
           (async () => {
             for (const url of urls) {
               await submitUrl(url);
-              // API rate limit safety - small delay between requests
               await new Promise((r) => setTimeout(r, 1000));
             }
           })();
