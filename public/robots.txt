@@ -45,3 +45,4 @@ Disallow: /api/*
 
 Sitemap: https://www.walakatha.net/sitemap-index.xml
 Sitemap: https://www.walakatha.net/news-sitemap.xml
+Sitemap: https://www.walakatha.net/image-sitemap.xml
