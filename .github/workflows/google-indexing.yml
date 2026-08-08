@@ -3,18 +3,20 @@ name: Google Indexing API Auto-Submit
 # (site-wide convention එකම - optimize-images.yml, indexnow-ping.yml
 # වගේ paths filter එකක් සමගින්)
 #
-# FIXED (npm ERESOLVE build failure): googleapis package එක කලින්
-# root project එකේම (package.json/node_modules) install කරපු නිසා,
-# npm එකට root project එකේ මුළු dependency tree එකම resolve කරන්න
-# සිද්ධ වුනා. ඒ ගමන් astro-auto-import@0.5.1 (peer: astro ^5/^6)
-# සහ astro@7.1.0 අතර දැනටමත් තිබෙන known incompatibility එක නිසා
-# ERESOLVE error එකක් ඇතිවුනා - googleapis එකට කිසිම සම්බන්ධයක් නැති
-# unrelated conflict එකක්. optimize-images.yml (Sharp install) එකේම
-# established pattern එකම දැන් මෙතනටත් apply කර ඇත - isolated /tmp
-# folder එකක වෙනම package.json එකක් හදලා, ඒකේම googleapis install
-# කරයි. මෙයින් root project එකේ package.json/node_modules කිසිවකට
-# කිසිසේත් touch වෙන්නේ නැති නිසා, dependency conflict එකම
-# permanent ලෙස වළක්වයි.
+# UPGRADED: post URL එකට අමතරව, changed post එකේ frontmatter තියෙන
+# categories/tags array එකෙන් අදාළ /categories/{slug}/ සහ /tags/{slug}/
+# page URLs ටිකත් extract කරලා Google Indexing API එකටම submit කරයි.
+# මෙයින් post එකක් add/edit වුනාම, එයාගේ category/tag listing pages
+# වලත් content එක වෙනස් වුනා කියලා Google ට signal එකක් යයි.
+#
+# NOTE: Google Indexing API එක officially JobPosting/BroadcastEvent
+# structured data content සඳහාම කියලා Google ගේ Terms of Service එකේ
+# සඳහන් වෙතත්, practical වශයෙන් අනිත් page types වලටත් crawl-priority
+# hint එකක් විදිහට වැඩ කරනවා. ඒක guaranteed indexing එකක් නෙවෙයි.
+#
+# googleapis package එක root project එකට touch නොකර, isolated /tmp
+# folder එකක install කරයි - optimize-images.yml (Sharp) එකේම pattern
+# එකම, root package.json/node_modules dependency conflict වළක්වයි.
 on:
   push:
     branches: [main]
@@ -33,41 +35,85 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Detect changed/new post files
+      - name: Detect changed post files
         id: changed-posts
         run: |
           echo "Detecting changed post files in this push..."
           if git rev-parse HEAD~1 >/dev/null 2>&1; then
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD -- 'src/content/posts/*.md' 'src/content/posts/*.mdx' || echo "")
+            git diff --name-only HEAD~1 HEAD -- 'src/content/posts/*.md' 'src/content/posts/*.mdx' > /tmp/changed-posts.txt || true
           else
             echo "No parent commit found - skipping diff-based detection."
-            CHANGED_FILES=""
+            : > /tmp/changed-posts.txt
           fi
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
-          SLUGS=""
-          for f in $CHANGED_FILES; do
-            base=$(basename "$f")
-            slug="${base%.*}"
-            if [[ "$slug" == -* ]]; then
-              continue
-            fi
-            SLUGS="$SLUGS $slug"
-          done
-          echo "slugs=$SLUGS" >> "$GITHUB_OUTPUT"
-          echo "Detected post slugs: $SLUGS"
+          echo "---- Changed post files ----"
+          cat /tmp/changed-posts.txt 2>/dev/null || echo "(none)"
+      - name: Extract post slugs categories and tags
+        id: extract
+        run: |
+          node --input-type=module << 'EOF'
+          import { readFileSync, existsSync, appendFileSync } from 'fs';
+          import { basename } from 'path';
+
+          const changedFilesRaw = existsSync('/tmp/changed-posts.txt')
+            ? readFileSync('/tmp/changed-posts.txt', 'utf-8')
+            : '';
+          const changedFiles = changedFilesRaw
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+
+          const postSlugs = new Set();
+          const categorySlugs = new Set();
+          const tagSlugs = new Set();
+
+          function extractArrayField(content, fieldName) {
+            const regex = new RegExp(fieldName + '\\s*:\\s*\\[([\\s\\S]*?)\\]');
+            const match = content.match(regex);
+            if (!match) return [];
+            return match[1]
+              .split(',')
+              .map((item) => item.trim().replace(/^["']|["']$/g, ''))
+              .filter(Boolean);
+          }
+
+          for (const filePath of changedFiles) {
+            const base = basename(filePath);
+            if (base.startsWith('-')) continue;
+            if (!existsSync(filePath)) continue;
+
+            const slug = base.replace(/\.[^.]+$/, '');
+            postSlugs.add(slug);
+
+            const content = readFileSync(filePath, 'utf-8');
+            extractArrayField(content, 'categories').forEach((c) => categorySlugs.add(c));
+            extractArrayField(content, 'tags').forEach((t) => tagSlugs.add(t));
+          }
+
+          console.log('Posts:', [...postSlugs].join(', ') || '(none)');
+          console.log('Categories:', [...categorySlugs].join(', ') || '(none)');
+          console.log('Tags:', [...tagSlugs].join(', ') || '(none)');
+
+          const output =
+            'post_slugs=' + [...postSlugs].join(' ') + '\n' +
+            'category_slugs=' + [...categorySlugs].join(' ') + '\n' +
+            'tag_slugs=' + [...tagSlugs].join(' ') + '\n';
+
+          appendFileSync(process.env.GITHUB_OUTPUT, output);
+          EOF
       - name: Install googleapis in isolated temp folder
-        if: steps.changed-posts.outputs.slugs != ''
+        if: steps.extract.outputs.post_slugs != '' || steps.extract.outputs.category_slugs != '' || steps.extract.outputs.tag_slugs != ''
         run: |
           mkdir -p /tmp/google-indexing-tool
           cd /tmp/google-indexing-tool
           npm init -y
           npm install googleapis@144
       - name: Submit URLs to Google Indexing API
-        if: steps.changed-posts.outputs.slugs != ''
+        if: steps.extract.outputs.post_slugs != '' || steps.extract.outputs.category_slugs != '' || steps.extract.outputs.tag_slugs != ''
         env:
           GOOGLE_INDEXING_KEY: ${{ secrets.GOOGLE_INDEXING_KEY }}
-          POST_SLUGS: ${{ steps.changed-posts.outputs.slugs }}
+          POST_SLUGS: ${{ steps.extract.outputs.post_slugs }}
+          CATEGORY_SLUGS: ${{ steps.extract.outputs.category_slugs }}
+          TAG_SLUGS: ${{ steps.extract.outputs.tag_slugs }}
         run: |
           node --input-type=module << 'EOF'
           import { createRequire } from 'module';
@@ -75,14 +121,27 @@ jobs:
           const { google } = require('googleapis');
 
           const key = JSON.parse(process.env.GOOGLE_INDEXING_KEY);
-          const slugs = process.env.POST_SLUGS.trim().split(/\s+/).filter(Boolean);
+          const postSlugs = (process.env.POST_SLUGS || '').trim().split(/\s+/).filter(Boolean);
+          const categorySlugs = (process.env.CATEGORY_SLUGS || '').trim().split(/\s+/).filter(Boolean);
+          const tagSlugs = (process.env.TAG_SLUGS || '').trim().split(/\s+/).filter(Boolean);
 
-          if (slugs.length === 0) {
-            console.log('No slugs to submit.');
+          const MAX_URLS_PER_RUN = 100;
+
+          const postUrls = postSlugs.map((slug) => `https://www.walakatha.net/blog/${slug}/`);
+          const categoryUrls = categorySlugs.map((slug) => `https://www.walakatha.net/categories/${slug}/`);
+          const tagUrls = tagSlugs.map((slug) => `https://www.walakatha.net/tags/${slug}/`);
+
+          let urls = [...new Set([...postUrls, ...categoryUrls, ...tagUrls])];
+
+          if (urls.length === 0) {
+            console.log('No URLs to submit.');
             process.exit(0);
           }
 
-          const urls = slugs.map((slug) => `https://www.walakatha.net/blog/${slug}/`);
+          if (urls.length > MAX_URLS_PER_RUN) {
+            console.warn('URL count ' + urls.length + ' exceeds per-run cap ' + MAX_URLS_PER_RUN + '. Trimming.');
+            urls = urls.slice(0, MAX_URLS_PER_RUN);
+          }
 
           const jwtClient = new google.auth.JWT(
             key.client_email,
@@ -102,19 +161,20 @@ jobs:
                   type: 'URL_UPDATED',
                 },
               });
-              console.log(`OK: ${url} -> status ${res.status}`);
+              console.log('OK: ' + url + ' -> status ' + res.status);
             } catch (err) {
-              console.error(`FAILED: ${url} -> ${err.message}`);
+              console.error('FAILED: ' + url + ' -> ' + err.message);
             }
           }
 
           (async () => {
+            console.log('Submitting ' + urls.length + ' URL(s): ' + postUrls.length + ' post(s), ' + categoryUrls.length + ' category page(s), ' + tagUrls.length + ' tag page(s)');
             for (const url of urls) {
               await submitUrl(url);
               await new Promise((r) => setTimeout(r, 1000));
             }
           })();
           EOF
-      - name: No changed posts detected
-        if: steps.changed-posts.outputs.slugs == ''
-        run: echo "No new/modified post files detected in this push - skipping Google Indexing submission."
+      - name: No changes detected
+        if: steps.extract.outputs.post_slugs == '' && steps.extract.outputs.category_slugs == '' && steps.extract.outputs.tag_slugs == ''
+        run: echo "No new/modified posts, categories, or tags detected in this push - skipping Google Indexing submission."
