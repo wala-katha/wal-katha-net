@@ -1,0 +1,102 @@
+name: Google Indexing API Auto-Submit
+# මෙම workflow එක post files add/modify වුනාම විතරක් run වේ
+# (site-wide convention එකම - optimize-images.yml, indexnow-ping.yml
+# වගේ paths filter එකක් සමගින්)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/content/posts/**"
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  submit-to-google:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Detect changed/new post files
+        id: changed-posts
+        run: |
+          echo "Detecting changed post files in this push..."
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD -- 'src/content/posts/*.md' 'src/content/posts/*.mdx' || echo "")
+          else
+            echo "No parent commit found - skipping diff-based detection."
+            CHANGED_FILES=""
+          fi
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          SLUGS=""
+          for f in $CHANGED_FILES; do
+            base=$(basename "$f")
+            slug="${base%.*}"
+            if [[ "$slug" == -* ]]; then
+              continue
+            fi
+            SLUGS="$SLUGS $slug"
+          done
+          echo "slugs=$SLUGS" >> "$GITHUB_OUTPUT"
+          echo "Detected post slugs: $SLUGS"
+      - name: Install googleapis package
+        if: steps.changed-posts.outputs.slugs != ''
+        run: npm install googleapis@144 --no-save
+      - name: Submit URLs to Google Indexing API
+        if: steps.changed-posts.outputs.slugs != ''
+        env:
+          GOOGLE_INDEXING_KEY: ${{ secrets.GOOGLE_INDEXING_KEY }}
+          POST_SLUGS: ${{ steps.changed-posts.outputs.slugs }}
+        run: |
+          node --input-type=module << 'EOF'
+          import { google } from 'googleapis';
+
+          const key = JSON.parse(process.env.GOOGLE_INDEXING_KEY);
+          const slugs = process.env.POST_SLUGS.trim().split(/\s+/).filter(Boolean);
+
+          if (slugs.length === 0) {
+            console.log('No slugs to submit.');
+            process.exit(0);
+          }
+
+          const urls = slugs.map((slug) => `https://www.walakatha.net/blog/${slug}/`);
+
+          const jwtClient = new google.auth.JWT(
+            key.client_email,
+            null,
+            key.private_key,
+            ['https://www.googleapis.com/auth/indexing'],
+            null
+          );
+
+          async function submitUrl(url) {
+            await jwtClient.authorize();
+            const indexing = google.indexing({ version: 'v3', auth: jwtClient });
+            try {
+              const res = await indexing.urlNotifications.publish({
+                requestBody: {
+                  url,
+                  type: 'URL_UPDATED',
+                },
+              });
+              console.log(`OK: ${url} -> status ${res.status}`);
+            } catch (err) {
+              console.error(`FAILED: ${url} -> ${err.message}`);
+            }
+          }
+
+          (async () => {
+            for (const url of urls) {
+              await submitUrl(url);
+              // API rate limit safety - small delay between requests
+              await new Promise((r) => setTimeout(r, 1000));
+            }
+          })();
+          EOF
+      - name: No changed posts detected
+        if: steps.changed-posts.outputs.slugs == ''
+        run: echo "No new/modified post files detected in this push - skipping Google Indexing submission."
