@@ -73,15 +73,41 @@ const hasUpdatedDate = updated && date && new Date(updated).getTime() !== new Da
 // (see ogImageUrl above), so og:image:type is always the fixed literal
 // "image/png" below instead of needing runtime detection.
 
-// BREADCRUMB DATA - single source of truth used by BOTH the JSON-LD
-// schema below AND the visible <nav> UI further down. Building one array
-// here and rendering it twice (script + nav) guarantees the visible trail
-// and the JSON-LD can never drift apart.
+// ==========================================================
+// 🎯 DYNAMIC BREADCRUMB TRAIL WITH INDEXING SIGNALS (2026-08)
+//
+// STRUCTURE: Home -> Blog -> Category -> Post Title
+//
+// WHY "Blog" POINTS AT THE HOMEPAGE: this site has no dedicated
+// /blog/ archive/listing route (blog/[single].astro only handles
+// individual posts, not a blog index) - the homepage (index.astro)
+// IS the site's post-listing/"blog roll" page. Pointing the "Blog"
+// breadcrumb node at siteUrl is therefore an accurate, real URL for
+// a genuine section of the site, not a placeholder/dead link. This
+// exact "Home and Blog share the same landing page" pattern is
+// common and fully valid under Google's BreadcrumbList structured
+// data guidelines.
+//
+// SINGLE SOURCE OF TRUTH: this same breadcrumbItems array below
+// drives BOTH the JSON-LD BreadcrumbList schema (breadcrumbSchema)
+// AND the visible <nav> breadcrumb UI further down in the template -
+// they can never desync, and adding/removing a level here
+// automatically flows through both without any other code changes
+// (the schema's itemListElement map and the UI's crumb map are both
+// fully generic over array length).
+//
+// Category URL now goes through withTrailingSlash() for consistency
+// with this site's Cloudflare Pages trailing-slash convention (every
+// other internal link/canonical URL site-wide already does this -
+// see src/lib/utils/urlHelper.ts) - this avoids an unnecessary 308
+// redirect hop on the breadcrumb's category link.
+// ==========================================================
 const breadcrumbItems = [
   { name: "මුල් පිටුව", item: siteUrl },
+  { name: "Blog", item: siteUrl },
   {
     name: categories?.[0] ? humanize(categories[0]) : "Posts",
-    item: `${siteUrl}/categories/${slugify(categories?.[0] ?? "posts")}`,
+    item: withTrailingSlash(`${siteUrl}/categories/${slugify(categories?.[0] ?? "posts")}`),
   },
   { name: title, item: postUrl },
 ];
@@ -140,39 +166,18 @@ const breadcrumbSchema = JSON.stringify({
 <section class="section !pt-6 sm:!pt-8 bg-[#010203] relative">
   <div class="container">
 
-    {/* 2026 AUTO-COLLAPSING VISIBLE BREADCRUMB UI (v3 - HEADER GAP
-        FIX & TOGGLE ICON COLOR FIX):
+    {/* 2026 AUTO-COLLAPSING VISIBLE BREADCRUMB UI (v4 - DYNAMIC
+        4-LEVEL TRAIL: Home -> Blog -> Category -> Post Title):
 
-        FIXES APPLIED (from user-reported screenshot issues, round 2):
-        1. CRITICAL FIX - HEADER-TO-TITLE GAP: The parent <section>
-           tag uses the global ".section { @apply py-20; }" utility
-           (defined in src/styles/components.css), which adds 5rem
-           (80px) of TOP padding on every page that uses this class
-           (404.astro, contact.astro, categories/[category].astro,
-           etc). In v2 this was documented as being overridden but the
-           override class was never actually added to the <section>
-           tag - that was the root cause of the large visible gap
-           between the Header and the Path/Title seen in the user's
-           screenshot. Now "!pt-6 sm:!pt-8" is applied directly on
-           THIS <section> tag only (Tailwind's "!" important-modifier
-           scopes the override to this exact element's classlist -
-           it does not touch the shared ".section" utility definition
-           itself, so every OTHER page still using ".section" for its
-           default 80px top padding is completely unaffected).
-        2. Breadcrumb wrapper spacing tightened further: "mt-1 mb-4"
-           -> "mt-0 mb-3" to remove the remaining vertical gap between
-           the (now-closer) top of the section and the Path pill, and
-           between the Path pill and the H1 title below it.
-        3. TOGGLE ICON COLOR FIX: The collapsed-state "Path" pill's
-           icon (BiMapPin) and its chevron arrow were rendering in a
-           dim white tone (text-[#F8F8FF]/70). Per user request, both
-           are now recolored to the site's signature emerald/green
-           theme color (#01AD9F, already used throughout Header.astro,
-           Logo.astro, Pagination.astro active-state, etc.) so the
-           icon stands out clearly on the dark background as either
-           green - matching the established site-wide accent color
-           convention (no new color introduced; reuses the existing
-           theme primary).
+        HREF LOGIC GENERALIZED: previously the <a href> for each
+        non-last crumb was hardcoded per-index (i === 0 ? "/" : the
+        single category URL), which only worked for exactly 3 items.
+        Now every non-last crumb's href reads directly from
+        crumb.item (already a correct, absolute URL computed once in
+        the breadcrumbItems array above) - this makes the UI fully
+        generic over however many breadcrumb levels exist, so adding
+        a "Blog" level (or any future level) never requires touching
+        this render logic again.
 
         SEO SAFETY: full breadcrumb <a> links සහ text සියල්ල DOM එකේ
         සම්පූර්ණයෙන්ම present වේ (display:none කිසිවිටෙකත් යොදා නැත) -
@@ -243,12 +248,8 @@ const breadcrumbSchema = JSON.stringify({
                         {crumb.name}
                       </span>
                     ) : (
-                      <a
-                        href={
-                          i === 0
-                            ? "/"
-                            : withTrailingSlash(`/categories/${slugify(categories?.[0] ?? "posts")}`)
-                        }
+                      
+                        href={crumb.item}
                         class="flex items-center gap-1.5 hover:text-emerald-400 transition-colors duration-200 truncate max-w-[100px] sm:max-w-none"
                       >
                         {i === 0 && <BiHomeAlt2 className="h-4 w-4 flex-shrink-0" aria-hidden="true" />}
@@ -317,7 +318,7 @@ const breadcrumbSchema = JSON.stringify({
               authors.map((a: string) => slugify(a)).includes(slugify(author.data.title))
             )
             .map((author) => (
-              <a
+              
                 href={withTrailingSlash(`/authors/${slugify(author.id)}`)}
                 class="post-meta-chip post-meta-chip-author group/author"
               >
@@ -365,7 +366,7 @@ const breadcrumbSchema = JSON.stringify({
             <BiCategoryAlt className="h-4 w-4 text-[#01AD9F] flex-shrink-0" />
             <span class="flex flex-wrap items-center gap-1.5">
               {categories.map((category: string) => (
-                <a
+                
                   href={withTrailingSlash(`/categories/${slugify(category)}`)}
                   class="rounded-full bg-white/[0.06] px-2 py-0.5 text-[12.5px] font-bold text-[#F8F8FF]/85 transition-colors duration-200 hover:bg-[#01AD9F]/15 hover:text-[#01AD9F]"
                 >
@@ -484,7 +485,7 @@ const breadcrumbSchema = JSON.stringify({
               <ul class="flex flex-wrap justify-center gap-2.5">
                 {tags.map((tag: string) => (
                   <li>
-                    <a
+                    
                       href={withTrailingSlash(`/tags/${slugify(tag)}`)}
                       class="inline-block rounded-lg bg-[#FFCC00] border border-[#FFCC00] px-4 py-2 font-black text-[#010203] text-sm hover:bg-[#E6B800] transition duration-300"
                     >
