@@ -41,6 +41,14 @@ const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 // Cloudflare Pages trailing-slash consistency: canonical tag and schema URL must match exactly.
 const canonicalUrl = `${base_url}/blog/${post.id}/`;
 
+// NEW: dynamic, auto-generated OG image path for this post
+// (/og/{slug}.png, generated at build time by src/pages/og/[slug].png.ts).
+// Passed into <Base image={...}> below so Base.astro's own generic
+// og:image/twitter:image meta block stays in sync with the
+// article-specific og:image/twitter:image tags PostSingle.astro
+// renders separately.
+const ogImagePath = `/og/${post.id}.png`;
+
 const authorName = Array.isArray(authors) && authors.length > 0 ? authors[0] : config?.metadata?.meta_author || "Admin";
 const authorSlug = globalSlugify(authorName || "");
 
@@ -62,16 +70,16 @@ const authorImageUrl = matchedAuthorEntry?.data.image
 const wordCount = post.body ? post.body.trim().split(/\s+/).filter(Boolean).length : undefined;
 
 // ImageObject (recommended over a plain string URL per Google's
-// Article/NewsArticle structured-data docs). 1200x630 matches the
-// og:image:width/height convention already used site-wide.
-const imageObject = image
-  ? {
-      "@type": "ImageObject",
-      "url": image.startsWith("http") ? image : `${base_url}${image}`,
-      "width": 1200,
-      "height": 630
-    }
-  : undefined;
+// Article/NewsArticle structured-data docs). Now points at the
+// dynamically-generated /og/{slug}.png instead of the frontmatter
+// thumbnail, so every post (even ones without a manual "image" field)
+// gets a proper social-share image.
+const imageObject = {
+  "@type": "ImageObject",
+  "url": `${base_url}${ogImagePath}`,
+  "width": 1200,
+  "height": 630
+};
 
 // keywords: reuses the same post.data.tags source already rendered
 // via <meta name="keywords"> in PostSingle.astro, so both can never
@@ -126,7 +134,7 @@ const articleSchema = {
   title={title}
   meta_title={meta_title}
   description={description}
-  image={image}
+  image={ogImagePath}
   canonical={canonicalUrl}
   isArticle={true}
 >
