@@ -7,6 +7,239 @@ import gtm from "astro-gtm-lite";
 import { defineConfig, fontProviders, sharpImageService } from "astro/config";
 import config from "./src/config/config.json";
 import theme from "./src/config/theme.json";
+
+// ==========================================================
+// 🎯 GIT-COMMIT-BASED REAL-TIME LASTMOD SYSTEM (NEW)
+//
+// ROOT CAUSE THIS SOLVES: the sitemap previously emitted zero
+// <lastmod> tags at all. Google has no signal about which URLs
+// actually changed recently, so editing a single word inside an
+// existing post never triggered a faster recrawl priority — Google
+// only re-visits on its own normal crawl schedule.
+//
+// THE FIX: instead of relying on frontmatter "date"/"updated"
+// (which authors often forget to bump on a small edit), this reads
+// the REAL git commit history of each content file directly at
+// build time via `git log -1 --format=%cI -- <file>` (strict ISO
+// 8601 committer date - the exact format <lastmod> requires). Any
+// commit that touches a file - even a one-word fix - immediately
+// updates that URL's lastmod on the next build/deploy, giving
+// Google an accurate, always-current freshness signal.
+//
+// SELF-HEALING / NEVER BREAKS THE BUILD: every git call is wrapped
+// in try/catch. If git is unavailable, the repo is a shallow clone
+// with no history for a file, or a file was never committed yet,
+// execution falls through to a safe fallback (the most recent
+// commit touching src/content/posts/, or the build's own current
+// timestamp as a last resort) - the sitemap is always valid XML,
+// never blocks or fails the Cloudflare Pages build.
+// ==========================================================
+import { execSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { slug as githubSlug } from "github-slugger";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CONTENT_DIR = path.join(__dirname, "src/content");
+
+// Per-file git commit date cache - guarantees each file's `git log`
+// command runs at most once per build, regardless of how many
+// sitemap URLs reference it.
+const gitLastModCache = new Map();
+
+function getGitLastMod(absFilePath) {
+  if (gitLastModCache.has(absFilePath)) return gitLastModCache.get(absFilePath);
+  let result = null;
+  try {
+    if (existsSync(absFilePath)) {
+      const out = execSync(`git log -1 --format=%cI -- "${absFilePath}"`, {
+        cwd: __dirname,
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+      if (out) result = out;
+    }
+  } catch {
+    // git unavailable / shallow clone / file untracked - handled by
+    // caller's fallback chain, never throws.
+    result = null;
+  }
+  gitLastModCache.set(absFilePath, result);
+  return result;
+}
+
+function findContentFile(dir, slugValue) {
+  for (const ext of [".md", ".mdx"]) {
+    const p = path.join(dir, `${slugValue}${ext}`);
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
+
+// Site-wide fallback: most recent commit touching ANY post file.
+// Used for the homepage, pagination pages, search page, and any
+// unmapped URL, so they still get a meaningful, real lastmod instead
+// of none at all.
+let siteWideLastModCache = null;
+function getSiteWideLastMod() {
+  if (siteWideLastModCache) return siteWideLastModCache;
+  try {
+    const postsDir = path.join(CONTENT_DIR, "posts");
+    const out = execSync(`git log -1 --format=%cI -- "${postsDir}"`, {
+      cwd: __dirname,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    siteWideLastModCache = out || new Date().toISOString();
+  } catch {
+    siteWideLastModCache = new Date().toISOString();
+  }
+  return siteWideLastModCache;
+}
+
+// Reuses the exact same frontmatter-array-extraction pattern already
+// proven in .github/workflows/google-indexing.yml's extractArrayField
+// (inline "categories: [a, b]" AND YAML block-list "categories:\n  - a"
+// formats), so category/tag matching here stays 100% consistent with
+// how the rest of this codebase already parses this same frontmatter.
+function extractArrayField(content, fieldName) {
+  const inlineMatch = content.match(new RegExp(fieldName + "\\s*:\\s*\\[([^\\]]*)\\]"));
+  if (inlineMatch) {
+    return inlineMatch[1]
+      .split(",")
+      .map((item) => item.trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+  }
+  const blockRegex = new RegExp(fieldName + "\\s*:\\s*\\n((?:[ \\t]*-[ \\t]*.+\\n?)+)");
+  const blockMatch = content.match(blockRegex);
+  if (blockMatch) {
+    return blockMatch[1]
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("-"))
+      .map((line) => line.replace(/^-\s*/, "").trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+  }
+  return [];
+}
+
+let postsFileListCache = null;
+function getAllPostFiles() {
+  if (postsFileListCache) return postsFileListCache;
+  const dir = path.join(CONTENT_DIR, "posts");
+  postsFileListCache = [];
+  try {
+    for (const file of readdirSync(dir)) {
+      if (!/\.(md|mdx)$/i.test(file)) continue;
+      if (file.startsWith("-")) continue; // skip -index.md system files
+      postsFileListCache.push(path.join(dir, file));
+    }
+  } catch {
+    postsFileListCache = [];
+  }
+  return postsFileListCache;
+}
+
+// Category/Tag archive pages don't map to a single file, so their
+// lastmod is the MOST RECENT commit among every post that actually
+// carries that category/tag in its frontmatter - an accurate
+// freshness signal for the archive page's real content, not a
+// hardcoded/static one.
+const taxonomyLastModCache = new Map();
+function getTaxonomyLastMod(fieldName, slugValue) {
+  const cacheKey = `${fieldName}:${slugValue}`;
+  if (taxonomyLastModCache.has(cacheKey)) return taxonomyLastModCache.get(cacheKey);
+
+  let latest = null;
+  for (const filePath of getAllPostFiles()) {
+    try {
+      const content = readFileSync(filePath, "utf-8");
+      const values = extractArrayField(content, fieldName);
+      const isMatch = values.some((v) => githubSlug(v) === slugValue);
+      if (isMatch) {
+        const d = getGitLastMod(filePath);
+        if (d && (!latest || new Date(d) > new Date(latest))) {
+          latest = d;
+        }
+      }
+    } catch {
+      // Unreadable/corrupt file - skip it, don't break the whole scan.
+    }
+  }
+  const result = latest || getSiteWideLastMod();
+  taxonomyLastModCache.set(cacheKey, result);
+  return result;
+}
+
+// Master resolver: maps a sitemap URL's pathname back to the real
+// content source(s) behind it, and returns the most accurate lastmod
+// available. Every branch has a safe fallback, so this function can
+// never return null/undefined/throw.
+function resolveLastModForUrl(pathname) {
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments.length === 0) return getSiteWideLastMod(); // homepage "/"
+
+  const EXCLUDED_FIRST_SEGMENTS = ["categories", "tags", "page", "search", "blog", "authors", "about", "contact"];
+
+  // /blog/{slug}/
+  if (segments[0] === "blog" && segments[1]) {
+    const f = findContentFile(path.join(CONTENT_DIR, "posts"), segments[1]);
+    if (f) {
+      const d = getGitLastMod(f);
+      if (d) return d;
+    }
+    return getSiteWideLastMod();
+  }
+
+  // /authors/{slug}/ (not /authors/page/N/)
+  if (segments[0] === "authors" && segments[1] && segments[1] !== "page") {
+    const f = findContentFile(path.join(CONTENT_DIR, "authors"), segments[1]);
+    if (f) {
+      const d = getGitLastMod(f);
+      if (d) return d;
+    }
+    return getSiteWideLastMod();
+  }
+
+  // /about/
+  if (segments[0] === "about") {
+    const d = getGitLastMod(path.join(CONTENT_DIR, "about", "-index.md"));
+    return d || getSiteWideLastMod();
+  }
+
+  // /contact/
+  if (segments[0] === "contact") {
+    const d = getGitLastMod(path.join(CONTENT_DIR, "contact", "-index.md"));
+    return d || getSiteWideLastMod();
+  }
+
+  // /categories/{slug}/ (not /categories/{slug}/page/N/, not /categories/ index)
+  if (segments[0] === "categories" && segments[1] && segments[1] !== "page") {
+    return getTaxonomyLastMod("categories", segments[1]);
+  }
+
+  // /tags/{slug}/ (not /tags/{slug}/page/N/, not /tags/ index)
+  if (segments[0] === "tags" && segments[1] && segments[1] !== "page") {
+    return getTaxonomyLastMod("tags", segments[1]);
+  }
+
+  // Generic top-level "pages" collection routes (/privacy-policy/,
+  // /copyright-credit-policy/, etc. - handled by [regular].astro)
+  if (segments.length === 1 && !EXCLUDED_FIRST_SEGMENTS.includes(segments[0])) {
+    const f = findContentFile(path.join(CONTENT_DIR, "pages"), segments[0]);
+    if (f) {
+      const d = getGitLastMod(f);
+      if (d) return d;
+    }
+  }
+
+  // Homepage, pagination pages, category/tag index pages, search page,
+  // and anything else unmapped - fall back to the most recent post
+  // commit site-wide.
+  return getSiteWideLastMod();
+}
+
 function parseFontString(fontStr) {
   const [name, weightPart] = fontStr.split(":");
   let weights = [400];
@@ -199,6 +432,21 @@ export default defineConfig({
           return undefined;
         }
         item.url = ensureSitemapTrailingSlash(item.url);
+        // 🎯 GIT-COMMIT-BASED REAL-TIME LASTMOD: resolves the real,
+        // most-recent commit date for whatever content backs this
+        // URL (post/page/author/about/contact file, or the newest
+        // matching post for category/tag archives), instead of a
+        // frontmatter date the author might forget to update. Wrapped
+        // defensively so a resolution failure NEVER removes/breaks an
+        // otherwise-valid sitemap entry - it simply omits lastmod for
+        // that one URL and continues.
+        try {
+          const urlObj = new URL(item.url);
+          const lastmod = resolveLastModForUrl(urlObj.pathname);
+          if (lastmod) item.lastmod = lastmod;
+        } catch {
+          // Self-healing: leave lastmod unset for this URL only.
+        }
         return item;
       },
     }),
