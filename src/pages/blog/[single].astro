@@ -28,19 +28,7 @@ const { title, meta_title, image, description, date, updated, authors, tags } = 
 const parsedDate = date ? new Date(date) : null;
 const safeDateISO = parsedDate && isValid(parsedDate) ? parsedDate.toISOString() : new Date().toISOString();
 
-// ✅ FIXED: dateModified was previously hardcoded to safeDateISO (the
-// publish date) regardless of whether the post's optional "updated"
-// frontmatter field was set. PostSingle.astro already computes
-// hasUpdatedDate and shows an "Updated: X" badge in the UI using this
-// same field, but this file's NewsArticle JSON-LD schema was silently
-// ignoring it — so Google's structured data always reported the
-// article as "modified" on its original publish date even when the
-// UI told readers it had been updated. This is now derived the same
-// way PostSingle.astro derives hasUpdatedDate (comparing timestamps,
-// not just presence, since some CMS flows can set updated === date),
-// and dateModified falls back to safeDateISO when there's no genuine
-// update — so existing posts without an "updated" field are
-// completely unaffected.
+// dateModified derivation: only true if "updated" genuinely differs from "date" (not just present).
 const parsedUpdated = updated ? new Date(updated) : null;
 const hasGenuineUpdate =
   parsedUpdated && isValid(parsedUpdated) && parsedDate && isValid(parsedDate)
@@ -50,62 +38,32 @@ const safeUpdatedISO = hasGenuineUpdate ? parsedUpdated!.toISOString() : safeDat
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 
-// 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY:
-// Base.astro auto-appends a trailing slash to <link rel="canonical">
-// (Cloudflare Pages serves directory-style URLs with a trailing slash
-// by default). This local canonicalUrl is also embedded directly inside
-// the JSON-LD Article schema's mainEntityOfPage.@id below, bypassing
-// Base.astro's trailing-slash logic, so we add the slash here too to
-// keep both in sync. NOTE: PostSingle.astro's own postUrl (used for
-// og:url / social share links) is built independently from
-// Astro.site + post.id and is NOT affected by this change.
+// Cloudflare Pages trailing-slash consistency: canonical tag and schema URL must match exactly.
 const canonicalUrl = `${base_url}/blog/${post.id}/`;
 
 const authorName = Array.isArray(authors) && authors.length > 0 ? authors[0] : config?.metadata?.meta_author || "Admin";
 const authorSlug = globalSlugify(authorName || "");
 
-// 🎯 2026 SCHEMA UPGRADE: BlogPosting -> NewsArticle
-// (Google News Top Stories / Discover Readiness)
-//
-// මීට කලින් මෙතන "@type": "BlogPosting" විදිහට තිබුණි. BlogPosting සහ
-// NewsArticle දෙකම schema.org හි structurally සමාන subtypes (දෙකම
-// CreativeWork -> Article -> ... hierarchy එකේ), ඒත් Google News
-// crawler එකට සහ Top Stories carousel එකට content එකක් eligible වෙන්න
-// "@type" field එකේ NewsArticle (හෝ ReportageNewsArticle) කියලා
-// explicit ලෙස තියෙන්න ඕනේ කියලා Google ගේ Structured Data
-// documentation එකේම සඳහන් වෙනවා — BlogPosting type එකෙන් News
-// crawler එකට content එක recognize වෙන්නේ නෑ.
-//
-// ⚠️ IMPORTANT NOTE: මේ schema upgrade එක තනිවම Google News Top
-// Stories / Discover feed එකට qualify වීම guarantee කරන්නේ නෑ —
-// eligibility එකට Google News Publisher Center registration එකක්,
-// සහ content policy compliance එකක් අවශ්‍යයි (මේවා schema markup
-// එකෙන් වෙන්නේ නෑ). මේ upgrade එකෙන් කරන්නේ, ඉදිරියේදී site එක
-// policy-compliant උනාට පස්සේ Publisher Center registration කරන
-// විට, technical structured-data requirement එක දැනටමත් සම්පූර්ණ
-// කර තියෙන එකයි.
-//
-// Field parity: NewsArticle සඳහාත් Article-family fields සියල්ලම
-// (headline, image, datePublished, dateModified, author, publisher,
-// mainEntityOfPage) එලෙසම valid — කිසිම field එකක් වෙනස් කිරීමට/
-// ඉවත් කිරීමට අවශ්‍ය නොවීය, "@type" value එක විතරක් වෙනස් විය.
+// NEW: author image lookup for the Person schema below (E-E-A-T
+// enhancement). Reuses the same slugify-match pattern PostSingle.astro
+// already uses to resolve an author frontmatter name against the
+// authors content collection - a pattern already proven safe/working
+// on this codebase, so no new matching logic is introduced here.
+const allAuthors = await getSinglePage("authors");
+const matchedAuthorEntry = allAuthors.find(
+  (a) => globalSlugify(a.data.title || "") === authorSlug
+);
+const authorImageUrl = matchedAuthorEntry?.data.image
+  ? matchedAuthorEntry.data.image.startsWith("http")
+    ? matchedAuthorEntry.data.image
+    : `${base_url}${matchedAuthorEntry.data.image}`
+  : undefined;
+
 const wordCount = post.body ? post.body.trim().split(/\s+/).filter(Boolean).length : undefined;
 
-// 🎯 2026 SCHEMA UPGRADE: ImageObject (instead of plain string URL)
-// Google ගේ Article/NewsArticle structured-data documentation එකේ
-// "image" field එකට plain string URL එකක් හෝ ImageObject එකක් දෙකම
-// valid, ඒත් ImageObject එකක් (width/height සමගින්) වඩාත් recommended
-// —Rich Results Test tool එකේදී image dimensions validate කිරීමට
-// පුළුවන් වෙනවා, සහ Google Discover/Images සඳහා image quality
-// signal එකක් ලෙසත් සලකනු ලැබිය හැක.
-//
-// 1200x630 dimensions (Open Graph image-size convention එකටම
-// ගැලපෙන standard) hardcode කර ඇත්තේ, astro:assets processing එකෙන්
-// පසු actual runtime dimensions මෙම schema-generation code point
-// එකට ලබාගත නොහැකි නිසා (build-time image optimization pipeline
-// එකෙන් වෙනස් context එකක). මෙය Base.astro/PostSingle.astro හි
-// දැනටමත් පවතින og:image:width/height (1200x630) අගයන්ටම සමානව
-// consistency පවත්වා ගනී.
+// ImageObject (recommended over a plain string URL per Google's
+// Article/NewsArticle structured-data docs). 1200x630 matches the
+// og:image:width/height convention already used site-wide.
 const imageObject = image
   ? {
       "@type": "ImageObject",
@@ -115,92 +73,23 @@ const imageObject = image
     }
   : undefined;
 
-// ==========================================================
-// 🎯 NEW (SEO Enhancement Pass #2): "keywords" field for Article/
-// NewsArticle schema.
-//
-// WHY: Google's structured-data documentation lists "keywords" as a
-// recommended (though not required) NewsArticle/Article property —
-// it gives search engines an explicit, machine-readable topic signal
-// distinct from the free-text headline/description, which can aid
-// topical relevance matching for News/Discover surfaces. This site
-// already computes a tags array from the same post frontmatter used
-// by <meta name="keywords"> in PostSingle.astro (tags?.join(", ")) —
-// reusing that exact same source of truth here guarantees the schema
-// keywords and the visible <meta name="keywords"> tag (already
-// rendered by PostSingle.astro) can never drift out of sync, since
-// both are derived from the identical post.data.tags array.
-// ==========================================================
+// keywords: reuses the same post.data.tags source already rendered
+// via <meta name="keywords"> in PostSingle.astro, so both can never
+// drift out of sync.
 const keywordsString = Array.isArray(tags) && tags.length > 0 ? tags.join(", ") : undefined;
 
-// ==========================================================
-// 🎯 NEW: "speakable" SpeakableSpecification (Google Assistant /
-// voice-search readiness).
-//
-// WHY: PostSingle.astro already renders two DOM elements specifically
-// built for this purpose (see PostSingle.astro's own comments at
-// id="speakable-headline" on the article <h1>, and
-// id="speakable-summary" on a visually-hidden (sr-only) <p> holding
-// the post description) — both were added in anticipation of this
-// schema field, but the field itself was never actually added here,
-// so Google's Rich Results Test showed no "Speakable" detection at
-// all despite the DOM already being ready for it.
-//
-// A schema.org "speakable" property can only point via cssSelector to
-// content that genuinely exists in the rendered DOM (Google explicitly
-// requires this — pointing at non-existent selectors, or selectors
-// that resolve to meta tags rather than visible/crawlable content,
-// fails validation). Both #speakable-headline and #speakable-summary
-// are real, crawlable DOM nodes (the sr-only class hides visually via
-// Tailwind's standard clip technique, not display:none/aria-hidden,
-// so it remains fully accessible to crawlers/screen readers) — so this
-// is a fully spec-compliant pairing.
-//
-// "url" is included per Google's own documented SpeakableSpecification
-// example (id="https://schema.org/SpeakableSpecification" is a fixed,
-// canonical value from the spec itself, not a per-page value) so
-// third-party consumers/validators that expect a fully-qualified
-// speakable block resolve correctly. canonicalUrl is reused as-is
-// (already trailing-slash-normalized above) to guarantee this can
-// never drift from mainEntityOfPage.@id.
-// ==========================================================
+// speakable: points at the two real, crawlable DOM nodes
+// PostSingle.astro already renders for this purpose
+// (#speakable-headline on the article H1, #speakable-summary on the
+// sr-only description paragraph).
 const speakableSpecification = {
   "@type": "SpeakableSpecification",
   "cssSelector": ["#speakable-headline", "#speakable-summary"]
 };
 
-// 🎯 FIXED (Duplicate/Conflicting Organization Entity — Cross-File
-// Consistency): මීට කලින් මෙතන "publisher" field එක වෙනම, inline
-// Organization object එකක් (@id කිසිවක් නැතුව, broken "logo.png" path
-// එකක් සමග) define කරමින් තිබුණි. index.astro හි homePageSchema එකේ
-// "${base_url}/#organization" කියන @id එකෙන් දැනටමත් සම්පූර්ණ, correct
-// Organization entity එකක් (logo.webp සමග) define වී ඇති නිසා, මෙතන
-// duplicate/conflicting definition එකක් වෙනුවට එකම @id එකට reference
-// එකක් පමණක් දෙයි. මෙය Google entity graph එකට site පුරාම එකම
-// Organization එක එකම, consistent data set එකක් ලෙස පෙනීමට සලස්වයි.
-//
-// 🎯 AI VISIBILITY UPGRADE (2026-07 — Option 2, Per-Post AI-Citation
-// Readiness): three additive fields, all standard schema.org
-// CreativeWork/Article properties, added to give AI answer engines
-// (Google AI Overviews, ChatGPT, Perplexity, Claude) explicit,
-// machine-readable signals when deciding whether/how to cite an
-// individual story:
-//   - "inLanguage": "si" — explicitly declares this ARTICLE's language
-//     (not just the page-level <html lang="si">, which AI content
-//     extractors don't always parse). Article-level inLanguage is a
-//     directly-documented schema.org CreativeWork property and helps
-//     multi-lingual-aware AI systems route/attribute the content
-//     correctly without guessing from raw text.
-//   - "isAccessibleForFree": true — a documented Google/schema.org
-//     signal indicating this content isn't paywalled, which AI
-//     citation/indexing pipelines use to decide whether full-content
-//     summarization is appropriate (vs. snippet-only for paywalled
-//     content).
-//   - "license" — points to this site's own Copyright & Credit Policy
-//     page (the single source of truth for content ownership/reuse
-//     terms — see src/content/pages/copyright-credit-policy.md and
-//     public/ai.txt), giving AI systems an explicit, crawlable license
-//     reference instead of leaving reuse-rights ambiguous.
+// publisher references the single, authoritative Organization entity
+// defined once (with logo.webp + sameAs) on index.astro via @id - no
+// duplicate/conflicting inline Organization object here.
 const articleSchema = {
   "@context": "https://schema.org",
   "@type": "NewsArticle",
@@ -215,7 +104,8 @@ const articleSchema = {
   "author": {
     "@type": "Person",
     "name": authorName,
-    "url": authorSlug ? `${base_url}/authors/${authorSlug}/` : undefined
+    "url": authorSlug ? `${base_url}/authors/${authorSlug}/` : undefined,
+    "image": authorImageUrl
   },
   "publisher": { "@id": `${base_url}/#organization` },
   "mainEntityOfPage": {
@@ -240,7 +130,7 @@ const articleSchema = {
   canonical={canonicalUrl}
   isArticle={true}
 >
-  {/* ✅ isArticle={true} — Base.astro duplicate OG/Twitter/robots tags render නොකරයි */}
+  {/* isArticle={true} - Base.astro duplicate OG/Twitter/robots tags render නොකරයි */}
   <script type="application/ld+json" set:html={JSON.stringify(articleSchema)} />
   <PostSingle post={post} />
 </Base>
