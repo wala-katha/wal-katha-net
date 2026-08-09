@@ -7,7 +7,7 @@ import gtm from "astro-gtm-lite";
 import { defineConfig, fontProviders, sharpImageService } from "astro/config";
 import config from "./src/config/config.json";
 import theme from "./src/config/theme.json";
-
+import remarkAutoInternalLinks from "./src/lib/remarkAutoInternalLinks.mjs";
 // ==========================================================
 // 🎯 GIT-COMMIT-BASED REAL-TIME LASTMOD SYSTEM (NEW)
 //
@@ -39,15 +39,12 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { slug as githubSlug } from "github-slugger";
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONTENT_DIR = path.join(__dirname, "src/content");
-
 // Per-file git commit date cache - guarantees each file's `git log`
 // command runs at most once per build, regardless of how many
 // sitemap URLs reference it.
 const gitLastModCache = new Map();
-
 function getGitLastMod(absFilePath) {
   if (gitLastModCache.has(absFilePath)) return gitLastModCache.get(absFilePath);
   let result = null;
@@ -68,7 +65,6 @@ function getGitLastMod(absFilePath) {
   gitLastModCache.set(absFilePath, result);
   return result;
 }
-
 function findContentFile(dir, slugValue) {
   for (const ext of [".md", ".mdx"]) {
     const p = path.join(dir, `${slugValue}${ext}`);
@@ -76,7 +72,6 @@ function findContentFile(dir, slugValue) {
   }
   return null;
 }
-
 // Site-wide fallback: most recent commit touching ANY post file.
 // Used for the homepage, pagination pages, search page, and any
 // unmapped URL, so they still get a meaningful, real lastmod instead
@@ -97,7 +92,6 @@ function getSiteWideLastMod() {
   }
   return siteWideLastModCache;
 }
-
 // Reuses the exact same frontmatter-array-extraction pattern already
 // proven in .github/workflows/google-indexing.yml's extractArrayField
 // (inline "categories: [a, b]" AND YAML block-list "categories:\n  - a"
@@ -123,7 +117,6 @@ function extractArrayField(content, fieldName) {
   }
   return [];
 }
-
 let postsFileListCache = null;
 function getAllPostFiles() {
   if (postsFileListCache) return postsFileListCache;
@@ -140,7 +133,6 @@ function getAllPostFiles() {
   }
   return postsFileListCache;
 }
-
 // Category/Tag archive pages don't map to a single file, so their
 // lastmod is the MOST RECENT commit among every post that actually
 // carries that category/tag in its frontmatter - an accurate
@@ -150,7 +142,6 @@ const taxonomyLastModCache = new Map();
 function getTaxonomyLastMod(fieldName, slugValue) {
   const cacheKey = `${fieldName}:${slugValue}`;
   if (taxonomyLastModCache.has(cacheKey)) return taxonomyLastModCache.get(cacheKey);
-
   let latest = null;
   for (const filePath of getAllPostFiles()) {
     try {
@@ -171,7 +162,6 @@ function getTaxonomyLastMod(fieldName, slugValue) {
   taxonomyLastModCache.set(cacheKey, result);
   return result;
 }
-
 // Master resolver: maps a sitemap URL's pathname back to the real
 // content source(s) behind it, and returns the most accurate lastmod
 // available. Every branch has a safe fallback, so this function can
@@ -179,9 +169,7 @@ function getTaxonomyLastMod(fieldName, slugValue) {
 function resolveLastModForUrl(pathname) {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) return getSiteWideLastMod(); // homepage "/"
-
   const EXCLUDED_FIRST_SEGMENTS = ["categories", "tags", "page", "search", "blog", "authors", "about", "contact"];
-
   // /blog/{slug}/
   if (segments[0] === "blog" && segments[1]) {
     const f = findContentFile(path.join(CONTENT_DIR, "posts"), segments[1]);
@@ -191,7 +179,6 @@ function resolveLastModForUrl(pathname) {
     }
     return getSiteWideLastMod();
   }
-
   // /authors/{slug}/ (not /authors/page/N/)
   if (segments[0] === "authors" && segments[1] && segments[1] !== "page") {
     const f = findContentFile(path.join(CONTENT_DIR, "authors"), segments[1]);
@@ -201,29 +188,24 @@ function resolveLastModForUrl(pathname) {
     }
     return getSiteWideLastMod();
   }
-
   // /about/
   if (segments[0] === "about") {
     const d = getGitLastMod(path.join(CONTENT_DIR, "about", "-index.md"));
     return d || getSiteWideLastMod();
   }
-
   // /contact/
   if (segments[0] === "contact") {
     const d = getGitLastMod(path.join(CONTENT_DIR, "contact", "-index.md"));
     return d || getSiteWideLastMod();
   }
-
   // /categories/{slug}/ (not /categories/{slug}/page/N/, not /categories/ index)
   if (segments[0] === "categories" && segments[1] && segments[1] !== "page") {
     return getTaxonomyLastMod("categories", segments[1]);
   }
-
   // /tags/{slug}/ (not /tags/{slug}/page/N/, not /tags/ index)
   if (segments[0] === "tags" && segments[1] && segments[1] !== "page") {
     return getTaxonomyLastMod("tags", segments[1]);
   }
-
   // Generic top-level "pages" collection routes (/privacy-policy/,
   // /copyright-credit-policy/, etc. - handled by [regular].astro)
   if (segments.length === 1 && !EXCLUDED_FIRST_SEGMENTS.includes(segments[0])) {
@@ -233,13 +215,11 @@ function resolveLastModForUrl(pathname) {
       if (d) return d;
     }
   }
-
   // Homepage, pagination pages, category/tag index pages, search page,
   // and anything else unmapped - fall back to the most recent post
   // commit site-wide.
   return getSiteWideLastMod();
 }
-
 function parseFontString(fontStr) {
   const [name, weightPart] = fontStr.split(":");
   let weights = [400];
@@ -469,6 +449,7 @@ export default defineConfig({
     }),
   ],
   markdown: {
+    remarkPlugins: [remarkAutoInternalLinks],
     shikiConfig: { theme: "one-dark-pro", wrap: true },
   },
 });
