@@ -323,49 +323,81 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         user-drag: none;
       }
 
-      /* 🎯 SMOOTH, NON-INTRUSIVE COPY-PROTECTION TOAST — same visual
-         language as PostSingle.astro's existing "comment-success-toast"
-         (dark card, teal accent, fade + slide transition) so it feels
-         like a native part of the site rather than a jarring alert(). */
+      /* 🎯 2026-08 REDESIGN: CENTERED "COPY-BLOCKED" NOTICE CARD
+         (previously a small bottom-fixed pill toast; now a proper
+         centered, rounded card that pops into the middle of the
+         screen so it reads as a deliberate, polished notice rather
+         than a cramped strip of text at the bottom edge).
+
+         WHY CENTERED, NOT BOTTOM: a copy/select attempt happens
+         wherever the user's finger/cursor currently is on the page —
+         a bottom-pinned toast is easy to miss or overlaps the
+         floating comment button (#comment-floating-btn) on post
+         pages. A centered card is impossible to miss, matches the
+         same dark "modal card" visual language already used by
+         TrustpilotReview.astro's popup and PostSingle.astro's like
+         success toast, and disappears on its own — no dismiss button
+         needed since it is purely informational and non-blocking
+         (pointer-events: none while hidden, and the whole card is
+         intentionally compact so it never covers meaningful content
+         for long).
+
+         STRUCTURE: a rounded card (not a pill) with a soft teal-ringed
+         lock icon on top and the message centered underneath — same
+         proportions/spacing rhythm as the site's other modal/toast
+         components (#0c0d10 background, teal accent border, heavy
+         drop shadow). Animates in with a gentle scale+fade "pop"
+         (matches the like-success-toast's spring easing) and fades
+         back out automatically after NOTICE_VISIBLE_MS.
+      ========================================================== */
       #content-protection-toast {
         position: fixed;
+        top: 50%;
         left: 50%;
-        bottom: 28px;
-        transform: translate(-50%, 16px);
-        z-index: 9999;
+        z-index: 99999;
         display: flex;
+        flex-direction: column;
         align-items: center;
-        gap: 8px;
-        max-width: min(92vw, 420px);
+        gap: 12px;
+        width: min(86vw, 340px);
         background: #0c0d10;
         border: 1px solid rgba(1, 173, 159, 0.35);
         color: #F8F8FF;
-        font-size: 13px;
-        font-weight: 700;
-        line-height: 1.4;
-        padding: 12px 18px;
-        border-radius: 999px;
-        box-shadow: 0 10px 34px rgba(0, 0, 0, 0.6);
+        padding: 26px 22px 22px;
+        border-radius: 1.5rem;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.03);
+        text-align: center;
+        user-select: none;
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.3s ease, transform 0.3s ease;
-        text-align: left;
-        user-select: none;
+        transform: translate(-50%, -50%) scale(0.9);
+        transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
       }
       #content-protection-toast.show {
         opacity: 1;
-        transform: translate(-50%, 0);
+        transform: translate(-50%, -50%) scale(1);
       }
-      #content-protection-toast .cp-dot {
-        width: 8px;
-        height: 8px;
+      #content-protection-toast .cp-icon-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 48px;
+        height: 48px;
         border-radius: 999px;
-        background: #01AD9F;
+        background: rgba(1, 173, 159, 0.12);
+        border: 1px solid rgba(1, 173, 159, 0.35);
+        color: #01AD9F;
         flex-shrink: 0;
-        box-shadow: 0 0 8px rgba(1, 173, 159, 0.7);
+        box-shadow: 0 0 18px rgba(1, 173, 159, 0.25);
+      }
+      #content-protection-toast .cp-icon-wrap svg {
+        width: 22px;
+        height: 22px;
       }
       #content-protection-toast .cp-text {
-        flex: 1;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.55;
       }
     </style>
 
@@ -626,13 +658,14 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
 
     {/* ==========================================================
         🛡️ CONTENT PROTECTION — ANTI-SCRAPING BEHAVIOR LAYER
-        (Smooth Selection Restriction + Friendly Notice)
+        (Smooth Selection Restriction + Friendly Centered Notice)
 
         WHAT THIS DOES:
         - Blocks the default browser "copy" action (Ctrl+C, right-click
           → Copy, long-press → Copy on mobile) anywhere OUTSIDE form
-          fields, and shows a short, friendly, auto-fading toast
-          notice instead of a jarring native alert().
+          fields, and shows a short, friendly, auto-fading CENTERED
+          card notice instead of a jarring native alert() or a
+          bottom-pinned strip of text.
         - Blocks the native right-click context menu outside form
           fields (the #1 easy vector casual scrapers/visitors use to
           "Save As" or "Inspect → Copy").
@@ -658,7 +691,7 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
           throttle prevents the notice from spamming if a person
           repeatedly right-clicks/tries to copy.
 
-        SELF-HEALING: the toast element is created on-demand via
+        SELF-HEALING: the notice element is created on-demand via
         JavaScript (not a static DOM node), so it can never end up in
         a broken/missing state across Astro View Transitions
         (ClientRouter) page swaps — every time it's needed, if it
@@ -669,13 +702,21 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         which persists for the full SPA session regardless of
         ClientRouter page swaps — no re-registration/cleanup needed,
         since these are not tied to any specific page's DOM nodes.
+
+        2026-08 REDESIGN: the notice moved from a small bottom-fixed
+        pill to a centered, rounded modal-style card (see the
+        #content-protection-toast CSS rules above, in the earlier
+        <style> block). The DOM structure built here now includes a
+        dedicated icon wrapper (cp-icon-wrap, holding a lock SVG)
+        instead of the old small colored dot — everything else about
+        the throttle/timing/targeting logic is unchanged.
        ========================================================== */}
     <script is:inline>
       (function initContentProtection() {
         let lastNoticeAt = 0;
         const NOTICE_THROTTLE_MS = 2200;
-        const NOTICE_VISIBLE_MS = 2400;
-        const NOTICE_MESSAGE = "මෙම අන්තර්ගතය පිටපත් කිරීම වළක්වා ඇත 🔒";
+        const NOTICE_VISIBLE_MS = 2600;
+        const NOTICE_MESSAGE = "මෙම අන්තර්ගතය පිටපත් කිරීම වළක්වා ඇත";
 
         function isEditableTarget(target) {
           if (!target || !target.tagName) return false;
@@ -685,6 +726,17 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
           // Allow selection inside any element explicitly opted back in
           if (target.closest && target.closest("[data-allow-select]")) return true;
           return false;
+        }
+
+        function buildLockIconSvg() {
+          return (
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<rect x="4" y="10.5" width="16" height="9.5" rx="2.2"></rect>' +
+            '<path d="M7.5 10.5V7.2a4.5 4.5 0 019 0v3.3"></path>' +
+            '<circle cx="12" cy="14.7" r="1.4" fill="currentColor" stroke="none"></circle>' +
+            "</svg>"
+          );
         }
 
         function showProtectionNotice() {
@@ -699,14 +751,15 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
             toast.setAttribute("role", "status");
             toast.setAttribute("aria-live", "polite");
 
-            const dot = document.createElement("span");
-            dot.className = "cp-dot";
-            dot.setAttribute("aria-hidden", "true");
+            const iconWrap = document.createElement("span");
+            iconWrap.className = "cp-icon-wrap";
+            iconWrap.setAttribute("aria-hidden", "true");
+            iconWrap.innerHTML = buildLockIconSvg();
 
             const text = document.createElement("span");
             text.className = "cp-text";
 
-            toast.appendChild(dot);
+            toast.appendChild(iconWrap);
             toast.appendChild(text);
             document.body.appendChild(toast);
           }
