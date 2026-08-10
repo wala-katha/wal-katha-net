@@ -74,7 +74,7 @@ const hasUpdatedDate = updated && date && new Date(updated).getTime() !== new Da
 // "image/png" below instead of needing runtime detection.
 
 // ==========================================================
-// DYNAMIC BREADCRUMB TRAIL WITH INDEXING SIGNALS (2026-08)
+// 🎯 DYNAMIC BREADCRUMB TRAIL WITH INDEXING SIGNALS (2026-08)
 //
 // STRUCTURE: Home -> Blog -> Category -> Post Title
 //
@@ -248,7 +248,7 @@ const breadcrumbSchema = JSON.stringify({
                         {crumb.name}
                       </span>
                     ) : (
-                      
+                      <a
                         href={crumb.item}
                         class="flex items-center gap-1.5 hover:text-emerald-400 transition-colors duration-200 truncate max-w-[100px] sm:max-w-none"
                       >
@@ -318,7 +318,7 @@ const breadcrumbSchema = JSON.stringify({
               authors.map((a: string) => slugify(a)).includes(slugify(author.data.title))
             )
             .map((author) => (
-              
+              <a
                 href={withTrailingSlash(`/authors/${slugify(author.id)}`)}
                 class="post-meta-chip post-meta-chip-author group/author"
               >
@@ -366,7 +366,7 @@ const breadcrumbSchema = JSON.stringify({
             <BiCategoryAlt className="h-4 w-4 text-[#01AD9F] flex-shrink-0" />
             <span class="flex flex-wrap items-center gap-1.5">
               {categories.map((category: string) => (
-                
+                <a
                   href={withTrailingSlash(`/categories/${slugify(category)}`)}
                   class="rounded-full bg-white/[0.06] px-2 py-0.5 text-[12.5px] font-bold text-[#F8F8FF]/85 transition-colors duration-200 hover:bg-[#01AD9F]/15 hover:text-[#01AD9F]"
                 >
@@ -485,7 +485,7 @@ const breadcrumbSchema = JSON.stringify({
               <ul class="flex flex-wrap justify-center gap-2.5">
                 {tags.map((tag: string) => (
                   <li>
-                    
+                    <a
                       href={withTrailingSlash(`/tags/${slugify(tag)}`)}
                       class="inline-block rounded-lg bg-[#FFCC00] border border-[#FFCC00] px-4 py-2 font-black text-[#010203] text-sm hover:bg-[#E6B800] transition duration-300"
                     >
@@ -1263,6 +1263,7 @@ const breadcrumbSchema = JSON.stringify({
   // every click instead of only the first time the class is added.
   function replayAnimationClass(el: Element, className: string) {
     el.classList.remove(className);
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     (el as HTMLElement).offsetWidth;
     el.classList.add(className);
   }
