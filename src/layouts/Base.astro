@@ -349,7 +349,36 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
          drop shadow). Animates in with a gentle scale+fade "pop"
          (matches the like-success-toast's spring easing) and fades
          back out automatically after NOTICE_VISIBLE_MS.
+
+         🎯 2026-08 CRITICAL FIX (ROOT CAUSE — style never applying,
+         icon rendering as a giant unstyled shape shoved under the
+         footer instead of a small centered card):
+         Astro scopes every <style> block in a .astro file to ONLY
+         the elements literally written in that same file's own
+         template — it does this by compiling each selector to
+         require a hidden `data-astro-cid-*` attribute, and only
+         stamps that attribute onto elements that were part of this
+         component's server-rendered output. #content-protection-toast
+         is never written in this template at all — it is created
+         entirely at RUNTIME by the initContentProtection() script
+         below via document.createElement()/appendChild(document.body),
+         so it can never receive that scope attribute. Result: every
+         rule in this block silently failed to match, the element got
+         zero positioning/sizing/color, and it rendered as a bare,
+         unstyled, un-fixed SVG inserted at the very end of <body> —
+         i.e. visually "under the footer", exactly as reported.
+         FIX: `is:global` on this <style> tag removes the scope-
+         attribute requirement entirely, so these plain selectors
+         match `#content-protection-toast` no matter when/how the
+         element was created. This is the exact same fix already
+         proven elsewhere in this codebase — see
+         TrustpilotReview.astro's own `:global(...)` modal rules and
+         PostSingle.astro's `<style is:global>` block, both used for
+         the identical reason (elements built/moved via JS at
+         runtime, appended to document.body).
       ========================================================== */
+    </style>
+    <style is:global>
       #content-protection-toast {
         position: fixed;
         top: 50%;
@@ -358,13 +387,13 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 12px;
-        width: min(86vw, 340px);
+        gap: 10px;
+        width: min(78vw, 240px);
         background: #0c0d10;
         border: 1px solid rgba(1, 173, 159, 0.35);
         color: #F8F8FF;
-        padding: 26px 22px 22px;
-        border-radius: 1.5rem;
+        padding: 18px 16px 16px;
+        border-radius: 1.25rem;
         box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.03);
         text-align: center;
         user-select: none;
@@ -381,23 +410,29 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 48px;
-        height: 48px;
+        width: 36px;
+        height: 36px;
         border-radius: 999px;
         background: rgba(1, 173, 159, 0.12);
         border: 1px solid rgba(1, 173, 159, 0.35);
         color: #01AD9F;
         flex-shrink: 0;
-        box-shadow: 0 0 18px rgba(1, 173, 159, 0.25);
+        box-shadow: 0 0 14px rgba(1, 173, 159, 0.25);
       }
       #content-protection-toast .cp-icon-wrap svg {
-        width: 22px;
-        height: 22px;
+        display: block;
+        width: 17px;
+        height: 17px;
       }
       #content-protection-toast .cp-text {
-        font-size: 14px;
+        font-size: 12.5px;
         font-weight: 700;
-        line-height: 1.55;
+        line-height: 1.5;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #content-protection-toast {
+          transition: opacity 0.15s ease;
+        }
       }
     </style>
 
@@ -729,8 +764,13 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         }
 
         function buildLockIconSvg() {
+          // width/height set directly on the <svg> tag (not only via
+          // CSS) as a defensive belt-and-suspenders measure — this
+          // guarantees a correctly-sized 17x17 icon even in the
+          // unlikely event the stylesheet hasn't parsed yet at the
+          // exact instant this element is inserted.
           return (
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+            '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
             'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
             '<rect x="4" y="10.5" width="16" height="9.5" rx="2.2"></rect>' +
             '<path d="M7.5 10.5V7.2a4.5 4.5 0 019 0v3.3"></path>' +
