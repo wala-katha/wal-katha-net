@@ -1,251 +1,122 @@
 ---
-// TRUSTPILOT REVIEW COLLECTOR - theme-matched card + in-site modal.
-// The official Trustpilot TrustBox widget code (data-locale,
-// data-template-id, data-businessunit-id, data-style-height/width,
-// data-token) below is kept byte-for-byte identical to what
-// Trustpilot itself provides - do not modify those attributes.
+// SINHALA MOVIES POPUP CARD - replaces the old Trustpilot review
+// collector. Renders in Footer.astro exactly like before (same
+// component name/path, so Footer.astro needs zero changes).
 //
-// 2026-08 FIX ROUND: two confirmed bugs from live testing.
-// 1) The modal iframe stayed blank because the open-modal logic used
-//    `if (iframe && !iframe.src)` to decide whether to set the real
-//    Trustpilot URL. Per the HTML spec, reading `.src` off an
-//    `<iframe src="">` returns the resolved current-page URL (a
-//    truthy string), never an empty string - so that condition was
-//    always false and the real URL was never assigned. Fixed by using
-//    a dedicated `data-loaded` flag instead of trusting `.src`.
-// 2) The modal close button relied only on an icon component that did
-//    not reliably render. Replaced with a plain inline SVG plus a
-//    visible "close" text label, so the button always has a clear,
-//    working way to dismiss the modal even if icon rendering fails.
-//
-// Also added: a loading spinner while the iframe loads, an 8-second
-// timeout fallback link (Trustpilot page in a new tab) in case the
-// iframe genuinely cannot load, a small animated shine-sweep line on
-// the Review Now button, and a dvh-based viewport height fix for
-// mobile browsers whose address bar resizes the visible viewport.
-//
-// 2026-08 SECOND FIX ROUND (root cause: CSS containing-block bug):
-// This component renders inside Footer.astro, and the <footer>
-// element there carries a `backdrop-blur-xl` class (backdrop-filter).
-// Per the CSS spec, an ancestor with `filter` or `backdrop-filter`
-// creates a new containing block for any descendant that uses
-// `position: fixed` - so this modal's `position: fixed` overlay was
-// actually being positioned relative to the footer box, not the real
-// viewport. Combined with the footer's own overflow clipping, this
-// caused three visible symptoms: the popup rendering as a small
-// clipped box instead of a true fullscreen overlay, the close button
-// becoming unreachable, and the modal body being unable to scroll
-// far enough to reach the submit button.
-//
-// Fix: on open, the modal's root element is moved (once) directly
-// under `document.body` via plain DOM `appendChild` - the same effect
-// a React portal gives, without needing React here. This makes the
-// modal a true top-level fixed overlay again, with zero change to
-// Footer.astro's own visual design (backdrop-blur stays exactly as
-// it was). The move happens once per page load and is idempotent -
-// re-opening the modal on the same page does not move it again.
-//
-// 2026-08 THIRD FIX ROUND (PageSpeed - critical network dependency
-// chain + inefficient cache lifetime, both flagged against
-// widget.trustpilot.com's main.js/bootstrap.min.js files):
-// ROOT CAUSE: the Trustpilot bootstrap script was previously loaded
-// unconditionally the moment the page finished loading, via
-// initTrustpilotWidget() running on every astro:page-load event. This
-// script sits below the fold inside Footer.astro, so fetching it
-// eagerly on every single page view added it to the initial critical
-// request chain for no real benefit - most visitors never scroll far
-// enough to see the small inline star rating widget it renders.
-// This site does not control widget.trustpilot.com's own
-// Cache-Control headers (that part of the PageSpeed finding is a
-// third-party limitation, not fixable from this codebase), but it
-// does control WHEN the script is requested.
-// FIX: the bootstrap script now loads lazily via IntersectionObserver,
-// only once the review card scrolls within 300px of the viewport.
-// This removes the script entirely from the initial page-load network
-// chain for the common case, while the modal (open on click) is
-// unaffected since it uses the embedded review-form iframe directly
-// and never depended on the bootstrap script.
-//
-// 2026-08 FOURTH FIX ROUND (Trustpilot's own Cloudflare verification
-// challenge stuck on "Verifying your connection... Unable to
-// verify"):
-// ROOT CAUSE: the Trustpilot review-form iframe loads trustpilot.com
-// content, and trustpilot.com fronts that page with its own
-// Cloudflare bot-check challenge (this is Trustpilot's own
-// infrastructure, not code in this repo). That challenge needs to set
-// a cookie to prove the browser passed the check. Per Chrome's own
-// documented third-party storage partitioning rules, a cross-origin
-// iframe does not get that storage/cookie access by default - the
-// parent page must explicitly opt the iframe in via the
-// `allow="storage-access"` permission on the <iframe> element itself.
-// Without it, the challenge can loop forever showing "Unable to
-// verify your connection right now."
-// FIX (two parts, both are things this codebase CAN actually
-// control):
-//   1. `allow="storage-access"` added directly on the iframe tag
-//      below - this is the standards-documented way to delegate
-//      storage access to a cross-origin iframe, giving Trustpilot's
-//      own challenge script the chance to set its verification
-//      cookie correctly.
-//   2. A permanent, always-visible "open on Trustpilot itself" link
-//      in the modal header (next to the close button) - this does
-//      NOT depend on the loading/timeout state, so even if a
-//      person's specific browser/network still blocks the challenge
-//      after fix #1, they always have an instant, one-tap way out to
-//      the real trustpilot.com review page in a new tab, with zero
-//      dead-end.
-//
-// 2026-08 FIFTH FIX ROUND (shine-sweep animation not animating on
-// some devices):
-// ROOT CAUSE: the "Review Now" button's shine-sweep effect
-// (`.tp-review-now-btn::after` / `@keyframes tpShineSweep`) animated
-// the `left` CSS property. `left` is a layout-affecting property (it
-// changes the box's position in normal flow terms), so every
-// animation frame forces the browser to recompute layout - this is a
-// non-composited animation. Browsers running in a reduced-power state
-// (Battery Saver / Data Saver mode, common on budget Android devices)
-// routinely throttle or fully skip non-composited animations as a
-// performance optimization, while true compositor-only animations
-// (transform / opacity) are never throttled this way. This is why the
-// shine line visually never moved on some devices even though the
-// animation was correctly declared and running.
-// FIX: the keyframes now animate `transform: translateX(...)` instead
-// of `left`, combined with the button's existing static `skewX(-20deg)`
-// tilt in the same transform value. `translateX()` percentages are
-// relative to the element's own box size (the pseudo-element is 40% of
-// the button's width), so `translateX(475%)` reproduces the exact same
-// visual travel distance as the original `left: -60% -> 130%` sweep
-// (a total of 190% of the button width, which is 475% of the
-// pseudo-element's own 40%-wide box). This is a pure GPU/compositor
-// animation now, so it can no longer be silently skipped.
-import { BiStar } from "react-icons/bi";
-const reviewDomain = "walakatha.net";
-const embeddedReviewFormUrl = `https://www.trustpilot.com/evaluate/embed/${reviewDomain}`;
-const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
+// FLOW:
+//  1. Footer shows a card with a "watch free Sinhala movies" button.
+//  2. Clicking it opens a modal (teleported to document.body, same
+//     technique the old Trustpilot modal used - required because
+//     Footer.astro's <footer> has backdrop-blur-xl, which creates a
+//     new CSS containing block for any descendant position:fixed
+//     element, clipping/breaking a "fixed" overlay if left inside it).
+//  3. Modal shows a notice to install the Terabox app first (with a
+//     button straight to the Play Store listing), and a second button
+//     that opens the actual movies collection link on teraboxpage.com
+//     in a new tab.
+import { BiMoviePlay } from "react-icons/bi";
+const MOVIES_URL = "https://www.teraboxpage.com/myknow/sinhalamovies";
+const TERABOX_APP_URL = "https://play.google.com/store/apps/details?id=com.dubox.drive";
 ---
 
-<section class="trustpilot-review-section" aria-label="Trustpilot Reviews">
-  <div class="trustpilot-review-card">
-    <span class="tp-card-glow" aria-hidden="true"></span>
+<section class="movies-promo-section" aria-label="Free Sinhala Movies">
+  <div class="movies-promo-card">
+    <span class="mp-card-glow" aria-hidden="true"></span>
 
-    <div class="tp-stars" aria-hidden="true">
-      <BiStar className="tp-star" />
-      <BiStar className="tp-star" />
-      <BiStar className="tp-star" />
-      <BiStar className="tp-star" />
-      <BiStar className="tp-star" />
+    <div class="mp-icon-wrap" aria-hidden="true">
+      <BiMoviePlay className="mp-icon" />
     </div>
 
-    <h2 class="tp-heading">ඔබත් අපිව අගය කරන්නද?</h2>
-    <p class="tp-subtext">
-      Wala Katha ගැන ඔබේ අත්දැකීම තත්පර කිහිපයකින් Trustpilot හි බෙදාගන්න -
-      එය අපිට තව හොඳ කරන්නත්, තව දහස් ගණන් පාඨකයන්ට අපිව හඳුනා ගන්නත් ලොකු උදව්වක්!
+    <h2 class="mp-heading">සිංහල චිත්‍රපට නොමිලේ බලන්න</h2>
+    <p class="mp-subtext">
+      අලුත්ම සහ ජනප්‍රියම සිංහල චිත්‍රපට එකතුවක් සම්පූර්ණයෙන්ම නොමිලේ නරඹන්න.
+      පහත බටනය ක්ලික් කර, විනාඩියකින් නැරඹීම ආරම්භ කරන්න.
     </p>
 
     <button
-      id="trustpilot-open-modal-btn"
+      id="movies-open-modal-btn"
       type="button"
-      class="tp-review-now-btn"
+      class="mp-watch-btn"
     >
-      <BiStar className="tp-review-now-icon" aria-hidden="true" />
-      <span>Review එකක් දෙන්න (Review Now)</span>
+      <BiMoviePlay className="mp-watch-icon" aria-hidden="true" />
+      <span>සිංහල චිත්‍රපට නොමිලේ බලන්න</span>
     </button>
-
-    <div
-      id="trustpilot-widget-container"
-      class="trustpilot-widget"
-      data-locale="en-US"
-      data-template-id="56278e9abfbbba0bdcd568bc"
-      data-businessunit-id="6a718943c72aab296e860f07"
-      data-style-height="52px"
-      data-style-width="100%"
-      data-token="b99ae46b-0b83-4431-9614-313deb05b559"
-    >
-      <a href="https://www.trustpilot.com/review/walakatha.net" target="_blank" rel="noopener">
-        Trustpilot
-      </a>
-    </div>
   </div>
 </section>
 
 <div
-  id="trustpilot-review-modal"
-  class="tp-modal-overlay hidden"
+  id="movies-modal"
+  class="mp-modal-overlay hidden"
   role="dialog"
   aria-modal="true"
-  aria-labelledby="trustpilot-modal-title"
+  aria-labelledby="movies-modal-title"
 >
-  <div class="tp-modal-card">
-    <div class="tp-modal-header">
-      <h3 id="trustpilot-modal-title" class="tp-modal-title">
-        <span class="tp-modal-dot" aria-hidden="true"></span>
-        ඔබේ Review එක Trustpilot හි දාන්න
+  <div class="mp-modal-card">
+    <div class="mp-modal-header">
+      <h3 id="movies-modal-title" class="mp-modal-title">
+        <span class="mp-modal-dot" aria-hidden="true"></span>
+        සිංහල චිත්‍රපට නරඹන්න
       </h3>
-      <div class="tp-modal-header-actions">
-        <a
-          href={directReviewPageUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="tp-modal-external-link"
-          aria-label="Trustpilot එකේම කෙලින්ම විවෘත කරන්න"
-          title="Trustpilot එකේම කෙලින්ම විවෘත කරන්න"
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"></path>
-            <path d="M15 3h6v6"></path>
-            <path d="M10 14L21 3"></path>
-          </svg>
-        </a>
-        <button
-          id="trustpilot-modal-close-btn"
-          type="button"
-          class="tp-modal-close-btn"
-          aria-label="Close review form"
-        >
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-            <path d="M6 6l12 12M18 6L6 18"></path>
-          </svg>
-          <span class="tp-modal-close-label">වහන්න</span>
-        </button>
-      </div>
+      <button
+        id="movies-modal-close-btn"
+        type="button"
+        class="mp-modal-close-btn"
+        aria-label="Close"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"></path>
+        </svg>
+        <span class="mp-modal-close-label">වහන්න</span>
+      </button>
     </div>
-    <div class="tp-modal-body">
-      <div id="trustpilot-modal-loading" class="tp-modal-loading">
-        <span class="tp-spinner" aria-hidden="true"></span>
-        <p class="tp-loading-text">Review පෝරමය පූරණය වෙමින්...</p>
+
+    <div class="mp-modal-body">
+      <div class="mp-notice-box">
+        <svg class="mp-notice-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 9v4"></path>
+          <path d="M12 17h.01"></path>
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path>
+        </svg>
+        <p class="mp-notice-text">
+          ඔබගේ දුරකථනයේ <strong>Terabox</strong> app එක Install කර නොමැති නම්, චිත්‍රපට නැරඹීමට පෙර එය අනිවාර්යයෙන්ම Download කරගත යුතුය.
+        </p>
       </div>
-      <div id="trustpilot-modal-fallback" class="tp-modal-fallback hidden">
-        <p>මෙය පූරණය වීමට වැඩි කාලයක් ගතවෙයි.</p>
-        <a
-          href={embeddedReviewFormUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="tp-fallback-link"
-        >
-          Trustpilot වෙබ් අඩවියටම කෙලින්ම යන්න
-        </a>
-      </div>
-      <iframe
-        id="trustpilot-modal-iframe"
-        src=""
-        data-src={embeddedReviewFormUrl}
-        data-loaded="false"
-        title="Trustpilot Review Form"
-        loading="lazy"
-        allow="storage-access"
-      ></iframe>
+
+      
+        href={TERABOX_APP_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="mp-action-btn mp-action-secondary"
+      >
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+          <path d="M7 10l5 5 5-5"></path>
+          <path d="M12 15V3"></path>
+        </svg>
+        <span>Terabox App Download කරන්න</span>
+      </a>
+
+      
+        href={MOVIES_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="mp-action-btn mp-action-primary"
+      >
+        <BiMoviePlay className="mp-action-icon" aria-hidden="true" />
+        <span>චිත්‍රපට වෙත යන්න</span>
+      </a>
     </div>
   </div>
 </div>
 
 <style>
-  .trustpilot-review-section {
+  .movies-promo-section {
     width: 100%;
     max-width: 640px;
     margin: 0 auto 2.5rem auto;
   }
 
-  .trustpilot-review-card {
+  .movies-promo-card {
     position: relative;
     overflow: hidden;
     border-radius: 1.25rem;
@@ -256,12 +127,12 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     box-shadow: 0 12px 34px -14px rgba(0, 0, 0, 0.7);
     transition: border-color 0.3s ease, transform 0.3s ease;
   }
-  .trustpilot-review-card:hover {
+  .movies-promo-card:hover {
     border-color: rgba(1, 173, 159, 0.4);
     transform: translateY(-2px);
   }
 
-  .tp-card-glow {
+  .mp-card-glow {
     position: absolute;
     top: -40%;
     left: 50%;
@@ -273,21 +144,26 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     z-index: 0;
   }
 
-  .tp-stars {
+  .mp-icon-wrap {
     position: relative;
     z-index: 1;
-    display: flex;
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
-    gap: 0.35rem;
-    margin-bottom: 0.75rem;
+    width: 52px;
+    height: 52px;
+    border-radius: 999px;
+    background: rgba(1, 173, 159, 0.12);
+    border: 1px solid rgba(1, 173, 159, 0.35);
+    margin-bottom: 0.85rem;
+    box-shadow: 0 0 18px rgba(1, 173, 159, 0.25);
   }
-  .tp-star {
+  .mp-icon {
     color: #01ad9f;
-    font-size: 1.15rem;
-    filter: drop-shadow(0 0 6px rgba(1, 173, 159, 0.45));
+    font-size: 1.6rem;
   }
 
-  .tp-heading {
+  .mp-heading {
     position: relative;
     z-index: 1;
     font-size: 1.15rem;
@@ -296,7 +172,7 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     margin: 0 0 0.5rem 0;
   }
 
-  .tp-subtext {
+  .mp-subtext {
     position: relative;
     z-index: 1;
     font-size: 0.85rem;
@@ -308,10 +184,7 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     margin-right: auto;
   }
 
-  /* Review Now button - now with an animated shine-sweep line so it
-     draws attention. overflow:hidden clips the sweep element inside
-     the button's own rounded shape. */
-  .tp-review-now-btn {
+  .mp-watch-btn {
     position: relative;
     z-index: 1;
     overflow: hidden;
@@ -326,100 +199,21 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     border: none;
     border-radius: 999px;
     cursor: pointer;
-    margin-bottom: 1.25rem;
     transition: background-color 0.25s ease, transform 0.25s ease;
     box-shadow: 0 8px 24px -8px rgba(1, 173, 159, 0.5);
   }
-  .tp-review-now-btn:hover {
+  .mp-watch-btn:hover {
     background-color: #01c4b4;
     transform: translateY(-1px);
   }
-  .tp-review-now-btn:active {
+  .mp-watch-btn:active {
     transform: translateY(0);
   }
-  .tp-review-now-icon {
-    font-size: 1rem;
-    position: relative;
-    z-index: 1;
-  }
-  .tp-review-now-btn span {
-    position: relative;
-    z-index: 1;
-  }
-  /* Compositor-only shine sweep (transform-based, not left-based).
-     See the frontmatter comment above (2026-08 FIFTH FIX ROUND) for
-     the full root-cause explanation of why this replaced the old
-     left-property animation. */
-  .tp-review-now-btn::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: -60%;
-    width: 40%;
-    height: 100%;
-    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.55), transparent);
-    transform: skewX(-20deg) translateX(0%);
-    animation: tpShineSweep 3.2s ease-in-out infinite;
-    pointer-events: none;
-    z-index: 0;
-  }
-  @keyframes tpShineSweep {
-    0% { transform: skewX(-20deg) translateX(0%); }
-    45% { transform: skewX(-20deg) translateX(475%); }
-    100% { transform: skewX(-20deg) translateX(475%); }
+  .mp-watch-icon {
+    font-size: 1.05rem;
   }
 
-  .trustpilot-widget {
-    position: relative;
-    z-index: 1;
-  }
-
-  :global(#trustpilot-thanks-toast) {
-    position: fixed;
-    left: 50%;
-    bottom: 28px;
-    transform: translate(-50%, 16px);
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    max-width: min(90vw, 380px);
-    background: #0c0d10;
-    border: 1px solid rgba(1, 173, 159, 0.4);
-    color: #f8f8ff;
-    font-size: 13px;
-    font-weight: 700;
-    line-height: 1.4;
-    padding: 12px 20px;
-    border-radius: 999px;
-    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.6);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  :global(#trustpilot-thanks-toast.show) {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-  :global(#trustpilot-thanks-toast .tpt-star) {
-    color: #01ad9f;
-    font-size: 16px;
-    flex-shrink: 0;
-  }
-  :global(#trustpilot-thanks-toast .tpt-text) {
-    flex: 1;
-  }
-
-  /* 2026-08: modal-related styles below are written as :global()
-     because, once the modal is moved to document.body at runtime
-     (see the script's teleportModalToBody function), it is no
-     longer a descendant of this component's own scoped root, so
-     Astro's default scoped CSS would no longer match it. Using
-     :global() here keeps the exact same visual styling working
-     correctly both before and after the DOM move - zero visual
-     change, this is purely a selector-scoping fix required by the
-     teleport approach. */
-  :global(.tp-modal-overlay) {
+  :global(.mp-modal-overlay) {
     position: fixed;
     inset: 0;
     z-index: 99999;
@@ -433,18 +227,17 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     pointer-events: none;
     transition: opacity 0.3s ease;
   }
-  :global(.tp-modal-overlay.hidden) {
+  :global(.mp-modal-overlay.hidden) {
     display: none;
   }
-  :global(.tp-modal-overlay.is-open) {
+  :global(.mp-modal-overlay.is-open) {
     opacity: 1;
     pointer-events: auto;
   }
 
-  :global(.tp-modal-card) {
+  :global(.mp-modal-card) {
     width: 100%;
-    max-width: 42rem;
-    max-height: 85vh;
+    max-width: 26rem;
     display: flex;
     flex-direction: column;
     background: #0c0d10;
@@ -453,13 +246,8 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
     overflow: hidden;
   }
-  @supports (height: 100dvh) {
-    :global(.tp-modal-card) {
-      max-height: 85dvh;
-    }
-  }
 
-  :global(.tp-modal-header) {
+  :global(.mp-modal-header) {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -468,7 +256,7 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     flex-shrink: 0;
   }
 
-  :global(.tp-modal-title) {
+  :global(.mp-modal-title) {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -478,7 +266,7 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     margin: 0;
   }
 
-  :global(.tp-modal-dot) {
+  :global(.mp-modal-dot) {
     width: 10px;
     height: 10px;
     border-radius: 999px;
@@ -486,41 +274,7 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     flex-shrink: 0;
   }
 
-  /* Header actions wrapper - groups the new "open on Trustpilot
-     itself" escape-hatch link and the existing close button together,
-     so the header keeps its two-item space-between layout regardless
-     of how many action icons live in the right-hand group. */
-  :global(.tp-modal-header-actions) {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-shrink: 0;
-  }
-
-  /* Escape-hatch link - always visible regardless of the iframe's
-     loading/timeout state, so a person stuck on Trustpilot's own
-     verification challenge always has an instant way out to the real
-     trustpilot.com review page in a new tab. */
-  :global(.tp-modal-external-link) {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.1rem;
-    height: 2.1rem;
-    border-radius: 0.75rem;
-    border: 1px solid rgba(1, 173, 159, 0.3);
-    background: rgba(1, 173, 159, 0.08);
-    color: #01ad9f;
-    text-decoration: none;
-    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
-  }
-  :global(.tp-modal-external-link:hover) {
-    color: #01c4b4;
-    background: rgba(1, 173, 159, 0.16);
-    border-color: rgba(1, 173, 159, 0.5);
-  }
-
-  :global(.tp-modal-close-btn) {
+  :global(.mp-modal-close-btn) {
     display: flex;
     align-items: center;
     gap: 0.35rem;
@@ -533,445 +287,163 @@ const directReviewPageUrl = `https://www.trustpilot.com/review/${reviewDomain}`;
     transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
     flex-shrink: 0;
   }
-  :global(.tp-modal-close-btn:hover) {
+  :global(.mp-modal-close-btn:hover) {
     color: #f87171;
     background: rgba(248, 113, 113, 0.1);
     border-color: rgba(248, 113, 113, 0.35);
   }
-  :global(.tp-modal-close-label) {
+  :global(.mp-modal-close-label) {
     font-size: 0.75rem;
     font-weight: 700;
   }
 
-  :global(.tp-modal-body) {
-    position: relative;
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    background: #ffffff;
-  }
-
-  :global(.tp-modal-body iframe) {
-    width: 100%;
-    height: 70vh;
-    min-height: 420px;
-    border: none;
-    display: block;
-    position: relative;
-    z-index: 1;
-  }
-  @supports (height: 100dvh) {
-    :global(.tp-modal-body iframe) {
-      height: 70dvh;
-    }
-  }
-
-  :global(.tp-modal-loading) {
-    position: absolute;
-    inset: 0;
+  :global(.mp-modal-body) {
+    padding: 1.25rem;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    background: #ffffff;
-    z-index: 2;
-  }
-  :global(.tp-spinner) {
-    width: 34px;
-    height: 34px;
-    border-radius: 999px;
-    border: 3px solid rgba(1, 173, 159, 0.15);
-    border-top-color: #01ad9f;
-    animation: tpSpin 0.8s linear infinite;
-  }
-  @keyframes tpSpin {
-    to { transform: rotate(360deg); }
-  }
-  :global(.tp-loading-text) {
-    margin: 0;
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #333333;
-  }
-
-  :global(.tp-modal-fallback) {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
     gap: 0.9rem;
-    background: #ffffff;
-    z-index: 2;
-    padding: 1.5rem;
-    text-align: center;
   }
-  :global(.tp-modal-fallback.hidden) {
-    display: none;
+
+  :global(.mp-notice-box) {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    background: rgba(251, 191, 36, 0.08);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-radius: 0.85rem;
+    padding: 0.85rem 1rem;
   }
-  :global(.tp-modal-fallback p) {
+  :global(.mp-notice-icon) {
+    color: #fbbf24;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+  :global(.mp-notice-text) {
     margin: 0;
-    font-size: 0.85rem;
-    color: #333333;
-    font-weight: 600;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: rgba(248, 248, 255, 0.85);
   }
-  :global(.tp-fallback-link) {
-    display: inline-flex;
+  :global(.mp-notice-text strong) {
+    color: #fbbf24;
+  }
+
+  :global(.mp-action-btn) {
+    display: flex;
     align-items: center;
-    gap: 0.4rem;
-    background: #01ad9f;
-    color: #010203;
+    justify-content: center;
+    gap: 0.55rem;
+    width: 100%;
+    padding: 0.8rem 1.1rem;
+    border-radius: 0.85rem;
+    font-size: 0.88rem;
     font-weight: 800;
-    font-size: 0.85rem;
-    padding: 0.65rem 1.35rem;
-    border-radius: 999px;
     text-decoration: none;
+    transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+  }
+  :global(.mp-action-btn:active) {
+    transform: scale(0.98);
+  }
+
+  :global(.mp-action-secondary) {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #f8f8ff;
+  }
+  :global(.mp-action-secondary:hover) {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  :global(.mp-action-primary) {
+    background: #01ad9f;
+    border: 1px solid #01ad9f;
+    color: #010203;
+    box-shadow: 0 8px 24px -8px rgba(1, 173, 159, 0.5);
+  }
+  :global(.mp-action-primary:hover) {
+    background: #01c4b4;
+    border-color: #01c4b4;
+  }
+  :global(.mp-action-icon) {
+    font-size: 1.05rem;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .trustpilot-review-card {
+    .movies-promo-card {
       transition: none;
     }
-    :global(#trustpilot-thanks-toast) {
+    :global(.mp-modal-overlay) {
       transition: none;
-    }
-    :global(.tp-modal-overlay) {
-      transition: none;
-    }
-    .tp-review-now-btn::after {
-      animation: none;
-      display: none;
-    }
-    :global(.tp-spinner) {
-      animation: none;
-      border-top-color: rgba(1, 173, 159, 0.4);
     }
   }
 </style>
 
 <script>
-  const TRUSTPILOT_SCRIPT_SRC = "https://widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js";
-  const THANKS_STORAGE_KEY = "wk-trustpilot-clicked-at";
-  const THANKS_MIN_AWAY_MS = 2500;
-  const MODAL_MIN_OPEN_MS = 8000;
-  const MODAL_LOAD_TIMEOUT_MS = 8000;
-  const WIDGET_LAZY_ROOT_MARGIN = "300px 0px";
-
-  function ensureTrustpilotScriptLoaded(onReady: () => void) {
-    const w = window as any;
-    if (w.Trustpilot) {
-      onReady();
-      return;
-    }
-    const existing = document.querySelector(`script[src="${TRUSTPILOT_SCRIPT_SRC}"]`);
-    if (existing) {
-      existing.addEventListener("load", onReady, { once: true });
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = TRUSTPILOT_SCRIPT_SRC;
-    script.async = true;
-    script.addEventListener("load", onReady, { once: true });
-    document.head.appendChild(script);
-  }
-
-  function showTrustpilotThanksToast() {
-    let toast = document.getElementById("trustpilot-thanks-toast");
-    if (!toast) {
-      toast = document.createElement("div");
-      toast.id = "trustpilot-thanks-toast";
-      toast.setAttribute("role", "status");
-      toast.setAttribute("aria-live", "polite");
-
-      const star = document.createElement("span");
-      star.className = "tpt-star";
-      star.setAttribute("aria-hidden", "true");
-      star.textContent = "*";
-
-      const text = document.createElement("span");
-      text.className = "tpt-text";
-      text.textContent = "ඔබගේ අගයන කාලයට ගොඩක් ස්තූතියි!";
-
-      toast.appendChild(star);
-      toast.appendChild(text);
-      document.body.appendChild(toast);
-    }
-
-    toast.classList.add("show");
-    clearTimeout((toast as any)._hideTimer);
-    (toast as any)._hideTimer = setTimeout(() => {
-      toast?.classList.remove("show");
-    }, 4000);
-  }
-
-  // NEW (PageSpeed - Network dependency tree + cache lifetime fix):
-  // module-scoped observer reference so it can be disconnected on
-  // every astro:before-swap, same cleanup convention already used
-  // elsewhere in this codebase (Header.astro's outsideClickHandler,
-  // PostSingle.astro's timers) to avoid a stale observer referencing
-  // a detached DOM node after a client-side navigation.
-  let trustpilotWidgetObserver: IntersectionObserver | null = null;
-
-  function initTrustpilotWidget() {
-    const container = document.getElementById("trustpilot-widget-container");
-    if (!container) return;
-
-    function loadWidgetScript() {
-      ensureTrustpilotScriptLoaded(() => {
-        const w = window as any;
-        if (w.Trustpilot && typeof w.Trustpilot.loadFromElement === "function") {
-          w.Trustpilot.loadFromElement(container, true);
-        }
-      });
-    }
-
-    // Disconnect any observer left over from a previous page (View
-    // Transitions navigation) before creating a new one for the
-    // current page's container element.
-    if (trustpilotWidgetObserver) {
-      trustpilotWidgetObserver.disconnect();
-      trustpilotWidgetObserver = null;
-    }
-
-    // LAZY LOAD: the bootstrap script is only requested once this
-    // card scrolls within 300px of the viewport, instead of on every
-    // page load regardless of scroll position. This removes the
-    // script from the initial critical network dependency chain for
-    // the common case where a visitor never scrolls to the footer.
-    if (typeof IntersectionObserver === "function") {
-      trustpilotWidgetObserver = new IntersectionObserver(
-        (entries, observer) => {
-          for (const entry of entries) {
-            if (entry.isIntersecting) {
-              loadWidgetScript();
-              observer.disconnect();
-            }
-          }
-        },
-        { rootMargin: WIDGET_LAZY_ROOT_MARGIN }
-      );
-      trustpilotWidgetObserver.observe(container);
-    } else {
-      // Older browsers without IntersectionObserver support - fall
-      // back to the previous eager-load behavior so the widget still
-      // renders correctly.
-      loadWidgetScript();
-    }
-
-    container.addEventListener("click", (e) => {
-      const target = e.target as HTMLElement | null;
-      if (target && target.closest && target.closest("a")) {
-        try {
-          sessionStorage.setItem(THANKS_STORAGE_KEY, String(Date.now()));
-        } catch {
-          // Storage unavailable in some private-browsing modes - non-fatal.
-        }
-      }
-    });
-  }
-
-  function checkReturnFromTrustpilot() {
-    if (document.visibilityState !== "visible") return;
-
-    let clickedAt: string | null;
-    try {
-      clickedAt = sessionStorage.getItem(THANKS_STORAGE_KEY);
-    } catch {
-      clickedAt = null;
-    }
-    if (!clickedAt) return;
-
-    const elapsed = Date.now() - Number(clickedAt);
-    try {
-      sessionStorage.removeItem(THANKS_STORAGE_KEY);
-    } catch {
-      // Non-fatal.
-    }
-
-    if (elapsed > THANKS_MIN_AWAY_MS) {
-      showTrustpilotThanksToast();
-    }
-  }
-
-  let modalOpenedAt = 0;
-  let modalLoadTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  function getModalLoadingEl() {
-    return document.getElementById("trustpilot-modal-loading");
-  }
-  function getModalFallbackEl() {
-    return document.getElementById("trustpilot-modal-fallback");
-  }
-
-  function resetModalLoadingUi() {
-    const loading = getModalLoadingEl();
-    const fallback = getModalFallbackEl();
-    if (loading) loading.style.display = "flex";
-    if (fallback) fallback.classList.add("hidden");
-  }
-
-  function hideModalLoadingUi() {
-    const loading = getModalLoadingEl();
-    if (loading) loading.style.display = "none";
-  }
-
-  function showModalFallbackUi() {
-    const loading = getModalLoadingEl();
-    const fallback = getModalFallbackEl();
-    if (loading) loading.style.display = "none";
-    if (fallback) fallback.classList.remove("hidden");
-  }
-
-  function clearModalLoadTimeout() {
-    if (modalLoadTimeoutId) {
-      clearTimeout(modalLoadTimeoutId);
-      modalLoadTimeoutId = null;
-    }
-  }
-
-  // ROOT-CAUSE FIX: Footer.astro's <footer> element uses
-  // backdrop-blur-xl (backdrop-filter), which per the CSS spec makes
-  // it a new containing block for any descendant using
-  // `position: fixed`. Since this modal originally lived inside
-  // Footer.astro's render tree, its "fixed" overlay was being
-  // positioned relative to the footer box instead of the real
-  // viewport - causing the popup to render clipped/small, the close
-  // button to become unreachable, and the body to be unable to
-  // scroll far enough to reach the submit button.
-  //
-  // Fix: move the modal's root element to be a direct child of
-  // document.body at runtime. This is idempotent - if it has already
-  // been moved (checked via a data attribute), it is not moved again.
-  // No visual/behavioral change to Footer.astro itself is needed.
+  // Same "teleport modal to document.body" fix the old Trustpilot
+  // component used: Footer.astro's <footer> uses backdrop-blur-xl,
+  // which creates a new CSS containing block for any descendant
+  // position:fixed element - without this move, the modal overlay
+  // would render clipped/small instead of a true fullscreen popup.
   function teleportModalToBody() {
-    const overlay = document.getElementById("trustpilot-review-modal");
+    const overlay = document.getElementById("movies-modal");
     if (!overlay) return;
     if (overlay.parentElement === document.body) return;
     document.body.appendChild(overlay);
   }
 
-  function openTrustpilotModal() {
+  function openMoviesModal() {
     teleportModalToBody();
-
-    const overlay = document.getElementById("trustpilot-review-modal");
-    const iframe = document.getElementById("trustpilot-modal-iframe") as HTMLIFrameElement | null;
+    const overlay = document.getElementById("movies-modal");
     if (!overlay) return;
-
-    resetModalLoadingUi();
-
-    // Use a dedicated data-loaded flag instead of checking iframe.src,
-    // since reading .src off an <iframe src=""> always resolves to a
-    // truthy current-page URL string, never an empty value.
-    if (iframe && iframe.dataset.loaded !== "true") {
-      const dataSrc = iframe.getAttribute("data-src");
-      if (dataSrc) {
-        iframe.src = dataSrc;
-      }
-    } else if (iframe && iframe.dataset.loaded === "true") {
-      hideModalLoadingUi();
-    }
-
     overlay.classList.remove("hidden");
     overlay.style.display = "flex";
     requestAnimationFrame(() => overlay.classList.add("is-open"));
-    modalOpenedAt = Date.now();
     document.body.style.overflow = "hidden";
-
-    clearModalLoadTimeout();
-    if (iframe && iframe.dataset.loaded !== "true") {
-      modalLoadTimeoutId = setTimeout(() => {
-        if (iframe.dataset.loaded !== "true") {
-          showModalFallbackUi();
-        }
-      }, MODAL_LOAD_TIMEOUT_MS);
-    }
   }
 
-  function closeTrustpilotModal() {
-    const overlay = document.getElementById("trustpilot-review-modal");
+  function closeMoviesModal() {
+    const overlay = document.getElementById("movies-modal");
     if (!overlay) return;
-
     overlay.classList.remove("is-open");
     setTimeout(() => {
       overlay.classList.add("hidden");
       overlay.style.display = "none";
     }, 300);
     document.body.style.overflow = "";
-
-    clearModalLoadTimeout();
-
-    if (modalOpenedAt && Date.now() - modalOpenedAt > MODAL_MIN_OPEN_MS) {
-      showTrustpilotThanksToast();
-    }
-    modalOpenedAt = 0;
   }
 
-  function handleIframeLoaded() {
-    const iframe = document.getElementById("trustpilot-modal-iframe") as HTMLIFrameElement | null;
-    if (iframe) iframe.dataset.loaded = "true";
-    clearModalLoadTimeout();
-    hideModalLoadingUi();
-  }
-
-  function initTrustpilotModal() {
-    // Move the modal out of Footer.astro's filtered/clipped subtree
-    // as early as possible on every page load, not only on first
-    // open - this guarantees the overlay is always a direct child of
-    // <body> before any user interaction happens.
+  function initMoviesModal() {
     teleportModalToBody();
 
-    const openBtn = document.getElementById("trustpilot-open-modal-btn");
-    const closeBtn = document.getElementById("trustpilot-modal-close-btn");
-    const overlay = document.getElementById("trustpilot-review-modal");
-    const iframe = document.getElementById("trustpilot-modal-iframe") as HTMLIFrameElement | null;
+    const openBtn = document.getElementById("movies-open-modal-btn");
+    const closeBtn = document.getElementById("movies-modal-close-btn");
+    const overlay = document.getElementById("movies-modal");
     if (!openBtn || !closeBtn || !overlay) return;
 
     const freshOpenBtn = openBtn.cloneNode(true) as HTMLButtonElement;
     openBtn.parentNode?.replaceChild(freshOpenBtn, openBtn);
-    freshOpenBtn.addEventListener("click", openTrustpilotModal);
+    freshOpenBtn.addEventListener("click", openMoviesModal);
 
     const freshCloseBtn = closeBtn.cloneNode(true) as HTMLButtonElement;
     closeBtn.parentNode?.replaceChild(freshCloseBtn, closeBtn);
-    freshCloseBtn.addEventListener("click", closeTrustpilotModal);
+    freshCloseBtn.addEventListener("click", closeMoviesModal);
 
     overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) closeTrustpilotModal();
+      if (e.target === overlay) closeMoviesModal();
     });
-
-    if (iframe) {
-      iframe.addEventListener("load", handleIframeLoaded);
-    }
   }
 
-  document.addEventListener("astro:page-load", initTrustpilotWidget);
-  document.addEventListener("astro:page-load", initTrustpilotModal);
+  document.addEventListener("astro:page-load", initMoviesModal);
 
-  // NEW: disconnect the lazy-load observer when navigating away via
-  // View Transitions, so it never keeps watching a detached container
-  // element from a previous page.
-  document.addEventListener("astro:before-swap", () => {
-    if (trustpilotWidgetObserver) {
-      trustpilotWidgetObserver.disconnect();
-      trustpilotWidgetObserver = null;
-    }
-  });
-
-  if (!(window as any).__wkTrustpilotEscapeBound) {
-    (window as any).__wkTrustpilotEscapeBound = true;
+  if (!(window as any).__wkMoviesEscapeBound) {
+    (window as any).__wkMoviesEscapeBound = true;
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
-      const overlay = document.getElementById("trustpilot-review-modal");
+      const overlay = document.getElementById("movies-modal");
       if (overlay && overlay.classList.contains("is-open")) {
-        closeTrustpilotModal();
+        closeMoviesModal();
       }
     });
-  }
-
-  if (!(window as any).__wkTrustpilotVisibilityBound) {
-    (window as any).__wkTrustpilotVisibilityBound = true;
-    document.addEventListener("visibilitychange", checkReturnFromTrustpilot);
   }
 </script>
