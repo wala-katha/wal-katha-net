@@ -8,13 +8,14 @@ import { defineConfig, fontProviders, sharpImageService } from "astro/config";
 import config from "./src/config/config.json";
 import theme from "./src/config/theme.json";
 import remarkAutoInternalLinks from "./src/lib/remarkAutoInternalLinks.mjs";
+import redirectFixer from "./src/integrations/redirect-fixer.mjs";
 // ==========================================================
-// 🎯 GIT-COMMIT-BASED REAL-TIME LASTMOD SYSTEM (NEW)
+// GIT-COMMIT-BASED REAL-TIME LASTMOD SYSTEM
 //
 // ROOT CAUSE THIS SOLVES: the sitemap previously emitted zero
 // <lastmod> tags at all. Google has no signal about which URLs
 // actually changed recently, so editing a single word inside an
-// existing post never triggered a faster recrawl priority — Google
+// existing post never triggered a faster recrawl priority - Google
 // only re-visits on its own normal crawl schedule.
 //
 // THE FIX: instead of relying on frontmatter "date"/"updated"
@@ -404,6 +405,12 @@ export default defineConfig({
   fonts: fontsConfig,
   integrations: [
     react(),
+    // 404->301 auto-redirect fixer: scans the last git commit for
+    // src/content/posts/ renames/deletes at astro:build:start and
+    // writes/merges corresponding rules into public/_redirects
+    // under an AUTO-GENERATED marker block. Self-healing - never
+    // blocks or fails the build (see src/integrations/redirect-fixer.mjs).
+    redirectFixer(),
     sitemap({
       changefreq: "weekly",
       priority: 0.7,
@@ -412,7 +419,7 @@ export default defineConfig({
           return undefined;
         }
         item.url = ensureSitemapTrailingSlash(item.url);
-        // 🎯 GIT-COMMIT-BASED REAL-TIME LASTMOD: resolves the real,
+        // GIT-COMMIT-BASED REAL-TIME LASTMOD: resolves the real,
         // most-recent commit date for whatever content backs this
         // URL (post/page/author/about/contact file, or the newest
         // matching post for category/tag archives), instead of a
