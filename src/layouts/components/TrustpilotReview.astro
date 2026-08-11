@@ -13,7 +13,7 @@
 // it) never prematurely unlock the background while the other popup
 // is still open.
 //
-// 2026-08 NEW: "TeraBox කියන්නේ මොකක්ද?" info popup - a second modal,
+// 2026-08 NEW: "TeraBox කියන්නේ කුමක්ද?" info popup - a second modal,
 // stacked above the movie popup (higher z-index), explaining that
 // TeraBox is a Google-Drive-like cloud storage app, that signing up
 // gives 1024GB (1TB) free storage, and that the movie collection can
@@ -38,10 +38,9 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
       <BiFilm className="tp-icon-badge-svg" />
     </div>
 
-    <h2 class="tp-heading">සිංහල චිත්‍රපට නොමිලේ නරඹන්න</h2>
+    <h2 class="tp-heading">සිංහල වැල් විඩියෝ නොමිලේ නරඹන්න</h2>
     <p class="tp-subtext">
-      අපි එකතු කරගත් සියලුම සිංහල චිත්‍රපට එකම තැනකින්, එකම Link එකකින්
-      නරඹන්න පුළුවන් - කිසිම ගානක් නැතුව. පහත බටනය ක්ලික් කර දැන්ම නරඹන්න පටන් ගන්න!
+      අන්තර්ජාලය තුල තිබෙන Viral & Treanding අලුත් සහ පරන සියලුම 18+ චිත්‍රපට, වේබ් කතා, ලික් විඩියො සහ Premium XXX Videos එකම තැනකින්, එකම Link එකකින් දැන් ඔබට නොමිලේ නරඹන්න පුළුවන් - පහත බටනය ක්ලික් කර දැන්ම නරඹන්න පටන් ගන්න!
     </p>
 
     <button
@@ -66,7 +65,7 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     <div class="tp-modal-header">
       <h3 id="movies-modal-title" class="tp-modal-title">
         <span class="tp-modal-dot" aria-hidden="true"></span>
-        සිංහල චිත්‍රපට එකතුව
+        සිංහල වැල් විඩියො එකතුව
       </h3>
       <div class="tp-modal-header-actions">
         <button
@@ -92,8 +91,8 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
         </svg>
       </span>
       <span class="tp-movie-notice-text">
-        මෙහි ඇති චිත්‍රපට නැරඹීම සඳහා ඔබගේ දුරකථනයේ <strong>TeraBox Official App</strong> එක
-        Install කරගෙන තිබිය යුතුය. Install කර නොමැති නම් පහත Download බටනය ක්ලික් කර App එක ලබාගන්න.
+        මෙහි ඇති වැල් විඩියො නැරඹීම සඳහා ඔබගේ දුරකථනයේ <strong>TeraBox Official App</strong> එක
+        Install කරගෙන Sign up - ( ලියාපදිංචි ) වි තිබිය යුතුය. Install කර නොමැති නම් පහත Download බටනය ක්ලික් කර App එක ලබාගෙන නොමිලෙ කැමති Email එකක් බාවිතයෙන් Sign up - ( ලියාපදිංචි ) වන්න...
       </span>
       <a
         href={teraboxAppPlayStoreUrl}
@@ -110,10 +109,10 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
       <div class="tp-cta-icon-badge" aria-hidden="true">
         <BiFilm className="tp-cta-icon-svg" />
       </div>
-      <h4 class="tp-cta-heading">චිත්‍රපට එකතුව බලන්න සූදානම්ද?</h4>
+      <h4 class="tp-cta-heading">වල් විඩියො එකතුව බලන්න සූදානම්ද?</h4>
       <p class="tp-cta-subtext">
-        පහත බටනය ක්ලික් කළ විට, සිංහල චිත්‍රපට එකතුව අලුත් Tab එකකින්
-        විවෘත වේ. TeraBox App එකෙන් ඔබට සියලුම චිත්‍රපට කෙලින්ම නරඹන්න පුළුවන්.
+        පහත බටනය ක්ලික් කළ විට, සිංහල වල් විඩියො එකතුව අලුත් Tab එකකින්
+        විවෘත වේ. TeraBox App එකෙන් ඔබට සියලුම වල් විඩියො කෙලින්ම නරඹන්න පුළුවන්.
       </p>
       <a
         id="movies-open-link-btn"
@@ -123,7 +122,7 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
         class="tp-cta-btn"
       >
         <BiLinkExternal className="tp-cta-btn-icon" aria-hidden="true" />
-        <span>චිත්‍රපට එකතුව Open කරන්න</span>
+        <span>වැල් විඩියො එකතුව Open කරන්න</span>
       </a>
       <p class="tp-cta-url-hint">{movieCollectionUrl}</p>
 
@@ -191,7 +190,7 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
           <span>
             මේ නරඹන චිත්‍රපටිය බටනයක් Click කිරීමෙන් කෙලින්ම ඔබේ TeraBox ගිණුමට
             <strong>Save</strong> කරගන්න පුළුවන් - ඔබට ලැබෙන නොමිලේ Storage එක
-            පිරෙනකම් ඕනෑ තරම් movies save කරගන්න පුළුවන්.
+            පිරෙනකම් ඕනෑ තරම් වැල් save කරගන්න පුළුවන්.
           </span>
         </li>
         <li>
@@ -204,7 +203,7 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
         <li>
           <BiCheckCircle className="tp-info-feature-icon" aria-hidden="true" />
           <span>
-            Site එකේ Link එකක් වෙනස් වුනත් හෝ file එකක් ඉවත් වුනත්, ඔබ Save
+            Site එකේ Link එකක් වෙනස් වුනත් හෝ විඩියො එකක් ඉවත් වුනත්, ඔබ Save
             කරගත්ත Copy එක ඔබේම ගිණුමේ ආරක්ෂිතව රැඳී තියෙනවා.
           </span>
         </li>
