@@ -1,6 +1,6 @@
 /*
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://comments.wala-katha.workers.dev https://api.web3forms.com https://cloudflareinsights.com; frame-src 'self' https://www.teraboxpage.com; frame-ancestors 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://comments.wala-katha.workers.dev https://api.web3forms.com https://cloudflareinsights.com; frame-ancestors 'self'
 
 # PAGESPEED "USE EFFICIENT CACHE LIFETIMES" FIX (Est savings 5 KiB):
 # PageSpeed flagged the Cloudflare beacon.min.js script (1d TTL) - that
@@ -18,17 +18,17 @@
 # improves the "Use efficient cache lifetimes" score for every asset
 # this site actually controls.
 #
-# 2026-08 CSP UPDATE (Footer "Watch Movies" popup - TeraBox iframe):
-# frame-src now whitelists https://www.teraboxpage.com so the footer's
-# movie-collection popup can embed https://www.teraboxpage.com/myknow/
-# sinhalamovies inside an <iframe> without being silently blocked by
-# the browser's Content Security Policy. The previous widget.trustpilot.com
-# / www.trustpilot.com entries (script-src, style-src, connect-src,
-# frame-src) have been removed since the footer's Trustpilot review
-# widget and its embedded review-form iframe were both replaced by this
-# movies popup - nothing else on the site references those Trustpilot
-# domains, so removing them keeps this policy tight instead of leaving
-# unused, unnecessarily-broad allowances in place.
+# 2026-08 CSP UPDATE (Footer "Watch Movies" popup - iframe removed):
+# the movies popup previously tried to embed teraboxpage.com inside an
+# <iframe>, which required whitelisting it under frame-src. That embed
+# was permanently abandoned - teraboxpage.com refuses to be rendered
+# inside any cross-origin iframe (its own X-Frame-Options/CSP policy,
+# not something we can override from here), the exact same limitation
+# already documented for the earlier Trustpilot iframe attempt. The
+# popup now opens teraboxpage.com as a normal new-tab link instead, so
+# frame-src no longer needs any teraboxpage.com/Trustpilot entries at
+# all - removing them keeps this policy as tight as possible instead of
+# leaving an unused, unnecessarily-broad allowance in place.
 /images/*
   Cache-Control: public, max-age=31536000, immutable
 
