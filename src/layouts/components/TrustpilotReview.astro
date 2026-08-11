@@ -1,39 +1,35 @@
 ---
 // WATCH SINHALA MOVIES PROMO CARD (footer widget)
 //
+// 2026-08 FIX (Iframe embed permanently abandoned - root cause):
+// teraboxpage.com sends its own X-Frame-Options / CSP frame-ancestors
+// header that refuses to be rendered inside ANY cross-origin <iframe>,
+// regardless of what CSP frame-src we allow on our own origin. This is
+// identical to the Trustpilot iframe problem already solved elsewhere
+// in this codebase - see the history note below. There is no
+// workaround for this: the site being embedded controls that policy,
+// not us. The permanent fix is a direct link opened in a new tab
+// instead of an iframe embed.
+//
 // HISTORY: this component used to be a Trustpilot review-collector
-// card with a "Review Now" button that opened trustpilot.com's embed
-// review form inside a popup modal.
+// card, later repurposed to a movie-collection promo that tried to
+// load teraboxpage.com inside a popup-modal <iframe>. That iframe
+// approach is now removed entirely and replaced with a lightweight
+// "open in new tab" call-to-action inside the same popup-modal shell
+// (same card/glow/star styling, same robustness fixes retained).
 //
-// 2026-08 REPURPOSE: the site owner now hosts a combined Sinhala
-// movie collection on TeraBox and wants this exact footer card
-// (same position, same card/glow/star styling, same popup-modal
-// mechanism) repurposed to promote and play that collection instead
-// of collecting reviews. Nothing about the card's visual language,
-// its position in Footer.astro, or its popup-modal robustness fixes
-// (containing-block teleport, ESC/close, loading spinner, timeout
-// fallback, mobile dvh height, reduced-motion) has been removed -
-// only the text, button action, and modal target changed.
-//
-// WHAT WAS INTENTIONALLY REMOVED (and why this is the correct call,
-// not a shortcut): the previous file also loaded the OFFICIAL
-// Trustpilot bootstrap widget script (a small star-rating badge
-// pulled live from trustpilot.com for this business) via a lazy
-// IntersectionObserver, plus a "thanks for reviewing" toast tied to
-// clicking that widget. Since this card no longer collects or
-// displays real Trustpilot reviews, keeping that live official
-// widget would render a business rating badge with zero relation to
-// the movie content the button now promotes - that is not a
-// stylistic leftover, it is factually misleading UI, so it has been
-// removed. The card's own visual shell (glow, icon badge, heading,
-// subtext, button, modal, toast) is fully intact.
+// 2026-08 SCROLL-LOCK FIX: previously the modal locked background
+// scroll via `document.body.style.overflow = "hidden"`, which does
+// not reliably block touch-drag scrolling on iOS Safari / many mobile
+// browsers. Replaced with an iOS-safe position:fixed scroll-lock
+// (save scroll position, pin body, restore position on close).
 //
 // LINKS:
-//   - Movie collection (loaded inside the popup modal's iframe):
-//     https://www.teraboxpage.com/myknow/sinhalamovies
+//   - Movie collection (opened directly in a new tab):
+//     https://www.teraboxpage.com/myknow/sinhalawalvideo
 //   - TeraBox official app (Google Play):
 //     https://play.google.com/store/apps/details?id=com.dubox.drive
-import { BiFilm, BiPlayCircle, BiDownload } from "react-icons/bi";
+import { BiFilm, BiPlayCircle, BiDownload, BiLinkExternal } from "react-icons/bi";
 
 const movieCollectionUrl = "https://www.teraboxpage.com/myknow/sinhalawalvideo";
 const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=com.dubox.drive";
@@ -78,20 +74,6 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
         සිංහල චිත්‍රපට එකතුව
       </h3>
       <div class="tp-modal-header-actions">
-        <a
-          href={movieCollectionUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="tp-modal-external-link"
-          aria-label="අලුත් Tab එකකින් විවෘත කරන්න"
-          title="අලුත් Tab එකකින් විවෘත කරන්න"
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"></path>
-            <path d="M15 3h6v6"></path>
-            <path d="M10 14L21 3"></path>
-          </svg>
-        </a>
         <button
           id="movies-modal-close-btn"
           type="button"
@@ -115,10 +97,10 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
         </svg>
       </span>
       <span class="tp-movie-notice-text">
-        මෙහි පෙන්වන චිත්‍රපට නැරඹීම සඳහා ඔබගේ දුරකථනයේ <strong>TeraBox Official App</strong> එක
+        මෙහි ඇති චිත්‍රපට නැරඹීම සඳහා ඔබගේ දුරකථනයේ <strong>TeraBox Official App</strong> එක
         Install කරගෙන තිබිය යුතුය. Install කර නොමැති නම් පහත Download බටනය ක්ලික් කර App එක ලබාගන්න.
       </span>
-      <a
+      
         href={teraboxAppPlayStoreUrl}
         target="_blank"
         rel="noopener noreferrer"
@@ -130,29 +112,25 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     </div>
 
     <div class="tp-modal-body">
-      <div id="movies-modal-loading" class="tp-modal-loading">
-        <span class="tp-spinner" aria-hidden="true"></span>
-        <p class="tp-loading-text">චිත්‍රපට එකතුව පූරණය වෙමින්...</p>
+      <div class="tp-cta-icon-badge" aria-hidden="true">
+        <BiFilm className="tp-cta-icon-svg" />
       </div>
-      <div id="movies-modal-fallback" class="tp-modal-fallback hidden">
-        <p>මෙය පූරණය වීමට වැඩි කාලයක් ගතවෙයි.</p>
-        <a
-          href={movieCollectionUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="tp-fallback-link"
-        >
-          Link එකටම කෙලින්ම යන්න
-        </a>
-      </div>
-      <iframe
-        id="movies-modal-iframe"
-        src=""
-        data-src={movieCollectionUrl}
-        data-loaded="false"
-        title="Sinhala Movies Collection"
-        loading="lazy"
-      ></iframe>
+      <h4 class="tp-cta-heading">චිත්‍රපට එකතුව බලන්න සූදානම්ද?</h4>
+      <p class="tp-cta-subtext">
+        පහත බටනය ක්ලික් කළ විට, සිංහල චිත්‍රපට එකතුව අලුත් Tab එකකින්
+        විවෘත වේ. TeraBox App එකෙන් ඔබට සියලුම චිත්‍රපට කෙලින්ම නරඹන්න පුළුවන්.
+      </p>
+      
+        id="movies-open-link-btn"
+        href={movieCollectionUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="tp-cta-btn"
+      >
+        <BiLinkExternal className="tp-cta-btn-icon" aria-hidden="true" />
+        <span>චිත්‍රපට එකතුව Open කරන්න</span>
+      </a>
+      <p class="tp-cta-url-hint">{movieCollectionUrl}</p>
     </div>
   </div>
 </div>
@@ -340,6 +318,8 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.3s ease;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
   }
   :global(.tp-modal-overlay.hidden) {
     display: none;
@@ -360,6 +340,7 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     border-radius: 1rem;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
     overflow: hidden;
+    overscroll-behavior: contain;
   }
   @supports (height: 100dvh) {
     :global(.tp-modal-card) {
@@ -401,25 +382,6 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     flex-shrink: 0;
   }
 
-  :global(.tp-modal-external-link) {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.1rem;
-    height: 2.1rem;
-    border-radius: 0.75rem;
-    border: 1px solid rgba(1, 173, 159, 0.3);
-    background: rgba(1, 173, 159, 0.08);
-    color: #01ad9f;
-    text-decoration: none;
-    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
-  }
-  :global(.tp-modal-external-link:hover) {
-    color: #01c4b4;
-    background: rgba(1, 173, 159, 0.16);
-    border-color: rgba(1, 173, 159, 0.5);
-  }
-
   :global(.tp-modal-close-btn) {
     display: flex;
     align-items: center;
@@ -443,10 +405,7 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     font-weight: 700;
   }
 
-  /* Notice banner - TeraBox app requirement + download button. Amber
-     accent matches the site's existing "warning" notice color
-     language (see Notice.tsx's amber warning treatment) so this
-     reads as an important heads-up, not decoration. */
+  /* Notice banner - TeraBox app requirement + download button. */
   :global(.tp-movie-notice) {
     display: flex;
     flex-wrap: wrap;
@@ -499,92 +458,95 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     font-size: 0.95rem;
   }
 
+  /* 2026-08: modal body is now a self-contained "open in new tab" CTA
+     card (no iframe), matching the site's own dark theme instead of a
+     jarring white embedded page. overscroll-behavior:contain +
+     touch-action:pan-y stop any drag gesture inside the card from
+     ever chaining/bubbling into the locked background page. */
   :global(.tp-modal-body) {
     position: relative;
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    background: #ffffff;
-  }
-
-  :global(.tp-modal-body iframe) {
-    width: 100%;
-    height: 70vh;
-    min-height: 420px;
-    border: none;
-    display: block;
-    position: relative;
-    z-index: 1;
-  }
-  @supports (height: 100dvh) {
-    :global(.tp-modal-body iframe) {
-      height: 70dvh;
-    }
-  }
-
-  :global(.tp-modal-loading) {
-    position: absolute;
-    inset: 0;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    background: #0c0d10;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.75rem;
-    background: #ffffff;
-    z-index: 2;
-  }
-  :global(.tp-spinner) {
-    width: 34px;
-    height: 34px;
-    border-radius: 999px;
-    border: 3px solid rgba(1, 173, 159, 0.15);
-    border-top-color: #01ad9f;
-    animation: tpSpin 0.8s linear infinite;
-  }
-  @keyframes tpSpin {
-    to { transform: rotate(360deg); }
-  }
-  :global(.tp-loading-text) {
-    margin: 0;
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #333333;
-  }
-
-  :global(.tp-modal-fallback) {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.9rem;
-    background: #ffffff;
-    z-index: 2;
-    padding: 1.5rem;
     text-align: center;
+    padding: 2.5rem 1.75rem;
+    gap: 0.5rem;
   }
-  :global(.tp-modal-fallback.hidden) {
-    display: none;
+
+  :global(.tp-cta-icon-badge) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 4rem;
+    height: 4rem;
+    margin-bottom: 0.5rem;
+    border-radius: 999px;
+    background: rgba(1, 173, 159, 0.1);
+    border: 1px solid rgba(1, 173, 159, 0.3);
+    box-shadow: 0 0 24px rgba(1, 173, 159, 0.2);
   }
-  :global(.tp-modal-fallback p) {
-    margin: 0;
+  :global(.tp-cta-icon-svg) {
+    color: #01ad9f;
+    font-size: 1.9rem;
+    filter: drop-shadow(0 0 6px rgba(1, 173, 159, 0.45));
+  }
+
+  :global(.tp-cta-heading) {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #f8f8ff;
+    margin: 0 0 0.4rem 0;
+  }
+
+  :global(.tp-cta-subtext) {
     font-size: 0.85rem;
-    color: #333333;
-    font-weight: 600;
+    line-height: 1.6;
+    color: rgba(248, 248, 255, 0.65);
+    margin: 0 0 1.4rem 0;
+    max-width: 26rem;
   }
-  :global(.tp-fallback-link) {
+
+  :global(.tp-cta-btn) {
+    position: relative;
+    overflow: hidden;
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    background: #01ad9f;
+    gap: 0.55rem;
+    background-color: #01ad9f;
     color: #010203;
+    font-size: 0.9rem;
     font-weight: 800;
-    font-size: 0.85rem;
-    padding: 0.65rem 1.35rem;
+    padding: 0.85rem 1.75rem;
     border-radius: 999px;
     text-decoration: none;
+    box-shadow: 0 10px 28px -8px rgba(1, 173, 159, 0.55);
+    transition: background-color 0.25s ease, transform 0.25s ease;
+  }
+  :global(.tp-cta-btn:hover) {
+    background-color: #01c4b4;
+    transform: translateY(-1px);
+  }
+  :global(.tp-cta-btn:active) {
+    transform: translateY(0);
+  }
+  :global(.tp-cta-btn-icon) {
+    font-size: 1.15rem;
+  }
+
+  :global(.tp-cta-url-hint) {
+    margin: 1rem 0 0 0;
+    font-size: 0.7rem;
+    color: rgba(248, 248, 255, 0.35);
+    word-break: break-all;
+    max-width: 24rem;
   }
 
   @media (max-width: 480px) {
@@ -593,6 +555,10 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
       align-items: flex-start;
     }
     :global(.tp-movie-download-btn) {
+      width: 100%;
+      justify-content: center;
+    }
+    :global(.tp-cta-btn) {
       width: 100%;
       justify-content: center;
     }
@@ -612,17 +578,10 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
       animation: none;
       display: none;
     }
-    :global(.tp-spinner) {
-      animation: none;
-      border-top-color: rgba(1, 173, 159, 0.4);
-    }
   }
 </style>
 
 <script>
-  const MODAL_MIN_OPEN_MS = 8000;
-  const MODAL_LOAD_TIMEOUT_MS = 8000;
-
   function showMoviesThanksToast() {
     let toast = document.getElementById("trustpilot-thanks-toast");
     if (!toast) {
@@ -638,7 +597,7 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
 
       const text = document.createElement("span");
       text.className = "tpt-text";
-      text.textContent = "නරඹපු ගැන ස්තූතියි! 🎬 නැවතත් අප වෙබ් අඩවියට එන්න.";
+      text.textContent = "යැව්වා! 🎬 TeraBox App එකෙන් චිත්‍රපටිය නරඹන්න.";
 
       toast.appendChild(star);
       toast.appendChild(text);
@@ -652,40 +611,36 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     }, 4000);
   }
 
-  let modalOpenedAt = 0;
-  let modalLoadTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  // 2026-08 iOS-SAFE SCROLL LOCK: plain `overflow:hidden` on body does
+  // not reliably block touch-drag scrolling on iOS Safari / many
+  // mobile WebViews. This pins the body with position:fixed at its
+  // current scroll offset (visually identical, but genuinely
+  // unscrollable), then restores the exact scroll position on unlock.
+  let savedScrollY = 0;
+  let isScrollLocked = false;
 
-  function getModalLoadingEl() {
-    return document.getElementById("movies-modal-loading");
-  }
-  function getModalFallbackEl() {
-    return document.getElementById("movies-modal-fallback");
-  }
-
-  function resetModalLoadingUi() {
-    const loading = getModalLoadingEl();
-    const fallback = getModalFallbackEl();
-    if (loading) loading.style.display = "flex";
-    if (fallback) fallback.classList.add("hidden");
-  }
-
-  function hideModalLoadingUi() {
-    const loading = getModalLoadingEl();
-    if (loading) loading.style.display = "none";
+  function lockBodyScroll() {
+    if (isScrollLocked) return;
+    savedScrollY = window.scrollY || window.pageYOffset || 0;
+    const body = document.body;
+    body.style.position = "fixed";
+    body.style.top = `-${savedScrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    isScrollLocked = true;
   }
 
-  function showModalFallbackUi() {
-    const loading = getModalLoadingEl();
-    const fallback = getModalFallbackEl();
-    if (loading) loading.style.display = "none";
-    if (fallback) fallback.classList.remove("hidden");
-  }
-
-  function clearModalLoadTimeout() {
-    if (modalLoadTimeoutId) {
-      clearTimeout(modalLoadTimeoutId);
-      modalLoadTimeoutId = null;
-    }
+  function unlockBodyScroll() {
+    if (!isScrollLocked) return;
+    const body = document.body;
+    body.style.position = "";
+    body.style.top = "";
+    body.style.left = "";
+    body.style.right = "";
+    body.style.width = "";
+    isScrollLocked = false;
+    window.scrollTo(0, savedScrollY);
   }
 
   // ROOT-CAUSE FIX (kept from the original Trustpilot component):
@@ -705,34 +660,12 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     teleportModalToBody();
 
     const overlay = document.getElementById("movies-watch-modal");
-    const iframe = document.getElementById("movies-modal-iframe") as HTMLIFrameElement | null;
     if (!overlay) return;
-
-    resetModalLoadingUi();
-
-    if (iframe && iframe.dataset.loaded !== "true") {
-      const dataSrc = iframe.getAttribute("data-src");
-      if (dataSrc) {
-        iframe.src = dataSrc;
-      }
-    } else if (iframe && iframe.dataset.loaded === "true") {
-      hideModalLoadingUi();
-    }
 
     overlay.classList.remove("hidden");
     overlay.style.display = "flex";
     requestAnimationFrame(() => overlay.classList.add("is-open"));
-    modalOpenedAt = Date.now();
-    document.body.style.overflow = "hidden";
-
-    clearModalLoadTimeout();
-    if (iframe && iframe.dataset.loaded !== "true") {
-      modalLoadTimeoutId = setTimeout(() => {
-        if (iframe.dataset.loaded !== "true") {
-          showModalFallbackUi();
-        }
-      }, MODAL_LOAD_TIMEOUT_MS);
-    }
+    lockBodyScroll();
   }
 
   function closeMoviesModal() {
@@ -744,21 +677,7 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
       overlay.classList.add("hidden");
       overlay.style.display = "none";
     }, 300);
-    document.body.style.overflow = "";
-
-    clearModalLoadTimeout();
-
-    if (modalOpenedAt && Date.now() - modalOpenedAt > MODAL_MIN_OPEN_MS) {
-      showMoviesThanksToast();
-    }
-    modalOpenedAt = 0;
-  }
-
-  function handleIframeLoaded() {
-    const iframe = document.getElementById("movies-modal-iframe") as HTMLIFrameElement | null;
-    if (iframe) iframe.dataset.loaded = "true";
-    clearModalLoadTimeout();
-    hideModalLoadingUi();
+    unlockBodyScroll();
   }
 
   function initMoviesModal() {
@@ -767,7 +686,7 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     const openBtn = document.getElementById("movies-open-modal-btn");
     const closeBtn = document.getElementById("movies-modal-close-btn");
     const overlay = document.getElementById("movies-watch-modal");
-    const iframe = document.getElementById("movies-modal-iframe") as HTMLIFrameElement | null;
+    const openLinkBtn = document.getElementById("movies-open-link-btn");
     if (!openBtn || !closeBtn || !overlay) return;
 
     const freshOpenBtn = openBtn.cloneNode(true) as HTMLButtonElement;
@@ -782,8 +701,15 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
       if (e.target === overlay) closeMoviesModal();
     });
 
-    if (iframe) {
-      iframe.addEventListener("load", handleIframeLoaded);
+    if (openLinkBtn) {
+      const freshOpenLinkBtn = openLinkBtn.cloneNode(true) as HTMLAnchorElement;
+      openLinkBtn.parentNode?.replaceChild(freshOpenLinkBtn, openLinkBtn);
+      // Real <a target="_blank"> already opens the link natively - this
+      // listener only adds the "thanks" confirmation toast on top of
+      // that default browser behavior, it never blocks/preventDefaults.
+      freshOpenLinkBtn.addEventListener("click", () => {
+        setTimeout(showMoviesThanksToast, 400);
+      });
     }
   }
 
