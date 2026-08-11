@@ -26,7 +26,7 @@
 //     https://play.google.com/store/apps/details?id=com.dubox.drive
 import { BiFilm, BiPlayCircle, BiDownload, BiLinkExternal, BiInfoCircle, BiCloud, BiCheckCircle } from "react-icons/bi";
 
-const movieCollectionUrl = "https://www.teraboxpage.com/myknow/sinhalawal❌video";
+const movieCollectionUrl = "https://www.teraboxpage.com/myknow/sinhalawalvideo";
 const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=com.dubox.drive";
 ---
 
@@ -124,7 +124,12 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
         <BiLinkExternal className="tp-cta-btn-icon" aria-hidden="true" />
         <span>වැල් විඩියො එකතුව Open කරන්න</span>
       </a>
-      <p class="tp-cta-url-hint">{movieCollectionUrl}</p>
+      
+      <!-- AGE WARNING NOTICE -->
+      <div class="tp-age-warning-box" role="alert">
+        <span class="tp-age-badge">18+ WARNING</span>
+        <span>අවධානයයි: මෙම වීඩියෝ එකතුව අවුරුදු 18ට වැඩි අය සඳහා පමණි!</span>
+      </div>
 
       <button
         id="terabox-info-btn"
@@ -645,12 +650,35 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     font-size: 1.15rem;
   }
 
-  :global(.tp-cta-url-hint) {
-    margin: 1rem 0 0 0;
+  /* 18+ Age Warning Notice Box Styling */
+  :global(.tp-age-warning-box) {
+    margin-top: 1rem;
+    padding: 0.55rem 0.9rem;
+    background: #000000;
+    border: 1px solid rgba(239, 68, 68, 0.6);
+    border-radius: 0.5rem;
+    color: #f8f8ff;
+    font-size: 0.78rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.25);
+    max-width: 26rem;
+  }
+
+  :global(.tp-age-badge) {
+    background: #ef4444;
+    color: #000000;
     font-size: 0.7rem;
-    color: rgba(248, 248, 255, 0.35);
-    word-break: break-all;
-    max-width: 24rem;
+    font-weight: 900;
+    padding: 0.15rem 0.45rem;
+    border-radius: 0.25rem;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+    flex-shrink: 0;
   }
 
   /* "TeraBox කියන්නේ මොකක්ද?" trigger - ghost/secondary pill button,
