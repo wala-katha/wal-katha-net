@@ -1,35 +1,30 @@
 ---
 // WATCH SINHALA MOVIES PROMO CARD (footer widget)
 //
-// 2026-08 FIX (Iframe embed permanently abandoned - root cause):
-// teraboxpage.com sends its own X-Frame-Options / CSP frame-ancestors
-// header that refuses to be rendered inside ANY cross-origin <iframe>,
-// regardless of what CSP frame-src we allow on our own origin. This is
-// identical to the Trustpilot iframe problem already solved elsewhere
-// in this codebase - see the history note below. There is no
-// workaround for this: the site being embedded controls that policy,
-// not us. The permanent fix is a direct link opened in a new tab
-// instead of an iframe embed.
+// 2026-08 - IFRAME PERMANENTLY ABANDONED: teraboxpage.com refuses to
+// be embedded in any cross-origin <iframe> (its own X-Frame-Options/
+// CSP policy - identical limitation already documented for the
+// earlier Trustpilot iframe attempt). The popup opens the movie
+// collection as a normal new-tab link instead.
 //
-// HISTORY: this component used to be a Trustpilot review-collector
-// card, later repurposed to a movie-collection promo that tried to
-// load teraboxpage.com inside a popup-modal <iframe>. That iframe
-// approach is now removed entirely and replaced with a lightweight
-// "open in new tab" call-to-action inside the same popup-modal shell
-// (same card/glow/star styling, same robustness fixes retained).
+// 2026-08 SCROLL-LOCK: iOS-safe position:fixed body scroll-lock,
+// implemented with a REFERENCE COUNTER so two stacked popups (the
+// movie popup + the "What is TeraBox?" info popup opened from inside
+// it) never prematurely unlock the background while the other popup
+// is still open.
 //
-// 2026-08 SCROLL-LOCK FIX: previously the modal locked background
-// scroll via `document.body.style.overflow = "hidden"`, which does
-// not reliably block touch-drag scrolling on iOS Safari / many mobile
-// browsers. Replaced with an iOS-safe position:fixed scroll-lock
-// (save scroll position, pin body, restore position on close).
+// 2026-08 NEW: "TeraBox කියන්නේ මොකක්ද?" info popup - a second modal,
+// stacked above the movie popup (higher z-index), explaining that
+// TeraBox is a Google-Drive-like cloud storage app, that signing up
+// gives 1024GB (1TB) free storage, and that the movie collection can
+// be saved into that free storage with one click for lifetime access.
 //
 // LINKS:
 //   - Movie collection (opened directly in a new tab):
 //     https://www.teraboxpage.com/myknow/sinhalawalvideo
 //   - TeraBox official app (Google Play):
 //     https://play.google.com/store/apps/details?id=com.dubox.drive
-import { BiFilm, BiPlayCircle, BiDownload, BiLinkExternal } from "react-icons/bi";
+import { BiFilm, BiPlayCircle, BiDownload, BiLinkExternal, BiInfoCircle, BiCloud, BiCheckCircle } from "react-icons/bi";
 
 const movieCollectionUrl = "https://www.teraboxpage.com/myknow/sinhalawalvideo";
 const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=com.dubox.drive";
@@ -101,7 +96,6 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
         Install කරගෙන තිබිය යුතුය. Install කර නොමැති නම් පහත Download බටනය ක්ලික් කර App එක ලබාගන්න.
       </span>
       
-      <a
         href={teraboxAppPlayStoreUrl}
         target="_blank"
         rel="noopener noreferrer"
@@ -122,7 +116,6 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
         විවෘත වේ. TeraBox App එකෙන් ඔබට සියලුම චිත්‍රපට කෙලින්ම නරඹන්න පුළුවන්.
       </p>
       
-      <a
         id="movies-open-link-btn"
         href={movieCollectionUrl}
         target="_blank"
@@ -133,6 +126,108 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
         <span>චිත්‍රපට එකතුව Open කරන්න</span>
       </a>
       <p class="tp-cta-url-hint">{movieCollectionUrl}</p>
+
+      <button
+        id="terabox-info-btn"
+        type="button"
+        class="tp-info-link-btn"
+      >
+        <BiInfoCircle className="tp-info-link-icon" aria-hidden="true" />
+        <span>TeraBox කියන්නේ මොකක්ද?</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div
+  id="terabox-info-modal"
+  class="tp-modal-overlay hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="terabox-info-title"
+>
+  <div class="tp-modal-card">
+    <div class="tp-modal-header">
+      <h3 id="terabox-info-title" class="tp-modal-title">
+        <span class="tp-modal-dot" aria-hidden="true"></span>
+        TeraBox කියන්නේ මොකක්ද?
+      </h3>
+      <div class="tp-modal-header-actions">
+        <button
+          id="terabox-info-close-btn"
+          type="button"
+          class="tp-modal-close-btn"
+          aria-label="Close"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18"></path>
+          </svg>
+          <span class="tp-modal-close-label">වහන්න</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="tp-modal-body tp-info-modal-body">
+      <div class="tp-cta-icon-badge" aria-hidden="true">
+        <BiCloud className="tp-cta-icon-svg" />
+      </div>
+
+      <p class="tp-info-paragraph">
+        <strong>TeraBox</strong> කියන්නේ <strong>Google Drive</strong> වගේම ක්ලවුඩ් ස්ටෝරේජ්
+        (Cloud Storage) ඇප් එකක්. ඔබට වීඩියෝ, ෆොටෝ, MP3 සින්දු, ඕනෑම ෆයිල් එකක් සහ
+        තවත් බොහෝ දේවල් අන්තර්ජාලයේ ආරක්ෂිතව ගබඩා කරගන්න පුළුවන් අඩවියක්.
+      </p>
+
+      <ul class="tp-info-feature-list">
+        <li>
+          <BiCheckCircle className="tp-info-feature-icon" aria-hidden="true" />
+          <span>
+            App එක Download කරලා Sign Up උනාම, ඔබට <strong>1024 GB (1 TB)</strong>
+            මෙමරි ස්පේස් එකක් සම්පූර්ණයෙන්ම නොමිලේ ලැබෙනවා.
+          </span>
+        </li>
+        <li>
+          <BiCheckCircle className="tp-info-feature-icon" aria-hidden="true" />
+          <span>
+            මේ නරඹන චිත්‍රපටිය බටනයක් Click කිරීමෙන් කෙලින්ම ඔබේ TeraBox ගිණුමට
+            <strong>Save</strong> කරගන්න පුළුවන් - ඔබට ලැබෙන නොමිලේ Storage එක
+            පිරෙනකම් ඕනෑ තරම් movies save කරගන්න පුළුවන්.
+          </span>
+        </li>
+        <li>
+          <BiCheckCircle className="tp-info-feature-icon" aria-hidden="true" />
+          <span>
+            Save කරගත්තහම ඒවා ඔබේ ගිණුමේ <strong>ජීවිත කාලයටම</strong> ආරක්ෂිතව
+            තියෙනවා - ඔබට ඕනෑම වෙලාවක, ඕනෑම තැනක ඉඳන් නැවත බලාගන්න පුළුවන්.
+          </span>
+        </li>
+        <li>
+          <BiCheckCircle className="tp-info-feature-icon" aria-hidden="true" />
+          <span>
+            Site එකේ Link එකක් වෙනස් වුනත් හෝ file එකක් ඉවත් වුනත්, ඔබ Save
+            කරගත්ත Copy එක ඔබේම ගිණුමේ ආරක්ෂිතව රැඳී තියෙනවා.
+          </span>
+        </li>
+      </ul>
+
+      <div class="tp-info-actions">
+        
+          href={teraboxAppPlayStoreUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="tp-cta-btn tp-info-download-btn"
+        >
+          <BiDownload className="tp-cta-btn-icon" aria-hidden="true" />
+          <span>TeraBox App එක Download කරන්න</span>
+        </a>
+        <button
+          id="terabox-info-got-it-btn"
+          type="button"
+          class="tp-info-link-btn"
+        >
+          තේරුණා, හරි (Got it)
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -302,10 +397,10 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     flex: 1;
   }
 
-  /* Modal-related styles are :global() because the modal is moved to
-     document.body at runtime (see teleportModalToBody in the script
+  /* Modal-related styles are :global() because both modals are moved
+     to document.body at runtime (see teleportModal() in the script
      below) to escape Footer.astro's backdrop-blur containing-block
-     bug - once moved it is no longer a descendant of this
+     bug - once moved they are no longer descendants of this
      component's own scoped root. */
   :global(.tp-modal-overlay) {
     position: fixed;
@@ -329,6 +424,14 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
   :global(.tp-modal-overlay.is-open) {
     opacity: 1;
     pointer-events: auto;
+  }
+
+  /* The "What is TeraBox?" info popup stacks ABOVE the movie popup
+     (which stays open in the background behind it) - a strictly
+     higher z-index guarantees it always renders on top whenever both
+     happen to be open at once. */
+  :global(#terabox-info-modal.tp-modal-overlay) {
+    z-index: 100000;
   }
 
   :global(.tp-modal-card) {
@@ -460,11 +563,11 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     font-size: 0.95rem;
   }
 
-  /* 2026-08: modal body is now a self-contained "open in new tab" CTA
-     card (no iframe), matching the site's own dark theme instead of a
-     jarring white embedded page. overscroll-behavior:contain +
-     touch-action:pan-y stop any drag gesture inside the card from
-     ever chaining/bubbling into the locked background page. */
+  /* Movie modal body - self-contained "open in new tab" CTA card
+     (no iframe), matching the site's own dark theme.
+     overscroll-behavior:contain + touch-action:pan-y stop any drag
+     gesture inside the card from ever chaining/bubbling into the
+     locked background page. */
   :global(.tp-modal-body) {
     position: relative;
     flex: 1 1 auto;
@@ -551,6 +654,96 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     max-width: 24rem;
   }
 
+  /* "TeraBox කියන්නේ මොකක්ද?" trigger - ghost/secondary pill button,
+     visually distinct (subdued) from the main teal CTA button so it
+     reads as a supplementary action, not the primary one. */
+  :global(.tp-info-link-btn) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    background: transparent;
+    color: #01ad9f;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.55rem 1.1rem;
+    border: 1px solid rgba(1, 173, 159, 0.35);
+    border-radius: 999px;
+    cursor: pointer;
+    text-decoration: none;
+    margin-top: 1rem;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+  :global(.tp-info-link-btn:hover) {
+    background: rgba(1, 173, 159, 0.1);
+    border-color: rgba(1, 173, 159, 0.55);
+  }
+  :global(.tp-info-link-icon) {
+    font-size: 0.95rem;
+  }
+
+  /* Info popup body - left-aligned, readable paragraph layout instead
+     of the centered short-CTA layout used by the movie popup body. */
+  :global(.tp-info-modal-body) {
+    align-items: stretch;
+    text-align: left;
+    padding: 1.75rem 1.5rem 2rem;
+  }
+  :global(.tp-info-modal-body .tp-cta-icon-badge) {
+    align-self: center;
+    margin-bottom: 1rem;
+  }
+  :global(.tp-info-paragraph) {
+    font-size: 0.86rem;
+    line-height: 1.7;
+    color: rgba(248, 248, 255, 0.8);
+    margin: 0 0 1.15rem 0;
+  }
+  :global(.tp-info-paragraph strong) {
+    color: #01ad9f;
+  }
+  :global(.tp-info-feature-list) {
+    list-style: none;
+    margin: 0 0 1.5rem 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  :global(.tp-info-feature-list li) {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: rgba(248, 248, 255, 0.75);
+  }
+  :global(.tp-info-feature-list li strong) {
+    color: #f8f8ff;
+  }
+  :global(.tp-info-feature-icon) {
+    color: #01ad9f;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+  }
+  :global(.tp-info-actions) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  :global(.tp-info-download-btn) {
+    width: 100%;
+    justify-content: center;
+    margin-top: 0.25rem;
+  }
+  :global(.tp-info-actions .tp-info-link-btn) {
+    margin-top: 0;
+  }
+
   @media (max-width: 480px) {
     :global(.tp-movie-notice) {
       flex-direction: column;
@@ -613,65 +806,75 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     }, 4000);
   }
 
-  // 2026-08 iOS-SAFE SCROLL LOCK: plain `overflow:hidden` on body does
-  // not reliably block touch-drag scrolling on iOS Safari / many
-  // mobile WebViews. This pins the body with position:fixed at its
-  // current scroll offset (visually identical, but genuinely
-  // unscrollable), then restores the exact scroll position on unlock.
+  // 2026-08 iOS-SAFE, REFERENCE-COUNTED SCROLL LOCK: plain
+  // `overflow:hidden` on body does not reliably block touch-drag
+  // scrolling on iOS Safari / many mobile WebViews, so this pins the
+  // body with position:fixed at its current scroll offset instead.
+  // A reference counter (scrollLockCount) is required because TWO
+  // modals can be open at once (movie popup + info popup stacked on
+  // top of it) - without counting, closing the SECOND modal while the
+  // FIRST is still open would incorrectly unlock the background.
   let savedScrollY = 0;
-  let isScrollLocked = false;
+  let scrollLockCount = 0;
 
   function lockBodyScroll() {
-    if (isScrollLocked) return;
-    savedScrollY = window.scrollY || window.pageYOffset || 0;
-    const body = document.body;
-    body.style.position = "fixed";
-    body.style.top = `-${savedScrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
-    isScrollLocked = true;
+    if (scrollLockCount === 0) {
+      savedScrollY = window.scrollY || window.pageYOffset || 0;
+      const body = document.body;
+      body.style.position = "fixed";
+      body.style.top = `-${savedScrollY}px`;
+      body.style.left = "0";
+      body.style.right = "0";
+      body.style.width = "100%";
+    }
+    scrollLockCount++;
   }
 
   function unlockBodyScroll() {
-    if (!isScrollLocked) return;
-    const body = document.body;
-    body.style.position = "";
-    body.style.top = "";
-    body.style.left = "";
-    body.style.right = "";
-    body.style.width = "";
-    isScrollLocked = false;
-    window.scrollTo(0, savedScrollY);
+    scrollLockCount = Math.max(0, scrollLockCount - 1);
+    if (scrollLockCount === 0) {
+      const body = document.body;
+      body.style.position = "";
+      body.style.top = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+      window.scrollTo(0, savedScrollY);
+    }
   }
 
   // ROOT-CAUSE FIX (kept from the original Trustpilot component):
   // Footer.astro's <footer> uses backdrop-blur-xl (backdrop-filter),
   // which per the CSS spec makes it a new containing block for any
-  // descendant using position:fixed. Moving the modal to be a direct
+  // descendant using position:fixed. Moving each modal to be a direct
   // child of document.body at runtime restores it as a true
   // viewport-fixed overlay. Idempotent - safe to call on every open.
-  function teleportModalToBody() {
-    const overlay = document.getElementById("movies-watch-modal");
+  function teleportModalToBody(id: string) {
+    const overlay = document.getElementById(id);
     if (!overlay) return;
     if (overlay.parentElement === document.body) return;
     document.body.appendChild(overlay);
   }
 
-  function openMoviesModal() {
-    teleportModalToBody();
+  // Stack of currently-open modal ids, most-recently-opened last, so
+  // the Escape key always closes only the topmost (visually frontmost)
+  // popup instead of closing both at once.
+  const openModalStack: string[] = [];
 
-    const overlay = document.getElementById("movies-watch-modal");
+  function openModalById(id: string) {
+    teleportModalToBody(id);
+    const overlay = document.getElementById(id);
     if (!overlay) return;
 
     overlay.classList.remove("hidden");
     overlay.style.display = "flex";
     requestAnimationFrame(() => overlay.classList.add("is-open"));
     lockBodyScroll();
+    openModalStack.push(id);
   }
 
-  function closeMoviesModal() {
-    const overlay = document.getElementById("movies-watch-modal");
+  function closeModalById(id: string) {
+    const overlay = document.getElementById(id);
     if (!overlay) return;
 
     overlay.classList.remove("is-open");
@@ -680,15 +883,37 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
       overlay.style.display = "none";
     }, 300);
     unlockBodyScroll();
+
+    const idx = openModalStack.lastIndexOf(id);
+    if (idx !== -1) openModalStack.splice(idx, 1);
+  }
+
+  function openMoviesModal() {
+    openModalById("movies-watch-modal");
+  }
+  function closeMoviesModal() {
+    closeModalById("movies-watch-modal");
+  }
+  function openTeraboxInfoModal() {
+    openModalById("terabox-info-modal");
+  }
+  function closeTeraboxInfoModal() {
+    closeModalById("terabox-info-modal");
   }
 
   function initMoviesModal() {
-    teleportModalToBody();
+    teleportModalToBody("movies-watch-modal");
+    teleportModalToBody("terabox-info-modal");
 
     const openBtn = document.getElementById("movies-open-modal-btn");
     const closeBtn = document.getElementById("movies-modal-close-btn");
     const overlay = document.getElementById("movies-watch-modal");
     const openLinkBtn = document.getElementById("movies-open-link-btn");
+    const infoBtn = document.getElementById("terabox-info-btn");
+    const infoCloseBtn = document.getElementById("terabox-info-close-btn");
+    const infoOverlay = document.getElementById("terabox-info-modal");
+    const infoGotItBtn = document.getElementById("terabox-info-got-it-btn");
+
     if (!openBtn || !closeBtn || !overlay) return;
 
     const freshOpenBtn = openBtn.cloneNode(true) as HTMLButtonElement;
@@ -713,6 +938,30 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
         setTimeout(showMoviesThanksToast, 400);
       });
     }
+
+    if (infoBtn) {
+      const freshInfoBtn = infoBtn.cloneNode(true) as HTMLButtonElement;
+      infoBtn.parentNode?.replaceChild(freshInfoBtn, infoBtn);
+      freshInfoBtn.addEventListener("click", openTeraboxInfoModal);
+    }
+
+    if (infoCloseBtn) {
+      const freshInfoCloseBtn = infoCloseBtn.cloneNode(true) as HTMLButtonElement;
+      infoCloseBtn.parentNode?.replaceChild(freshInfoCloseBtn, infoCloseBtn);
+      freshInfoCloseBtn.addEventListener("click", closeTeraboxInfoModal);
+    }
+
+    if (infoGotItBtn) {
+      const freshInfoGotItBtn = infoGotItBtn.cloneNode(true) as HTMLButtonElement;
+      infoGotItBtn.parentNode?.replaceChild(freshInfoGotItBtn, infoGotItBtn);
+      freshInfoGotItBtn.addEventListener("click", closeTeraboxInfoModal);
+    }
+
+    if (infoOverlay) {
+      infoOverlay.addEventListener("click", (e) => {
+        if (e.target === infoOverlay) closeTeraboxInfoModal();
+      });
+    }
   }
 
   document.addEventListener("astro:page-load", initMoviesModal);
@@ -721,10 +970,11 @@ const teraboxAppPlayStoreUrl = "https://play.google.com/store/apps/details?id=co
     (window as any).__wkMoviesEscapeBound = true;
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
-      const overlay = document.getElementById("movies-watch-modal");
-      if (overlay && overlay.classList.contains("is-open")) {
-        closeMoviesModal();
-      }
+      if (openModalStack.length === 0) return;
+      // Close only the topmost (most recently opened) popup so a
+      // single Escape press never closes both stacked popups at once.
+      const topModalId = openModalStack[openModalStack.length - 1];
+      closeModalById(topModalId);
     });
   }
 </script>
