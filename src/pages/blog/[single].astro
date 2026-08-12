@@ -5,6 +5,7 @@ import PostSingle from "@/partials/PostSingle.astro";
 import config from "@/config/config.json";
 import { isValid } from "date-fns";
 import { slugify as globalSlugify } from "@/lib/utils/textConverter";
+import { buildMetaKeywords } from "@/lib/utils/keywordExtractor";
 
 export async function getStaticPaths() {
   const BLOG_FOLDER = "posts";
@@ -81,10 +82,14 @@ const imageObject = {
   "height": 630
 };
 
-// keywords: reuses the same post.data.tags source already rendered
-// via <meta name="keywords"> in PostSingle.astro, so both can never
-// drift out of sync.
-const keywordsString = Array.isArray(tags) && tags.length > 0 ? tags.join(", ") : undefined;
+// keywords: previously sourced purely from post.data.tags. Now merged
+// with auto-extracted body keywords via keywordExtractor.ts's
+// buildMetaKeywords() - same helper PostSingle.astro's meta keywords
+// tag uses, so the schema keywords field and the meta tag stay
+// conceptually consistent (both derived from tags + body content +
+// global force keywords) without needing to be byte-identical strings.
+const mergedKeywords = buildMetaKeywords(tags || [], post.body);
+const keywordsString = mergedKeywords.length > 0 ? mergedKeywords.join(", ") : undefined;
 
 // speakable: points at the two real, crawlable DOM nodes
 // PostSingle.astro already renders for this purpose
