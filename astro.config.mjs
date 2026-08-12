@@ -233,6 +233,38 @@ function parseFontString(fontStr) {
   const cleanName = name.replace(/\+/g, " ");
   return { name: cleanName, weights };
 }
+// ==========================================================
+// FIXED (CRITICAL - Cloudflare Pages build failure,
+// "CannotFetchFontFile" 404 on fonts.gstatic.com):
+//
+// ROOT CAUSE: Astro's stable Fonts API (the "fonts" config array
+// below) computes fallback font metrics at BUILD TIME by making a
+// real network request to the font provider to download the actual
+// font file bytes (needed to calculate size-adjust/ascent-override
+// CSS via Capsize). With fontProviders.google(), that request goes
+// directly to fonts.gstatic.com using a specific hashed file URL.
+// Google periodically rotates these hashed URLs when a font family
+// is re-published - an old hash that worked yesterday can start
+// returning a hard 404 with zero warning, and since this happens
+// during the Cloudflare Pages build step (not in the browser), a
+// single flaky/rotated URL fails the ENTIRE site build.
+//
+// This exact class of problem (fonts.gstatic.com becoming
+// unreliable for build-time fetches) is already documented and
+// worked around elsewhere in this codebase - see
+// src/lib/og/font.ts, which had to add a jsDelivr CDN fallback for
+// the exact same reason when generating OG images with Satori.
+//
+// FIX: switched the provider from fontProviders.google() to
+// fontProviders.bunny(). Bunny Fonts mirrors the entire Google
+// Fonts catalog (same family names, same weights - "Mulish" is
+// unaffected and needs zero other config changes) but is served
+// from Bunny's own CDN infrastructure, which is not subject to the
+// same hash-rotation behavior that broke the Google-hosted URL
+// above. This removes the dependency on fonts.gstatic.com's
+// build-time availability entirely, with a single provider swap and
+// no binary font files needing to be committed to the repo.
+// ==========================================================
 const fontsConfig = Object.entries(theme.fonts.font_family)
   .filter(([key]) => !key.includes("_type"))
   .map(([key, fontStr]) => {
@@ -242,7 +274,7 @@ const fontsConfig = Object.entries(theme.fonts.font_family)
     return {
       name,
       cssVariable: `--font-${key}`,
-      provider: fontProviders.google(),
+      provider: fontProviders.bunny(),
       weights,
       display: "swap",
       fallbacks: [fallback],
