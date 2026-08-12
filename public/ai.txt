@@ -2,7 +2,7 @@
 # Format: informal, human + machine-readable manifest.
 # See also: /llms.txt (AI-readable site summary), /robots.txt (crawler rules)
 
-Site: Wala Katha
+Site: Sinhala Wal Katha
 URL: https://www.walakatha.net
 Content-Type: Fictional creative writing (Sinhala-language short stories, "wal katha" genre)
 Audience: Adults (18+) only
