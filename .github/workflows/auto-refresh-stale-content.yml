@@ -1,0 +1,260 @@
+name: Auto Content Freshness Refresher (Stale Post Updater)
+# පැරණි වුනත් traffic තියෙන posts වල frontmatter "updated" date එක
+# ස්වයංක්‍රීයව refresh කර, Google ට "මේ content එක නැවුම්" කියලා
+# freshness signal එකක් යවයි. Content එකේ text කිසිවක් වෙනස් නොකරයි -
+# "updated:" field එක විතරයි touch කරන්නේ.
+#
+# src/content.config.ts හි "updated" field එකත්, PostSingle.astro /
+# blog/[single].astro හි "Updated" badge + article:modified_time
+# schema logic එකත් දැනටමත් මෙම field එකම පාවිච්චි කරන නිසා, මෙය
+# existing infra එකට කෙලින්ම connect වේ - අලුත් schema/UI වෙනසක්
+# අවශ්‍ය නොවේ.
+#
+# SAFETY DESIGN (site-wide established pattern - auto-fix-url-issues.yml
+# එකේම pattern එකම): main branch එකට කෙලින්ම commit වෙන්නේ නැත.
+# 1) පරණ + traffic ඇති posts detect කරනවා (Search Console API, optional)
+# 2) අලුත් branch එකක updated field ටික edit කරනවා
+# 3) සෑම edit එකකටම self-test guard එකක් - YAML/content integrity
+#    verify කරලා, fail උනොත් ඒ file එක skip කරනවා (write කරන්නේ නෑ)
+# 4) yarn build එකෙන් verify කරනවා (fail උනොත් commit/PR කිසිවක් නෑ)
+# 5) Pull Request එකක් විවෘත කරනවා - review කරලා merge කරන තුරු
+#    කිසිම වෙනසක් site එකට යන්නේ නෑ.
+#
+# RATE LIMIT: එක run එකකට posts 3ක් පමණයි refresh කරන්නේ
+# (MAX_REFRESH_PER_RUN) - Google ට "mass edit spam" වගේ පෙනීම
+# වළක්වයි, සහ PR review එක පහසුවෙන් කරගත හැකි ප්‍රමාණයක් තියාගැනීමට.
+#
+# TRAFFIC SIGNAL (OPTIONAL): "GSC_SERVICE_ACCOUNT_KEY" secret එකක්
+# (Google Search Console API access ඇති service account JSON, Search
+# Console Property එකට "Owner"/"Full" access දෙන්න ඕන) repo secrets
+# වලට add කළොත්, පසුගිය දින 28ක clicks තියෙන posts පමණක් priority
+# කරයි. Secret එක නැත්නම් (default), ස්වයංක්‍රීයවම වයසින්ම පරණම
+# posts ටික fallback ලෙස තෝරයි - build කිසිවක් fail වෙන්නේ නෑ.
+on:
+  schedule:
+    - cron: "0 4 1 * *"
+  workflow_dispatch: {}
+permissions:
+  contents: write
+  pull-requests: write
+env:
+  MAX_REFRESH_PER_RUN: "3"
+  AGE_THRESHOLD_DAYS: "180"
+jobs:
+  refresh-stale-content:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Configure git identity
+        run: |
+          git config user.name "wal-katha-freshness-bot"
+          git config user.email "freshness-bot@users.noreply.github.com"
+      - name: Create working branch
+        id: branch
+        run: |
+          BRANCH="autofix/content-freshness-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          echo "branch_name=$BRANCH" >> "$GITHUB_OUTPUT"
+      - name: Install helper packages in isolated temp folder
+        run: |
+          mkdir -p /tmp/freshness-tool
+          cd /tmp/freshness-tool
+          npm init -y
+          npm install gray-matter@4 googleapis@144
+      - name: Detect and refresh stale-but-trafficked posts
+        id: refresh
+        env:
+          GSC_SERVICE_ACCOUNT_KEY: ${{ secrets.GSC_SERVICE_ACCOUNT_KEY }}
+        run: |
+          node --input-type=module << 'EOF'
+          import { createRequire } from 'module';
+          import { readFileSync, writeFileSync, readdirSync, appendFileSync } from 'fs';
+          import { join } from 'path';
+          const require = createRequire('/tmp/freshness-tool/package.json');
+          const matter = require('gray-matter');
+          const POSTS_DIR = 'src/content/posts';
+          const SITE_URL = 'https://www.walakatha.net';
+          const AGE_THRESHOLD_DAYS = parseInt(process.env.AGE_THRESHOLD_DAYS || '180', 10);
+          const MAX_REFRESH_PER_RUN = parseInt(process.env.MAX_REFRESH_PER_RUN || '3', 10);
+          function daysSince(dateStr) {
+            const then = new Date(dateStr);
+            if (isNaN(then.getTime())) return 0;
+            return Math.floor((Date.now() - then.getTime()) / (1000 * 60 * 60 * 24));
+          }
+          const files = readdirSync(POSTS_DIR).filter((f) => /\.(md|mdx)$/i.test(f) && !f.startsWith('-'));
+          const candidates = [];
+          for (const file of files) {
+            const filePath = join(POSTS_DIR, file);
+            const raw = readFileSync(filePath, 'utf-8');
+            const parsed = matter(raw);
+            const fm = parsed.data || {};
+            if (!fm.date) continue;
+            const referenceDate = fm.updated || fm.date;
+            const age = daysSince(referenceDate);
+            if (age >= AGE_THRESHOLD_DAYS) {
+              const slug = file.replace(/\.[^.]+$/, '');
+              candidates.push({ file: filePath, slug, age, title: fm.title || slug });
+            }
+          }
+          candidates.sort((a, b) => b.age - a.age);
+          console.log(`Found ${candidates.length} post(s) older than ${AGE_THRESHOLD_DAYS} days.`);
+          let trafficMap = null;
+          if (process.env.GSC_SERVICE_ACCOUNT_KEY) {
+            try {
+              const { google } = require('googleapis');
+              const key = JSON.parse(process.env.GSC_SERVICE_ACCOUNT_KEY);
+              const jwt = new google.auth.JWT(
+                key.client_email, null, key.private_key,
+                ['https://www.googleapis.com/auth/webmasters.readonly'], null
+              );
+              await jwt.authorize();
+              const searchconsole = google.searchconsole({ version: 'v1', auth: jwt });
+              const end = new Date();
+              const start = new Date();
+              start.setDate(start.getDate() - 28);
+              const fmt = (d) => d.toISOString().split('T')[0];
+              const res = await searchconsole.searchanalytics.query({
+                siteUrl: `${SITE_URL}/`,
+                requestBody: {
+                  startDate: fmt(start),
+                  endDate: fmt(end),
+                  dimensions: ['page'],
+                  rowLimit: 5000,
+                },
+              });
+              trafficMap = new Map();
+              for (const row of res.data.rows || []) {
+                trafficMap.set(row.keys[0], row.clicks || 0);
+              }
+              console.log(`Search Console data loaded for ${trafficMap.size} page(s).`);
+            } catch (err) {
+              console.warn('Search Console query failed, falling back to age-only selection:', err.message);
+              trafficMap = null;
+            }
+          } else {
+            console.log('GSC_SERVICE_ACCOUNT_KEY not set - using age-only fallback selection.');
+          }
+          let selected;
+          if (trafficMap) {
+            selected = candidates
+              .map((c) => {
+                const url1 = `${SITE_URL}/blog/${c.slug}/`;
+                const url2 = `${SITE_URL}/blog/${c.slug}`;
+                c.clicks = trafficMap.get(url1) ?? trafficMap.get(url2) ?? 0;
+                return c;
+              })
+              .filter((c) => c.clicks > 0)
+              .sort((a, b) => b.clicks - a.clicks || b.age - a.age);
+          } else {
+            selected = candidates;
+          }
+          selected = selected.slice(0, MAX_REFRESH_PER_RUN);
+          if (selected.length === 0) {
+            console.log('No stale-but-trafficked posts found this run - nothing to refresh.');
+            appendFileSync(process.env.GITHUB_OUTPUT, 'has_changes=false\n');
+            process.exit(0);
+          }
+          function upsertUpdatedField(raw, dateStr) {
+            const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+            if (!fmMatch) return null;
+            let fmBlock = fmMatch[1];
+            const updatedLineRegex = /^updated:\s*.*$/m;
+            if (updatedLineRegex.test(fmBlock)) {
+              fmBlock = fmBlock.replace(updatedLineRegex, `updated: ${dateStr}`);
+            } else if (/^date:\s*.*$/m.test(fmBlock)) {
+              fmBlock = fmBlock.replace(/^(date:\s*.*)$/m, `$1\nupdated: ${dateStr}`);
+            } else {
+              fmBlock = `updated: ${dateStr}\n${fmBlock}`;
+            }
+            return raw.slice(0, fmMatch.index) + '---\n' + fmBlock + '\n---' + raw.slice(fmMatch.index + fmMatch[0].length);
+          }
+          const today = new Date().toISOString().split('T')[0];
+          const touched = [];
+          for (const item of selected) {
+            const original = readFileSync(item.file, 'utf-8');
+            const updatedRaw = upsertUpdatedField(original, today);
+            if (!updatedRaw) {
+              console.warn(`SELF-TEST FAILED (no frontmatter block found): ${item.file} - skipped.`);
+              continue;
+            }
+            const reparsed = matter(updatedRaw);
+            const originalParsed = matter(original);
+            const selfTestOk =
+              reparsed.data.updated &&
+              !isNaN(new Date(reparsed.data.updated).getTime()) &&
+              reparsed.data.title === originalParsed.data.title &&
+              reparsed.content.trim() === originalParsed.content.trim();
+            if (!selfTestOk) {
+              console.warn(`SELF-TEST FAILED (frontmatter integrity check): ${item.file} - skipped.`);
+              continue;
+            }
+            writeFileSync(item.file, updatedRaw, 'utf-8');
+            touched.push(item);
+            console.log(`Refreshed: ${item.file} (age ${item.age}d${item.clicks !== undefined ? ', clicks ' + item.clicks : ''})`);
+          }
+          writeFileSync('/tmp/refresh-summary.json', JSON.stringify(touched, null, 2));
+          appendFileSync(process.env.GITHUB_OUTPUT, `has_changes=${touched.length > 0 ? 'true' : 'false'}\n`);
+          EOF
+      - name: Verify build integrity before commit
+        if: steps.refresh.outputs.has_changes == 'true'
+        run: |
+          corepack enable
+          yarn install --frozen-lockfile
+          yarn build
+      - name: Commit refreshed posts
+        id: commit
+        if: steps.refresh.outputs.has_changes == 'true'
+        run: |
+          git add src/content/posts/*.md src/content/posts/*.mdx || true
+          if git diff --staged --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Auto: refresh freshness date on stale, trafficked posts"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Push branch
+        if: steps.commit.outputs.has_changes == 'true'
+        run: git push origin "${{ steps.branch.outputs.branch_name }}"
+      - name: Open Pull Request
+        if: steps.commit.outputs.has_changes == 'true'
+        env:
+          BRANCH_NAME: ${{ steps.branch.outputs.branch_name }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.existsSync('/tmp/refresh-summary.json')
+              ? JSON.parse(fs.readFileSync('/tmp/refresh-summary.json', 'utf8'))
+              : [];
+            const rows = summary
+              .map((s) => `- **${s.title}** (\`${s.file}\`) - age ${s.age} days${s.clicks !== undefined ? `, ${s.clicks} clicks (28d)` : ''}`)
+              .join('\n');
+            const body = [
+              '## 🤖 Auto Content Freshness Refresh',
+              '',
+              'මෙම PR එකෙන් පසුගිය දින 180ට වඩා පරණ, traffic තියෙන (හෝ traffic data නොමැති නම් වයසින්ම පරණම) posts වල `updated` frontmatter date එක refresh කර ඇත. Post content එකේ text කිසිවක් වෙනස් වී නැත.',
+              '',
+              '### ✅ Merge කරන්න කලින් check කරන්න:',
+              '- [x] `yarn build` සාර්ථකව සම්පූර්ණ විය (මෙම PR create වුනේම build එක pass වූ පසුවය).',
+              '- [x] Self-test guard සියලුම refresh වූ posts වල YAML/content integrity verify කර ඇත.',
+              '- [ ] Merge කිරීමෙන් පසු Cloudflare Pages deployment preview එක verify කරන්න.',
+              '',
+              '### 📝 Refresh වූ Posts:',
+              rows || '(none)',
+              '',
+              '_මෙම PR එක ස්වයංක්‍රීයව scan-and-propose කරන bot එකකින් සාදන ලදී. Direct commit කිසිවක් main branch එකට සිදු වී නැත._',
+            ].join('\n');
+            await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🤖 Auto: Content freshness refresh (stale post updater)',
+              head: process.env.BRANCH_NAME,
+              base: 'main',
+              body,
+            });
+      - name: No changes detected
+        if: steps.refresh.outputs.has_changes != 'true'
+        run: echo "No stale-but-trafficked posts needed a freshness refresh this run."
