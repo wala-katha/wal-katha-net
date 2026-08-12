@@ -10,10 +10,11 @@ import theme from "./src/config/theme.json";
 import remarkAutoInternalLinks from "./src/lib/remarkAutoInternalLinks.mjs";
 import redirectFixer from "./src/integrations/redirect-fixer.mjs";
 import earlyHintsPreload from "./src/integrations/early-hints-preload.mjs";
-import criticalCssInline from "./src/integrations/critical-css-inline.mjs";
-// ==========================================================
-// GIT-COMMIT-BASED REAL-TIME LASTMOD SYSTEM
-// ==========================================================
+// critical-css-inline Astro integration REMOVED. Beasties now runs as
+// a standalone post-build script (scripts/inline-critical-css.mjs,
+// invoked via package.json's "build" script), NOT as an
+// astro:build:done hook - that hook context hit "Vite module runner
+// has been closed" when performing a dynamic import() of beasties.
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -208,25 +209,6 @@ export default defineConfig({
   site: config.site.base_url ? config.site.base_url : "https://www.walakatha.net",
   base: config.site.base_path ? config.site.base_path : "/",
   trailingSlash: config.site.trailing_slash ? "always" : "never",
-  // ==========================================================
-  // CRITICAL CSS STRATEGY (2026-08 UPDATE): switched from
-  // inlineStylesheets: "always" (which inlined the ENTIRE ~19.6 KiB
-  // compiled CSS bundle into every page, bloating HTML page size and
-  // failing the "HTML Page Size Test") to "never" - CSS now stays as
-  // a real external stylesheet link in the built HTML. The
-  // criticalCssInline() integration below (astro:build:done hook,
-  // powered by Beasties) then post-processes every built HTML file:
-  // it extracts ONLY the real, page-specific above-the-fold CSS and
-  // inlines that (a few KB, not the whole 19.6 KiB bundle), and loads
-  // the remaining CSS non-blocking via rel="preload" + onload swap
-  // (with a <noscript> fallback) - so first paint is never blocked by
-  // an external stylesheet request (solving the original
-  // render-blocking-requests problem "always" was added for) while
-  // keeping HTML page size small (solving the page-size problem
-  // "auto" was later added for, without reintroducing the render
-  // block "auto" caused since this bundle exceeds its 4 KB inline
-  // threshold).
-  // ==========================================================
   build: {
     format: "directory",
     inlineStylesheets: "never",
@@ -251,11 +233,6 @@ export default defineConfig({
     react(),
     redirectFixer(),
     earlyHintsPreload(),
-    // Critical CSS extraction + inlining (Beasties) - runs LAST so it
-    // processes the fully-built HTML/CSS output from every prior step
-    // (including earlyHintsPreload's own dist/_headers additions,
-    // which it does not touch since it only rewrites .html files).
-    criticalCssInline(),
     sitemap({
       changefreq: "weekly",
       priority: 0.7,
