@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Wala Katha - සිංහල වල් කතා",
-  "short_name": "Wala Katha",
-  "description": "Wala Katha: නවතම සිංහල වල් කතා, වැල කතා සහ අලුත්ම කෙටි කතා දිනපතා කියවන්න.",
+  "name": "Sinhala Wal Katha - සිංහල වල් කතා",
+  "short_name": "Wal Katha - වල් කතා",
+  "description": "2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
