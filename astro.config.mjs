@@ -7,9 +7,9 @@ import gtm from "astro-gtm-lite";
 import { defineConfig, fontProviders, sharpImageService } from "astro/config";
 import config from "./src/config/config.json";
 import theme from "./src/config/theme.json";
-import remarkAutoInternalLinks from "./src/lib/remarkAutoInternalLinks.mjs";
 import redirectFixer from "./src/integrations/redirect-fixer.mjs";
 import earlyHintsPreload from "./src/integrations/early-hints-preload.mjs";
+import markdownPlugins from "./src/integrations/markdown-plugins.mjs";
 // ==========================================================
 // GIT-COMMIT-BASED REAL-TIME LASTMOD SYSTEM
 //
@@ -451,6 +451,12 @@ export default defineConfig({
     // never blocks or fails the build (see
     // src/integrations/early-hints-preload.mjs).
     earlyHintsPreload(),
+    // FIXED (Astro "markdown.remarkPlugins option has been deprecated"
+    // warning): registers remarkAutoInternalLinks through the
+    // recommended astro:config:setup + updateConfig integration
+    // pattern instead of the deprecated top-level markdown.remarkPlugins
+    // shorthand. See src/integrations/markdown-plugins.mjs.
+    markdownPlugins(),
     sitemap({
       changefreq: "weekly",
       priority: 0.7,
@@ -496,7 +502,6 @@ export default defineConfig({
     }),
   ],
   markdown: {
-    remarkPlugins: [remarkAutoInternalLinks],
     shikiConfig: { theme: "one-dark-pro", wrap: true },
   },
 });
