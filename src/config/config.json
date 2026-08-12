@@ -1,6 +1,6 @@
 {
   "site": {
-    "title": "Wal Katha",
+    "title": "Sinhala Wal Katha",
     "base_url": "https://www.walakatha.net",
     "base_path": "/",
     "trailing_slash": true,
@@ -8,7 +8,7 @@
     "logo": "/images/logo.webp",
     "logo_width": "300",
     "logo_height": "50",
-    "logo_text": "Wala Katha"
+    "logo_text": "Wal Katha"
   },
 
   "settings": {
@@ -28,7 +28,7 @@
 
   "params": {
     "contact_form_action": "#",
-    "copyright": "Copyright © 2026 [Wal Katha](https://www.walakatha.net) | All Rights Reserved."
+    "copyright": "Copyright © 2026 [Sinhala Wal Katha](https://www.walakatha.net) | All Rights Reserved."
   },
 
   "contactinfo": {
