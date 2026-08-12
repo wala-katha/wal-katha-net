@@ -1,3 +1,11 @@
+# 🎯 EARLY HINTS AUTOMATION NOTE (2026-08):
+# Per-post hero-image "Link: <...>; rel=preload; as=image" header rules
+# are auto-appended to this file's BUILD OUTPUT (dist/_headers) by
+# src/integrations/early-hints-preload.mjs (astro:build:done hook) -
+# NOT to this source file itself, since post images vary per post.
+# Once Speed > Optimization > Early Hints is enabled in the Cloudflare
+# dashboard for this zone, Cloudflare replays those Link headers as
+# real HTTP 103 Early Hints responses on subsequent requests.
 /*
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://comments.wala-katha.workers.dev https://api.web3forms.com https://cloudflareinsights.com; frame-ancestors 'self'
