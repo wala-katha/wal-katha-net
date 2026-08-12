@@ -1,6 +1,6 @@
-# Wala Katha
+# Wal Katha
 
-> Wala Katha is a Sinhala-language creative fiction publishing platform featuring original Sinhala short stories (wal katha / wela katha genre). Content is fictional, adult-oriented, and intended for readers of legal age in their jurisdiction.
+> Wal Katha is a Sinhala-language creative fiction publishing platform featuring original Sinhala short stories (wal katha / wela katha genre). Content is fictional, adult-oriented, and intended for readers of legal age in their jurisdiction.
 
 This site publishes original Sinhala-language fiction. All stories are works of fiction; names, characters, and events are creative writing and not factual accounts.
 
