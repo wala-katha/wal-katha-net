@@ -1,31 +1,26 @@
+// ⚠️ NOT THE ACTIVE DEPLOYMENT PATH — CONFIRMED (2026-07):
+// This site's live production deployment is Cloudflare PAGES via Git
+// integration (auto-deploy on GitHub push). This wrangler.jsonc file,
+// and the "deploy:cf-workers" / "preview:cf-workers" scripts in
+// package.json, are OPTIONAL manual tooling for Cloudflare Workers
+// (wrangler deploy) - a completely separate deployment mechanism that
+// is NOT used for the live site. "assets.html_handling" below ONLY
+// affects requests served via `wrangler deploy` (Workers Static
+// Assets); it has ZERO effect on the actual Cloudflare Pages
+// Git-integration deployment that serves www.walakatha.net.
+//
+// "pages_build_output_dir" exists purely to satisfy Cloudflare Pages'
+// build-time config scanner, which otherwise logs a (non-fatal,
+// build-continuing) validation warning on every build when it finds a
+// wrangler config file that lacks this key. It has no effect on the
+// real Pages deployment (driven by the Cloudflare dashboard's own
+// build settings) and does not change `wrangler deploy` behavior for
+// the manual Workers testing scripts above, which continue to use the
+// "assets" block as before.
 {
-  /**
-   * ⚠️ NOT THE ACTIVE DEPLOYMENT PATH — CONFIRMED (2026-07):
-   * This site's live production deployment is Cloudflare PAGES via
-   * Git integration (auto-deploy on GitHub push). This wrangler.jsonc
-   * file, and the "deploy:cf-workers" / "preview:cf-workers" scripts
-   * in package.json, are OPTIONAL manual tooling for Cloudflare
-   * Workers (wrangler deploy) — a completely separate deployment
-   * mechanism that is NOT used for the live site.
-   *
-   * Per Cloudflare's own documentation
-   * (developers.cloudflare.com/workers/static-assets/routing/),
-   * "assets.html_handling" below ONLY affects requests served via
-   * `wrangler deploy` (Workers Static Assets). It has ZERO effect on
-   * the actual Cloudflare Pages Git-integration deployment that
-   * serves www.walakatha.net.
-   *
-   * "html_handling": "force-trailing-slash" is set here purely for
-   * CONSISTENCY / self-healing purposes: if this repo is ever manually
-   * deployed via `yarn deploy:cf-workers` for testing, it will 308
-   * redirect no-trailing-slash directory URLs to their trailing-slash
-   * version — matching Cloudflare Pages' real, non-configurable
-   * behavior exactly. This prevents a future contributor from being
-   * confused by inconsistent redirect behavior between the two
-   * deployment paths, even though only Pages is actually used.
-   */
   "name": "walakatha",
   "compatibility_date": "2026-03-01",
+  "pages_build_output_dir": "./dist",
   "assets": {
     "directory": "./dist",
     "not_found_handling": "404-page",
