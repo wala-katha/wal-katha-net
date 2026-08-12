@@ -131,7 +131,7 @@ const homeTitle = "Wala Katha - Sinhala Wal Katha & Wela Katha Stories 2026";
 // <h1> below, in the template) merges these into ONE real, fully
 // visible H1 that carries this exact keyword-rich text, styled
 // identically to the old H2 so the on-page appearance is unchanged.
-const homeH1 = "Wala Katha - සිංහල වල් කතා | Sinhala Wal Katha, Wela Katha & Aluth Wal Katha Stories";
+const homeH1 = "Aluth Sinhala Wal Katha PDF | Wala Katha & Wela Katha (2026)";
 
 const homePageSchema = {
   "@context": "https://schema.org",
@@ -140,9 +140,9 @@ const homePageSchema = {
       "@type": "WebSite",
       "@id": `${base_url}/#website`,
       "url": base_url,
-      "name": "Wala Katha",
-      "alternateName": ["Wala Katha Stories","Wal Katha","සිංහල වල් කතා","Sinhala Wal Katha","Wela Katha","Sinhala Wela Katha","WalKatha"],
-      "description": "Wala Katha - අලුත්ම සහ රසවත්ම සිංහල වල් කතා (Sinhala Wal Katha) සහ වැල කතා (Wela Katha) දිනපතා කියවන්න ඇති එකම නිල වෙබ් අඩවිය.",
+      "name": "Aluth Sinhala Wal Katha PDF | Wala Katha & Wela Katha (2026)",
+      "alternateName": ["Wal Katha","Sinhala Wal Katha","Aluth Wal Katha","Wal Katha PDF","Wala Katha","Wela Katha","New Sinhala Wal Katha","Sinhala Wela Katha","Wal Katha New","Aluth Sinhala Wal Katha","සිංහල වල් කතා"],
+      "description": "2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න.",
       "publisher": { "@id": `${base_url}/#organization` },
       "potentialAction": {
         "@type": "SearchAction",
@@ -156,7 +156,7 @@ const homePageSchema = {
     {
       "@type": "Organization",
       "@id": `${base_url}/#organization`,
-      "name": "Wala Katha",
+      "name": "Aluth Sinhala Wal Katha PDF | Wala Katha & Wela Katha (2026)",
       "url": base_url,
       "logo": {
         "@type": "ImageObject",
@@ -170,8 +170,8 @@ const homePageSchema = {
       "@type": "CollectionPage",
       "@id": `${canonicalUrl}/#collection`,
       "url": canonicalUrl,
-      "name": "Wala Katha - Sinhala Wal Katha & Wela Katha",
-      "description": "Daily updated premium Sinhala wal katha, wala katha and wela stories collection.",
+      "name": "Aluth Sinhala Wal Katha PDF | Wala Katha & Wela Katha (2026)",
+      "description": "2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න.",
       "isPartOf": { "@id": `${base_url}/#website` },
       "about": { "@type": "Thing", "name": "Sinhala Wal Katha Literature" },
       "speakable": {
@@ -187,7 +187,7 @@ const homePageSchema = {
 <Base 
   title={homeTitle}
   meta_title={homeTitle}
-  description="Wala Katha: 2026 අලුත් සිංහල වල් කතා, වැල කතා, Aluth Sinhala wala katha stories එකතුව දිනපතා කියවන්න. Best daily updated Sinhala wela katha collection."
+  description="2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න."
   canonical={canonicalUrl}
   image={siteLogo}
 >
@@ -196,12 +196,12 @@ const homePageSchema = {
   <Fragment slot="head">
     <meta property="og:type" content="website" />
     <meta property="og:title" content={homeTitle} />
-    <meta property="og:description" content="Wala Katha: නවතම සිංහල වල් කතා, වැල කතා සහ රසවත් සිංහල wal katha stories එකතුවක් දිනපතා කියවන්න." />
+    <meta property="og:description" content="2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න." />
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:image" content={siteLogo} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={homeTitle} />
-    <meta name="twitter:description" content="Daily updated Sinhala wal katha and wela stories collection." />
+    <meta name="twitter:description" content="2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න." />
     <meta name="twitter:image" content={siteLogo} />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
   </Fragment>
