@@ -437,6 +437,18 @@ export default defineConfig({
   },
   fonts: fontsConfig,
   integrations: [
+    AutoImport({
+      imports: [
+        "@/shortcodes/Button",
+        "@/shortcodes/Accordion",
+        "@/shortcodes/Notice",
+        "@/shortcodes/Video",
+        "@/shortcodes/Youtube",
+        "@/shortcodes/Tabs",
+        "@/shortcodes/Tab",
+      ],
+    }),
+    mdx(),
     react(),
     // 404->301 auto-redirect fixer: scans the last git commit for
     // src/content/posts/ renames/deletes at astro:build:start and
@@ -483,18 +495,6 @@ export default defineConfig({
         return item;
       },
     }),
-    AutoImport({
-      imports: [
-        "@/shortcodes/Button",
-        "@/shortcodes/Accordion",
-        "@/shortcodes/Notice",
-        "@/shortcodes/Video",
-        "@/shortcodes/Youtube",
-        "@/shortcodes/Tabs",
-        "@/shortcodes/Tab",
-      ],
-    }),
-    mdx(),
     gtm({
       enable: config.google_tag_manager.enable,
       id: config.google_tag_manager.gtm_id,
