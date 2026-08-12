@@ -9,6 +9,7 @@ import config from "./src/config/config.json";
 import theme from "./src/config/theme.json";
 import remarkAutoInternalLinks from "./src/lib/remarkAutoInternalLinks.mjs";
 import redirectFixer from "./src/integrations/redirect-fixer.mjs";
+import earlyHintsPreload from "./src/integrations/early-hints-preload.mjs";
 // ==========================================================
 // GIT-COMMIT-BASED REAL-TIME LASTMOD SYSTEM
 //
@@ -443,6 +444,13 @@ export default defineConfig({
     // under an AUTO-GENERATED marker block. Self-healing - never
     // blocks or fails the build (see src/integrations/redirect-fixer.mjs).
     redirectFixer(),
+    // Core Web Vitals: per-post hero-image Link/preload header
+    // generator, appended to dist/_headers at build:done. Cloudflare
+    // replays these as HTTP 103 Early Hints once "Speed > Optimization
+    // > Early Hints" is enabled on the zone dashboard. Self-healing -
+    // never blocks or fails the build (see
+    // src/integrations/early-hints-preload.mjs).
+    earlyHintsPreload(),
     sitemap({
       changefreq: "weekly",
       priority: 0.7,
