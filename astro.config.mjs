@@ -7,9 +7,9 @@ import gtm from "astro-gtm-lite";
 import { defineConfig, fontProviders, sharpImageService } from "astro/config";
 import config from "./src/config/config.json";
 import theme from "./src/config/theme.json";
+import remarkAutoInternalLinks from "./src/lib/remarkAutoInternalLinks.mjs";
 import redirectFixer from "./src/integrations/redirect-fixer.mjs";
 import earlyHintsPreload from "./src/integrations/early-hints-preload.mjs";
-import markdownPlugins from "./src/integrations/markdown-plugins.mjs";
 // ==========================================================
 // GIT-COMMIT-BASED REAL-TIME LASTMOD SYSTEM
 //
@@ -437,18 +437,6 @@ export default defineConfig({
   },
   fonts: fontsConfig,
   integrations: [
-    AutoImport({
-      imports: [
-        "@/shortcodes/Button",
-        "@/shortcodes/Accordion",
-        "@/shortcodes/Notice",
-        "@/shortcodes/Video",
-        "@/shortcodes/Youtube",
-        "@/shortcodes/Tabs",
-        "@/shortcodes/Tab",
-      ],
-    }),
-    mdx(),
     react(),
     // 404->301 auto-redirect fixer: scans the last git commit for
     // src/content/posts/ renames/deletes at astro:build:start and
@@ -463,12 +451,6 @@ export default defineConfig({
     // never blocks or fails the build (see
     // src/integrations/early-hints-preload.mjs).
     earlyHintsPreload(),
-    // FIXED (Astro "markdown.remarkPlugins option has been deprecated"
-    // warning): registers remarkAutoInternalLinks through the
-    // recommended astro:config:setup + updateConfig integration
-    // pattern instead of the deprecated top-level markdown.remarkPlugins
-    // shorthand. See src/integrations/markdown-plugins.mjs.
-    markdownPlugins(),
     sitemap({
       changefreq: "weekly",
       priority: 0.7,
@@ -495,13 +477,46 @@ export default defineConfig({
         return item;
       },
     }),
+    AutoImport({
+      imports: [
+        "@/shortcodes/Button",
+        "@/shortcodes/Accordion",
+        "@/shortcodes/Notice",
+        "@/shortcodes/Video",
+        "@/shortcodes/Youtube",
+        "@/shortcodes/Tabs",
+        "@/shortcodes/Tab",
+      ],
+    }),
+    mdx(),
     gtm({
       enable: config.google_tag_manager.enable,
       id: config.google_tag_manager.gtm_id,
       devMode: false,
     }),
   ],
+  // 2026-08 REVERTED (build-breaking regression - see the "Astro
+  // Deprecation Warning" fix attempt history): moving
+  // remarkAutoInternalLinks registration into a separate
+  // astro:config:setup + updateConfig() integration caused this
+  // Astro version's markdown processor to stop running
+  // markdown.remarkPlugins entirely ("processor doesn't run them").
+  // astro-auto-import's own shortcode auto-injection ALSO runs as a
+  // remark plugin appended the same way - once the processor stopped
+  // consuming remarkPlugins, AutoImport's Tabs/Tab/Notice/etc.
+  // auto-import mechanism broke too, causing a hard, build-failing
+  // "Expected a matching import for component `Tabs`" error in
+  // src/content/pages/elements.mdx.
+  //
+  // This inline shorthand IS deprecated (Astro logs a non-fatal
+  // warning about it), but it is the only configuration verified to
+  // keep both remarkAutoInternalLinks AND astro-auto-import's
+  // internal remark plugin working together correctly on this Astro
+  // version. A successful, warning-only build takes priority over a
+  // cosmetic deprecation notice - see src/lib/remarkAutoInternalLinks.mjs
+  // for the actual plugin logic (unchanged).
   markdown: {
+    remarkPlugins: [remarkAutoInternalLinks],
     shikiConfig: { theme: "one-dark-pro", wrap: true },
   },
 });
