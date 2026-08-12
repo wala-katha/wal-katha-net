@@ -139,6 +139,14 @@ const articleSchema = {
   isArticle={true}
 >
   {/* isArticle={true} - Base.astro duplicate OG/Twitter/robots tags render නොකරයි */}
+  {/* 🎯 CORE WEB VITALS - Early Hints: hero image එකට browser-level
+      preload signal එකක් <head> එකට කෙලින්ම දෙයි. Cloudflare Early
+      Hints (103) enable කර ඇති විට, mjs integration එකෙන් dist/_headers
+      එකට එකතු කරන Link header එකත් මේ URL එකටම match වේ (post.data.image
+      literal string path එකක් නිසා). */}
+  <Fragment slot="head">
+    {image && <link rel="preload" as="image" href={image} fetchpriority="high" />}
+  </Fragment>
   <script type="application/ld+json" set:html={JSON.stringify(articleSchema)} />
   <PostSingle post={post} />
 </Base>
