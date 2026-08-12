@@ -6,6 +6,7 @@ import dateFormat from "@/lib/utils/dateFormat";
 import readingTime from "@/lib/utils/readingTime";
 import { humanize, markdownify, slugify } from "@/lib/utils/textConverter";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
+import { buildMetaKeywords } from "@/lib/utils/keywordExtractor";
 import { Image } from "astro:assets";
 import { render } from "astro:content";
 import { BiCalendarEdit, BiCategoryAlt, BiTime, BiChevronRight, BiHomeAlt2, BiMapPin } from "react-icons/bi";
@@ -66,6 +67,16 @@ const authorName = allAuthors.find((a) =>
 // මෙය silently false වී, publish date එක විතරක් පෙන්වයි, කිසිම build
 // error එකක් හෝ UI glitch එකක් ඇති නොකරයි.
 const hasUpdatedDate = updated && date && new Date(updated).getTime() !== new Date(date).getTime();
+
+// NEW: auto-extracted body keywords, merged with frontmatter tags +
+// global force keywords via keywordExtractor.ts's buildMetaKeywords().
+// This feeds the <meta name="keywords"> tag below and also supplies
+// extra article:tag entries (entity/topic signals for AI Overviews and
+// knowledge-graph parsing) beyond the manually curated tags list.
+const autoExtractedKeywords = buildMetaKeywords(tags || [], post.body);
+const extractedOnlyKeywords = autoExtractedKeywords.filter(
+  (k) => !(tags || []).some((t: string) => t.toLowerCase() === k.toLowerCase())
+);
 
 // NOTE: the previous per-image MIME-type detection helper
 // (detectImageMimeType/postImageMimeType) has been removed - og:image
@@ -145,6 +156,7 @@ const breadcrumbSchema = JSON.stringify({
 <meta property="article:author" content={authorName} />
 {categories?.map((c: string) => <meta property="article:section" content={humanize(c)} />)}
 {tags?.map((t: string) => <meta property="article:tag" content={humanize(t)} />)}
+{extractedOnlyKeywords.map((k: string) => <meta property="article:tag" content={humanize(k)} />)}
 
 <!-- Twitter Card - Article specific -->
 <meta name="twitter:card" content="summary_large_image" />
@@ -155,7 +167,7 @@ const breadcrumbSchema = JSON.stringify({
 <meta name="twitter:site" content="@WalaKatha" />
 
 <!-- Keywords & Author - article specific, Base.astro isArticle=true නිසා render නොකරයි -->
-<meta name="keywords" content={tags?.join(", ") ?? ""} />
+<meta name="keywords" content={autoExtractedKeywords.join(", ")} />
 <meta name="author" content={authorName} />
 <meta name="language" content="Sinhala" />
 <meta name="revisit-after" content="3 days" />
