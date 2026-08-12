@@ -1,6 +1,6 @@
 {
   "site": {
-    "title": "Wala Katha",
+    "title": "Wal Katha",
     "base_url": "https://www.walakatha.net",
     "base_path": "/",
     "trailing_slash": true,
@@ -16,9 +16,9 @@
   },
 
   "metadata": {
-    "meta_author": "Wala Katha Team",
+    "meta_author": "Wal Katha Team",
     "meta_image": "/images/og-image.webp",
-    "meta_description": "Wala Katha: නවතම සිංහල වල් කතා, වැල කතා සහ අලුත්ම කෙටි කතා දිනපතා කියවන්න. Best daily updated Sinhala wal katha collection."
+    "meta_description": "2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න."
   },
 
   "google_tag_manager": {
@@ -28,7 +28,7 @@
 
   "params": {
     "contact_form_action": "#",
-    "copyright": "Copyright © 2026 [Wala Katha](https://www.walakatha.net) | All Rights Reserved."
+    "copyright": "Copyright © 2026 [Wal Katha](https://www.walakatha.net) | All Rights Reserved."
   },
 
   "contactinfo": {
