@@ -35,10 +35,10 @@ export async function GET(context: APIContext) {
   const siteUrl = context.site?.toString().replace(/\/$/, "") ?? base_url;
 
   return rss({
-    title: config?.site?.title || "Wala Katha",
+    title: config?.site?.title || "Aluth Sinhala Wal Katha PDF | Wala Katha & Wela Katha (2026)",
     description:
       config?.metadata?.meta_description ||
-      "Wala Katha - Sinhala Wal Katha & Wela Katha Stories",
+      "2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න.",
     site: context.site ?? base_url,
     xmlns: {
       content: "http://purl.org/rss/1.0/modules/content/",
