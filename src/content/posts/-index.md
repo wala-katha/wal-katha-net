@@ -1,4 +1,4 @@
 ---
-title: "සිංහල වල් කතා"
-meta_title: "Sinhala Wal Katha - සියලුම සිංහල වල් කතා සහ නවකතා එකතුව"
+title: "Sinhala Wal Katha - සිංහල වල් කතා"
+meta_title: "Aluth Sinhala Wal Katha PDF | Wala Katha & Wela Katha (2026)"
 ---
