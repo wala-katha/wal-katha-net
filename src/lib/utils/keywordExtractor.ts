@@ -30,6 +30,9 @@ const GLOBAL_FORCE_KEYWORDS = [
   "wal katha",
   "wala katha",
   "wela katha",
+  "වැල් කතා",
+  "වල් කතා",
+  "වැල කතා",
 ];
 
 // Tokenize plain text into words, filtering stopwords and short noise.
