@@ -1,29 +1,17 @@
-// ⚠️ NOT THE ACTIVE DEPLOYMENT PATH — CONFIRMED (2026-07):
-// This site's live production deployment is Cloudflare PAGES via Git
-// integration (auto-deploy on GitHub push). This wrangler.jsonc file,
-// and the "deploy:cf-workers" / "preview:cf-workers" scripts in
-// package.json, are OPTIONAL manual tooling for Cloudflare Workers
-// (wrangler deploy) - a completely separate deployment mechanism that
-// is NOT used for the live site. "assets.html_handling" below ONLY
-// affects requests served via `wrangler deploy` (Workers Static
-// Assets); it has ZERO effect on the actual Cloudflare Pages
-// Git-integration deployment that serves www.walakatha.net.
+// ⚠️ CLOUDFLARE PAGES CONFIGURATION
 //
-// "pages_build_output_dir" exists purely to satisfy Cloudflare Pages'
-// build-time config scanner, which otherwise logs a (non-fatal,
-// build-continuing) validation warning on every build when it finds a
-// wrangler config file that lacks this key. It has no effect on the
-// real Pages deployment (driven by the Cloudflare dashboard's own
-// build settings) and does not change `wrangler deploy` behavior for
-// the manual Workers testing scripts above, which continue to use the
-// "assets" block as before.
+// 🎯 PURPOSE OF THIS FILE:
+// Cloudflare Pages build system auto-scans the repository root for a Wrangler
+// configuration file at the start of every build.
+//
+// 🛠️ FIXES APPLIED:
+// 1. "pages_build_output_dir": Declares "./dist" as the build output directory to
+//    satisfy the Pages build scanner validation check.
+// 2. "assets" BLOCK REMOVED: Cloudflare Pages strictly forbids the "assets" property
+//    (which is exclusively reserved for Cloudflare Workers Static Assets).
+//    Including "assets" causes a fatal validation crash on Pages builds.
 {
   "name": "walakatha",
   "compatibility_date": "2026-03-01",
-  "pages_build_output_dir": "./dist",
-  "assets": {
-    "directory": "./dist",
-    "not_found_handling": "404-page",
-    "html_handling": "force-trailing-slash"
-  }
+  "pages_build_output_dir": "./dist"
 }
