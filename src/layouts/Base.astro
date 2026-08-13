@@ -537,118 +537,75 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
     <slot name="head" />
 
     {/* ==========================================================
-        🎯 PWA SERVICE WORKER — EARLY (HEAD-LEVEL) REGISTRATION FIX
-        (Home page එකේ "Install app" simple dialog vs Post page එකේ
-        "Install + Create shortcut" richer dialog අතර වෙනස විසඳීම)
+        🎯 PWA SERVICE WORKER — EARLY (HEAD-LEVEL), ONE-TIME
+        REGISTRATION (Home page එකේ "Install app" simple dialog vs
+        Post page එකේ "Install + Create shortcut" richer dialog අතර
+        වෙනස විසඳීම)
 
         🔍 ROOT CAUSE: කලින් SW registration script එක <body> එකේ
         අගට දාලා, "load" event එකට පස්සේ විතරක් register වුනා. Chrome
         ගේ richer install dialog (Install + Create shortcut options
         දෙකම) එක trigger වෙන්නේ, SW එක page එකට "controller" විදිහට
         active වෙලා තියෙනවා කියලා Chrome ට high-confidence එකක් තියෙනකොට
-        විතරයි. පළමු visit එකේදී (cold load) "load" event එකට පස්සේ
-        register කළාම, SW එක install වෙනවා ඒත් එම load එකේදීම page එක
-        control කරන්නේ නෑ (SW spec එකේම standard behavior එකක් —
-        පළමු register වෙන SW එක current page එක control කරන්නේ නෑ,
-        ඊළඟ navigation එකේදී විතරයි). ඒ නිසා Home page එකේ පළමු visit
-        එකේදී Chrome ට low-confidence, simple dialog එකක් පෙන්නන්න
-        සිද්ධ වුනා. Blog post එකට navigate කරනකොට (2 වෙනි navigation),
-        SW එක දැනටමත් "controlling" state එකේ තියෙන නිසා richer dialog
-        එක පෙන්නුවා.
+        විතරයි.
 
-        ✅ PERMANENT FIX: Registration script එක <head> එකට, ඉතාම
-        ඉක්මනින්ම (blocking network request එකක් නොවන "register()"
-        call එකක්, main content render එකට කිසිම බලපෑමක් නැති
-        async/non-blocking call එකක්) දාලා, "load" event එකට කලින්ම
-        trigger කරනවා. මෙය Chrome ට SW එක install+active වෙන්න
-        හැකි තරම් ඉක්මනින්ම ලැබෙන chance එක වැඩි කරනවා, page load
-        එකේම (හෝ ඊළඟ ඉක්මන් reload එකකදී) richer dialog එකට
-        eligible වෙන්න පුළුවන් වෙනවා — Home page එකද, Post page
-        එකද කියලා වෙනසක් නැතුව site එක පුරාම consistent PWA install
-        experience එකක් සහතික කරනවා.
+        ✅ FIX: Registration script එක <head> එකට, "load" event එකට
+        කලින්ම (blocking network request එකක් නොවන "register()" call
+        එකක්, main content render එකට කිසිම බලපෑමක් නැති async call
+        එකක්) දාලා, Chrome ට SW එක install+active වෙන්න හැකි තරම්
+        ඉක්මනින්ම ලැබෙන chance එක වැඩි කරනවා.
 
-        🎯 2026-08 FIX (Duplicate Registration Call + Confusing
-        Console Warnings — Google Search Console URL Inspection tool
-        flagged 2 identical "SW registration failed" warnings on a
-        single test): ROOT CAUSE was that doRegister() was called
-        directly below AND attached as an "astro:page-load" listener
-        — but Astro's ClientRouter dispatches "astro:page-load" once
-        on the VERY FIRST page load too (not only on later client-side
-        SPA navigations). That meant register() actually ran TWICE for
-        the same initial load, producing two duplicate registration
-        attempts and, when registration fails (e.g. inside sandboxed
-        tools like Google Search Console's URL Inspection, which does
-        not support Service Workers at all), two duplicate console
-        warnings. A "hasRegistered" guard flag now ensures doRegister()
-        only performs an actual register() call once per real
-        page/navigation - the immediate call runs first, and the
-        "astro:page-load" listener is now a no-op on that same initial
-        load (guard already tripped), only doing real work on genuine
-        subsequent SPA navigations. If a registration attempt fails,
-        the guard is deliberately reset so a later real navigation can
-        still retry - this preserves the exact same retry-resilience
-        behavior as before, just without the duplicate first-load call.
+        🎯 2026-08 SIMPLIFIED FIX (Duplicate Registration - Root Cause
+        Removal): මීට කලින් "astro:page-load" listener එකකුත් attach
+        කරලා තිබුණි, closure-scoped "hasRegistered" flag එකකින් guard
+        කරගෙන. ඒ guard එක real browsers/users ලාට නිවැරදිව වැඩ කළත්,
+        Google Search Console URL Inspection tool එක වගේ testing
+        tools, එකම URL එකට render pass 2ක් (HTML tab සඳහා එකක්,
+        Screenshot tab සඳහා එකක්) කරද්දී, සෑම render pass එකකදීම මුළු
+        script එකම fresh එකක් විදිහට re-execute වෙනවා - closure එකත්
+        අලුතින් හැදෙන නිසා "hasRegistered" flag එකත් "false" ලෙස
+        reset වෙනවා. ඒ නිසා tool එකේ එකම test එකේදීම render pass
+        දෙකකින් duplicate "SW registration failed" warning එකක් log
+        වුනා.
 
-        🛡️ SELF-HEALING GUARDS (retained):
-        - "serviceWorker" API නොමැති browsers වල silently skip වෙනවා.
-        - hasRegistered guard flag එකෙන් View Transitions (ClientRouter)
-          client-side navigation වලදීත් duplicate registration
-          attempts (initial load එකේදී විශේෂයෙන්) වළක්වයි.
-        - registration fail උනොත් (offline, unsupported browser
-          edge-case ආදී) silently log කරලා core site functionality
-          කිසිවකට බලපෑමක් නැතුව ඉදිරියට යනවා, සහ guard flag එක reset
-          කරලා ඊළඟ real navigation එකකදී retry කරන්න ඉඩ දෙනවා.
+        PERMANENT FIX: "astro:page-load" listener එක සම්පූර්ණයෙන්ම
+        ඉවත් කර ඇත. Service Worker එකක් origin එකකට register කරන්න
+        ඕන එක්වරයි විතරයි - browser එක ඒ registration එක browsing
+        session එක පුරාම persist කරගෙන ඉන්නවා. Astro's View
+        Transitions (ClientRouter) client-side SPA navigation එකකදී
+        full page reload එකක් කවදාවත් trigger කරන්නේ නෑ, ඒ නිසා මෙම
+        script එක මුලින්ම parse වෙනකොට කරන එකම registration call එක
+        ඊළඟ සියලුම in-app navigations සඳහාත් valid/active ලෙසම
+        පවතිනවා - real user කෙනෙක්ගේ browser එකට මෙය දෙවනි වතාවක්
+        run කරන්න ඕන කිසිම scenario එකක් නෑ. මෙයින් duplicate-call
+        vector එකම root level එකේදීම ඉවත් වේ - real users ලාටත්,
+        page එක බහුවිට render කරන ඕනෑම testing tool එකකටත්.
        ========================================================== */}
     <script is:inline>
       (function registerServiceWorkerEarly() {
         if (!("serviceWorker" in navigator)) return;
 
-        let hasRegistered = false;
-
-        function doRegister() {
-          // Duplicate-call guard: Astro's ClientRouter dispatches
-          // "astro:page-load" once on the initial page load too (not
-          // just subsequent SPA navigations). Without this guard,
-          // register() would run twice on the very first load - once
-          // from the direct call below, once via the listener -
-          // producing duplicate registration attempts and duplicate
-          // console warnings when registration fails (e.g. in
-          // sandboxed test tools like Google Search Console's URL
-          // Inspection, which does not support Service Workers at
-          // all).
-          if (hasRegistered) return;
-          hasRegistered = true;
-
-          navigator.serviceWorker
-            .register("/sw.js")
-            .then((registration) => {
-              console.log("SW registered (early):", registration.scope);
-            })
-            .catch((err) => {
-              console.warn("SW registration failed:", err);
-              // Reset the guard on failure so a later real navigation
-              // can still retry registration (preserves the original
-              // retry-resilience behavior).
-              hasRegistered = false;
-            });
-        }
-
-        // 🎯 ASAP TRIGGER: "load" event එකට කලින්ම, script tag එක
-        // parse වෙන ගමන්ම register() call කරනවා. register() call එක
-        // itself non-blocking (Promise-based) නිසා, main content
-        // render/paint එකට කිසිම delay එකක් හෝ blocking side-effect
-        // එකක් ඇති නොකරයි — Network Information API/Fetch handler
-        // setup එක background thread එකක (Service Worker thread)
-        // සිදු වෙනවා.
-        doRegister();
-
-        // 🎯 View Transitions (ClientRouter) client-side navigation
-        // සඳහාත් register logic එකම attach කරනවා — hasRegistered
-        // guard එක නිසා මෙය initial load එකේදී no-op එකක් වේ (already
-        // registered above), නමුත් ඊළඟ genuine SPA navigation එකකදී
-        // (හෝ පළමු attempt එක fail වුනොත් retry එකක් ලෙස) working
-        // logic එකක් ලෙස පවතී.
-        document.addEventListener("astro:page-load", doRegister);
+        // 🎯 ASAP, ONE-TIME TRIGGER: script tag එක parse වෙන ගමන්ම
+        // register() call කරනවා (load event එකට කලින්ම). register()
+        // call එක itself non-blocking (Promise-based) නිසා, main
+        // content render/paint එකට කිසිම delay එකක් හෝ blocking
+        // side-effect එකක් ඇති නොකරයි. Registration එක origin එකටම
+        // browsing session එක පුරාම persist වෙන නිසා, View
+        // Transitions client-side navigation එකකදී නැවත register
+        // කරන්න අවශ්‍ය නැත.
+        navigator.serviceWorker
+          .register("/sw.js")
+          .then((registration) => {
+            console.log("SW registered (early):", registration.scope);
+          })
+          .catch((err) => {
+            // ⚠️ ආරක්ෂිත fallback: offline first-load, unsupported
+            // browser edge-case, හෝ Service Worker API restrictions
+            // ඇති sandboxed testing environment එකක් (උදා: සමහර
+            // crawler/inspection tools) නිසා registration fail
+            // වුවත්, core site functionality කිසිවකට බලපෑමක් නැත.
+            console.warn("SW registration failed:", err);
+          });
       })();
     </script>
 
