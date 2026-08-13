@@ -34,7 +34,7 @@ const canonicalUrl = `${base_url}/contact/`;
 // content/contact/-index.md එකේ දැන් description field එකක් define
 // කර ඇති නිසා, fallback string එකත් consistency සඳහා 110+ characters
 // වන පරිදි යාවත්කාලීන කළා.
-const finalDescription = description || "Wala Katha වෙබ් අඩවිය සම්බන්ධ කර ගැනීමට අවශ්‍ය ලිපිනය, විද්‍යුත් තැපෑල, දුරකථන අංකය ඇතුළු සියලුම තොරතුරු මෙතැනින් සම්පූර්ණයෙන් ලබා ගන්න.";
+const finalDescription = description || "Wal Katha වෙබ් අඩවිය සම්බන්ධ කර ගැනීමට අවශ්‍ය ලිපිනය, විද්‍යුත් තැපෑල, දුරකථන අංකය ඇතුළු සියලුම තොරතුරු මෙතැනින් සම්පූර්ණයෙන් ලබා ගන්න.";
 
 const contactPageSchema = {
   "@context": "https://schema.org",
@@ -44,7 +44,7 @@ const contactPageSchema = {
   "url": canonicalUrl,
   "mainEntity": {
     "@type": "Organization",
-    "name": config?.site?.title || "Wala Katha",
+    "name": config?.site?.title || "Wal Katha",
     "url": base_url,
     "contactPoint": {
       "@type": "ContactPoint",
@@ -360,7 +360,7 @@ const contactPageSchema = {
           formData.forEach((value, key) => { object[key] = value; });
 
           if (!object["subject"] || !object["subject"].trim()) {
-            object["subject"] = "Wala Katha - නව සම්බන්ධතා පණිවිඩය";
+            object["subject"] = "Wal Katha - නව සම්බන්ධතා පණිවිඩය";
           }
 
           object["replyto"] = object["email"];
