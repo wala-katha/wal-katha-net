@@ -83,42 +83,53 @@ jobs:
           let skippedCount = 0;
           let processedCount = 0;
           // ==========================================================
-          // 🎯 UNIVERSAL CONTENT-HASH GUARD (NEW — applies to EVERY
-          //    single image processed by this workflow: post images,
-          //    slider images, author images, root images, logo,
-          //    favicon, og-image, AND app-icon — no exceptions).
+          // 🎯 UNIVERSAL CONTENT-HASH GUARD (applies to EVERY single
+          //    image processed by this workflow: post images, slider
+          //    images, author images, root images, logo, favicon,
+          //    og-image, AND app-icon — no exceptions).
           //
           //    ROOT CAUSE THIS SOLVES: previously, "up to date" was
           //    decided purely by file MODIFICATION TIMESTAMP + pixel
           //    DIMENSIONS. If someone re-uploaded a *replacement* image
-          //    with the exact same filename (e.g. re-uploading
-          //    "logo.png" with new artwork, or replacing
-          //    "Nandage-duwa-wal-katha.jpg" with a different photo but
-          //    keeping the same name), git checkout can restore a
-          //    fresh mtime, BUT if the resulting .webp already existed
-          //    with matching dimensions, the OLD staleness check would
+          //    with the exact same filename, or an OUTPUT ENCODER
+          //    SETTING (webp quality/effort) was tuned in this file
+          //    without the source bytes changing, this guard would
           //    wrongly report "already up to date" and skip
-          //    reconversion — silently leaving stale artwork live.
-          //    Only app-icon.jpg had a manual, one-off workaround for
-          //    this (the "appIconConverted" boolean) — every other
-          //    image type had zero protection against this scenario.
+          //    reconversion — silently leaving stale-quality artwork
+          //    live even after a deliberate compression fix.
           //
-          //    THE FIX: every source image now gets a tiny sidecar
-          //    hash file (e.g. "logo.png.hash" next to "logo.png",
-          //    committed to the repo like any other tracked file)
-          //    containing a SHA-256 digest of the source file's bytes.
-          //    On every run, we compare the CURRENT source file's hash
-          //    against the sidecar's stored hash:
-          //      - Hash file missing (first-ever run for this image)
-          //        -> treat as "content changed" (force reconvert +
-          //           force downstream re-verify), and write the hash
-          //           sidecar for next time.
-          //      - Hash mismatch (content genuinely replaced, filename
-          //        identical) -> force reconvert + force downstream
-          //        re-verify, update the hash sidecar.
-          //      - Hash match -> content is byte-identical to last
-          //        run; fall through to the existing timestamp+
-          //        dimension check as a secondary/cheap early-exit.
+          //    THE FIX: every source image gets a tiny sidecar hash
+          //    file (e.g. "logo.png.hash") containing a SHA-256 digest
+          //    of the source file's bytes **plus a fixed
+          //    ENCODER_CONFIG_VERSION string** (see below). Any change
+          //    to either the source bytes OR the encoder version
+          //    invalidates the cached hash, forcing a fresh reconvert.
+          //
+          //    🎯 2026-08 ENCODER-VERSION HASH BINDING (NEW — PageSpeed
+          //    "Improve image delivery" fix, slide-2.webp flagged:
+          //    86.6 KiB delivered vs ~8.6 KiB potential savings from
+          //    better compression). ROOT CAUSE: the hash guard above
+          //    only ever compared SOURCE FILE bytes — it had no way to
+          //    detect that this workflow's own OUTPUT ENCODER SETTINGS
+          //    (e.g. webp quality) had been intentionally tuned, since
+          //    the source jpg/png itself never changes when only a
+          //    quality knob here is adjusted. That meant any future
+          //    quality tuning here would silently NOT regenerate any
+          //    already-existing .webp file — the hash-guard would keep
+          //    reporting "unchanged" forever.
+          //
+          //    THE FIX: ENCODER_CONFIG_VERSION is mixed into the hash
+          //    digest alongside the source file bytes. Bumping this
+          //    version string (whenever any webp() quality/effort value
+          //    anywhere in this file is intentionally changed) makes
+          //    every existing hash sidecar mismatch exactly once on the
+          //    next run, forcing a full, correct re-encode with the new
+          //    settings for every image in every folder — self-healing,
+          //    with zero manual per-file bookkeeping required going
+          //    forward. This run's version bump specifically forces the
+          //    slider desktop master to re-encode at the new, more
+          //    compressed quality setting (see the SLIDER DUAL-OUTPUT
+          //    PIPELINE block further below).
           //
           //    ⚠️ IMPORTANT (2026-07 slider dual-output note): this
           //    function has a SIDE EFFECT — it writes the updated hash
@@ -128,23 +139,28 @@ jobs:
           //    a "mobile" output decision) would make the SECOND call
           //    wrongly report "unchanged" even on a genuine content
           //    change, because the sidecar was already updated by the
-          //    first call. The new slider block further below calls
-          //    this function EXACTLY ONCE per source file and reuses
-          //    the single boolean result for both its desktop and
-          //    mobile output decisions, to avoid this exact pitfall.
-          //    The 2026-08 post-thumbnail block (see the "folders"
-          //    loop further below) follows this exact same rule too.
+          //    first call. The slider block further below calls this
+          //    function EXACTLY ONCE per source file and reuses the
+          //    single boolean result for both its desktop and mobile
+          //    output decisions, to avoid this exact pitfall. The
+          //    2026-08 post-thumbnail block (see the "folders" loop
+          //    further below) follows this exact same rule too.
           //
           //    This single mechanism now uniformly covers EVERY image
           //    in every folder + every root/logo/favicon/og-image/
           //    app-icon path — no per-image special-casing required,
           //    and it is fully self-healing for any image added in the
           //    future (new post images, new author avatars, a
-          //    replaced slider photo, etc.) with zero manual upkeep.
+          //    replaced slider photo, a future quality re-tune, etc.)
+          //    with zero manual upkeep.
           // ==========================================================
+          const ENCODER_CONFIG_VERSION = '2026-08-v2-slider-quality-tuned';
           function computeFileHash(filePath) {
             const buf = readFileSync(filePath);
-            return createHash('sha256').update(buf).digest('hex');
+            return createHash('sha256')
+              .update(buf)
+              .update(ENCODER_CONFIG_VERSION)
+              .digest('hex');
           }
           function hasSourceContentChanged(inputPath) {
             const hashSidecarPath = `${inputPath}.hash`;
@@ -161,15 +177,16 @@ jobs:
               writeFileSync(hashSidecarPath, currentHash, 'utf-8');
               return true;
             }
-            return false; // byte-identical to the last successful run
+            return false; // byte-identical to the last successful run (source + encoder version)
           }
           // ==========================================================
           // ⚡ SMART STALENESS CHECK — secondary/cheap check, now only
           //    reached AFTER the content-hash guard above has already
-          //    confirmed the source bytes are unchanged. Still verifies
-          //    timestamp + dimensions match, as a defensive fallback in
-          //    case the .webp itself was manually deleted or corrupted
-          //    even though the source hash didn't change.
+          //    confirmed the source bytes AND encoder version are
+          //    unchanged. Still verifies timestamp + dimensions match,
+          //    as a defensive fallback in case the .webp itself was
+          //    manually deleted or corrupted even though the source
+          //    hash didn't change.
           // ==========================================================
           async function isUpToDate(input, out, targetWidth, isSquare = false) {
             if (!existsSync(out)) return false;
@@ -357,8 +374,10 @@ jobs:
           // ==========================================================
           // 🎯 SLIDER DUAL-OUTPUT PIPELINE — fixes PageSpeed Insights
           //    "Improve image delivery" flag (slide-2.webp: 86.6 KiB
-          //    delivered vs ~11.7 KiB needed on mobile). ROOT CAUSE:
-          //    FeaturedSlider.astro previously used a single plain
+          //    delivered vs ~11.7 KiB needed on mobile, and separately,
+          //    ~8.6 KiB of extra savings available on DESKTOP purely
+          //    from better compression). ROOT CAUSE: FeaturedSlider.astro
+          //    previously used a single plain
           //    <img src="/images/slider/slide-N.webp"> with NO
           //    responsive srcset/picture element at all — every
           //    device, including small phones, always downloaded the
@@ -367,12 +386,24 @@ jobs:
           //
           //    THE FIX: for every slider source image, this block now
           //    produces TWO output files:
-          //      1. "slide-N.webp"        — UNCHANGED filename, same
-          //         1200px max width, same quality — used by desktop/
-          //         tablet viewports via FeaturedSlider.astro's
-          //         <picture><img> fallback. Zero regression: any
-          //         existing reference to this exact filename anywhere
-          //         in the codebase keeps working identically.
+          //      1. "slide-N.webp"        — SAME filename, same
+          //         1200px max width — used by desktop/tablet
+          //         viewports via FeaturedSlider.astro's <picture><img>
+          //         fallback. Zero regression: any existing reference
+          //         to this exact filename anywhere in the codebase
+          //         keeps working identically.
+          //
+          //         🎯 2026-08 QUALITY TUNE (PageSpeed "Improve image
+          //         delivery" desktop-report fix): quality lowered from
+          //         85 -> 78. A full-bleed 1200px hero/background image
+          //         has very high tolerance for a modest quality drop
+          //         (it also sits behind a dark gradient + overlay text
+          //         in FeaturedSlider.astro), while a 7-point quality
+          //         reduction on a photographic image at this
+          //         resolution typically yields close to the ~10%
+          //         (~8.6 KiB) savings PageSpeed's compression-factor
+          //         audit called for, with no perceptible visual
+          //         difference in the actual rendered slider.
           //      2. "slide-N-mobile.webp" — NEW, lightweight ~700px
           //         max width companion file, referenced by
           //         FeaturedSlider.astro's <source media="(max-width:
@@ -393,7 +424,11 @@ jobs:
           //    picked up by this same loop and gets both variants
           //    generated with zero manual configuration — exactly the
           //    same self-healing guarantee every other image folder in
-          //    this workflow already has.
+          //    this workflow already has. And thanks to the
+          //    ENCODER_CONFIG_VERSION hash-binding above, THIS SPECIFIC
+          //    run also force-regenerates every already-existing slide
+          //    at the new, more-compressed quality setting, without
+          //    requiring any source jpg/png to be re-uploaded.
           // ==========================================================
           const sliderDir = 'public/images/slider';
           const sliderDesktopMaxWidth = 1200;
@@ -409,7 +444,7 @@ jobs:
               // Compute the content-change status ONCE, reuse for both
               // outputs below (see rationale in the block comment above).
               const contentChanged = hasSourceContentChanged(input);
-              // --- Desktop variant (existing filename/behavior, unchanged) ---
+              // --- Desktop variant (existing filename, quality tuned) ---
               const desktopUpToDate = contentChanged
                 ? false
                 : await isUpToDate(input, desktopOut, sliderDesktopMaxWidth, false);
@@ -429,7 +464,7 @@ jobs:
                   });
                 }
                 await pipeline
-                  .webp({ quality: 85, smartSubsample: true, effort: 6 })
+                  .webp({ quality: 78, smartSubsample: true, effort: 6 })
                   .toFile(desktopOut);
                 convertedMap[file] = desktopOutFile;
                 processedCount++;
@@ -437,7 +472,7 @@ jobs:
               } else {
                 skippedCount++;
               }
-              // --- Mobile variant (NEW — lightweight ~700w companion) ---
+              // --- Mobile variant (lightweight ~700w companion) ---
               const mobileUpToDate = contentChanged
                 ? false
                 : await isUpToDate(input, mobileOut, sliderMobileMaxWidth, false);
@@ -720,7 +755,7 @@ jobs:
           git add public/images/favicon.webp || true
           git add public/images/og-image.webp || true
           git add public/images/app-icon.webp || true
-          # 🎯 NEW: commit the .hash sidecar files (tiny text files that
+          # 🎯 commit the .hash sidecar files (tiny text files that
           # power the universal content-change detection above). These
           # live alongside their source images and must be tracked so
           # the NEXT workflow run can compare against them.
@@ -735,5 +770,5 @@ jobs:
           git add src/content/contact/*.md || true
           git add src/content/pages/*.md || true
           git add src/config/config.json || true
-          git diff --staged --quiet || git commit -m "Auto: Slider mobile-optimized WebP variants (PageSpeed 'Improve image delivery' fix) + post grid-thumbnail dual-output + universal content-hash guard + frontmatter/config/manifest sync"
+          git diff --staged --quiet || git commit -m "Auto: slider desktop quality-tuned (PageSpeed 'Improve image delivery' fix) + encoder-version hash binding + frontmatter/config/manifest sync"
           git push
