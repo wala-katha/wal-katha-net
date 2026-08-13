@@ -567,22 +567,58 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         එකද කියලා වෙනසක් නැතුව site එක පුරාම consistent PWA install
         experience එකක් සහතික කරනවා.
 
-        🛡️ SELF-HEALING GUARDS (unchanged from before, retained):
+        🎯 2026-08 FIX (Duplicate Registration Call + Confusing
+        Console Warnings — Google Search Console URL Inspection tool
+        flagged 2 identical "SW registration failed" warnings on a
+        single test): ROOT CAUSE was that doRegister() was called
+        directly below AND attached as an "astro:page-load" listener
+        — but Astro's ClientRouter dispatches "astro:page-load" once
+        on the VERY FIRST page load too (not only on later client-side
+        SPA navigations). That meant register() actually ran TWICE for
+        the same initial load, producing two duplicate registration
+        attempts and, when registration fails (e.g. inside sandboxed
+        tools like Google Search Console's URL Inspection, which does
+        not support Service Workers at all), two duplicate console
+        warnings. A "hasRegistered" guard flag now ensures doRegister()
+        only performs an actual register() call once per real
+        page/navigation - the immediate call runs first, and the
+        "astro:page-load" listener is now a no-op on that same initial
+        load (guard already tripped), only doing real work on genuine
+        subsequent SPA navigations. If a registration attempt fails,
+        the guard is deliberately reset so a later real navigation can
+        still retry - this preserves the exact same retry-resilience
+        behavior as before, just without the duplicate first-load call.
+
+        🛡️ SELF-HEALING GUARDS (retained):
         - "serviceWorker" API නොමැති browsers වල silently skip වෙනවා.
-        - astro:page-load listener එකෙන් View Transitions (ClientRouter)
+        - hasRegistered guard flag එකෙන් View Transitions (ClientRouter)
           client-side navigation වලදීත් duplicate registration
-          attempts වළක්වයි (browser එකෙන්ම දැනටමත් registered SW
-          එකක් නම් .register() call එක silently no-op වෙනවා, error
-          එකක් හෝ duplicate registration side-effect එකක් නෑ).
+          attempts (initial load එකේදී විශේෂයෙන්) වළක්වයි.
         - registration fail උනොත් (offline, unsupported browser
           edge-case ආදී) silently log කරලා core site functionality
-          කිසිවකට බලපෑමක් නැතුව ඉදිරියට යනවා.
+          කිසිවකට බලපෑමක් නැතුව ඉදිරියට යනවා, සහ guard flag එක reset
+          කරලා ඊළඟ real navigation එකකදී retry කරන්න ඉඩ දෙනවා.
        ========================================================== */}
     <script is:inline>
       (function registerServiceWorkerEarly() {
         if (!("serviceWorker" in navigator)) return;
 
+        let hasRegistered = false;
+
         function doRegister() {
+          // Duplicate-call guard: Astro's ClientRouter dispatches
+          // "astro:page-load" once on the initial page load too (not
+          // just subsequent SPA navigations). Without this guard,
+          // register() would run twice on the very first load - once
+          // from the direct call below, once via the listener -
+          // producing duplicate registration attempts and duplicate
+          // console warnings when registration fails (e.g. in
+          // sandboxed test tools like Google Search Console's URL
+          // Inspection, which does not support Service Workers at
+          // all).
+          if (hasRegistered) return;
+          hasRegistered = true;
+
           navigator.serviceWorker
             .register("/sw.js")
             .then((registration) => {
@@ -590,6 +626,10 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
             })
             .catch((err) => {
               console.warn("SW registration failed:", err);
+              // Reset the guard on failure so a later real navigation
+              // can still retry registration (preserves the original
+              // retry-resilience behavior).
+              hasRegistered = false;
             });
         }
 
@@ -603,11 +643,11 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         doRegister();
 
         // 🎯 View Transitions (ClientRouter) client-side navigation
-        // සඳහාත් register logic එකම attach කරනවා — browser එකෙන්ම
-        // existing registration එකක් තියෙනවා නම් silently no-op වෙනවා
-        // (duplicate registration නෑ), නමුත් යම් හෙයකින් පළමු
-        // registration එක fail වුනා නම් (offline first-load ආදී)
-        // ඊළඟ page navigation එකේදී retry වෙන්නත් මේක උදව් වෙනවා.
+        // සඳහාත් register logic එකම attach කරනවා — hasRegistered
+        // guard එක නිසා මෙය initial load එකේදී no-op එකක් වේ (already
+        // registered above), නමුත් ඊළඟ genuine SPA navigation එකකදී
+        // (හෝ පළමු attempt එක fail වුනොත් retry එකක් ලෙස) working
+        // logic එකක් ලෙස පවතී.
         document.addEventListener("astro:page-load", doRegister);
       })();
     </script>
@@ -641,19 +681,46 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         after the "load" event fires, not before) so it can never
         compete with or delay LCP/FCP itself — instrumentation code
         must never be the thing that harms the metrics it measures.
+
+        🎯 2026-08 FIX (Misleading CLS Console Display — Google Search
+        Console URL Inspection tool logged "[Web Vitals] CLS: 4",
+        which reads as an alarmingly high score even though the real
+        underlying CLS was an excellent 0.004): ROOT CAUSE was that
+        the console-logged "value" for CLS was always the *1000-scaled
+        integer (the same value intentionally used for the GA4/GTM
+        dataLayer push, matching that platform's existing numeric
+        convention), so a genuinely great CLS of 0.004 displayed as a
+        bare "4" with no decimal/scale context in the console log
+        text itself. FIX: the human-readable console log now shows
+        CLS with real decimal precision (e.g. "0.004") while the
+        GA4/GTM dataLayer push keeps the exact same scaled-integer
+        value as before (zero change to any existing analytics/report
+        pipeline depending on that convention) - display and analytics
+        values are now computed and used separately.
        ========================================================== */}
     <script is:inline define:vars={{ gtmEnabled: config.google_tag_manager.enable }}>
       (function initWebVitalsMonitoring() {
         if (typeof PerformanceObserver === "undefined") return;
 
         function reportMetric(name, value, extra) {
-          const rounded = Math.round(name === "CLS" ? value * 1000 : value);
-          console.log(`[Web Vitals] ${name}:`, rounded, extra || "");
+          // Display value: CLS is a small decimal (e.g. 0.004-0.1) and
+          // is now shown with real decimals instead of a scaled
+          // integer, since "CLS: 4" (meaning 0.004 after *1000
+          // scaling) reads as an alarming score when reviewed in
+          // tools like Google Search Console's console log viewer,
+          // even though it represents an excellent (near-zero) score.
+          const displayValue = name === "CLS" ? value.toFixed(3) : Math.round(value);
+          // Analytics value: kept as the scaled integer (CLS * 1000)
+          // for GA4/GTM dataLayer push, matching the existing/standard
+          // convention already used by this integration - unchanged.
+          const analyticsValue = Math.round(name === "CLS" ? value * 1000 : value);
+
+          console.log(`[Web Vitals] ${name}:`, displayValue, extra || "");
           if (gtmEnabled && window.dataLayer) {
             window.dataLayer.push({
               event: "web_vitals",
               metric_name: name,
-              metric_value: rounded,
+              metric_value: analyticsValue,
             });
           }
         }
