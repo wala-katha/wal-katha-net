@@ -1,7 +1,6 @@
 import { glob } from "astro/loaders";
 import { defineCollection } from "astro:content";
 import { z } from "astro/zod";
-
 // Reusable social-link validator: accepts a valid absolute URL, an
 // empty string (common when an author leaves a frontmatter field
 // blank but keeps the key present), or is entirely absent. Empty
@@ -14,7 +13,6 @@ const optionalSocialUrl = z
   .union([z.url(), z.literal("")])
   .optional()
   .transform((val) => (val === "" ? undefined : val));
-
 // About collection schema
 const aboutCollection = defineCollection({
   loader: glob({ pattern: "**/-*.{md,mdx}", base: "src/content/about" }),
@@ -86,6 +84,12 @@ const postsCollection = defineCollection({
       // vitarak penvayi.
       updated: z.coerce.date().optional(),
       image: z.string().optional(),
+      // 2026 AI ALT-TEXT FEATURE: build-time PR-based GitHub Action
+      // (.github/workflows/generate-alt-text.yml) fills this in via
+      // Gemini Vision API when "image" exists but "image_alt" doesn't.
+      // Fully optional - existing posts without this field build and
+      // render exactly as before, falling back to post title as alt.
+      image_alt: z.string().optional(),
       // NOTE: default() intentionally uses a factory function
       // (() => [...]) rather than a plain array literal. Zod's own
       // guidance is to prefer a factory for array/object defaults -
