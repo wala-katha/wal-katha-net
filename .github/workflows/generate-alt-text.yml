@@ -1,0 +1,265 @@
+name: Auto-Generate Image Alt Text (AI, PR-Based)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/content/posts/**"
+      - "public/images/posts/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate-alt-text:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Configure git identity
+        run: |
+          git config user.name "wal-katha-alttext-bot"
+          git config user.email "alttext-bot@users.noreply.github.com"
+
+      - name: Create working branch
+        id: branch
+        run: |
+          BRANCH="autofix/image-alt-text-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          echo "branch_name=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Install helper packages in isolated temp folder
+        run: |
+          mkdir -p /tmp/alttext-tool
+          cd /tmp/alttext-tool
+          npm init -y
+          npm install gray-matter@4
+
+      - name: Generate alt text via Gemini Vision API
+        id: generate
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          node --input-type=module << 'EOF'
+          import { createRequire } from 'module';
+          import { readFileSync, writeFileSync, readdirSync, existsSync, appendFileSync } from 'fs';
+          import { join } from 'path';
+
+          const require = createRequire('/tmp/alttext-tool/package.json');
+          const matter = require('gray-matter');
+
+          const POSTS_DIR = 'src/content/posts';
+          const PUBLIC_DIR = 'public';
+          const MAX_PER_RUN = 5;
+          const GEMINI_MODEL = 'gemini-2.5-flash';
+
+          const apiKey = process.env.GEMINI_API_KEY;
+          if (!apiKey) {
+            console.warn('GEMINI_API_KEY secret not set - skipping alt-text generation.');
+            appendFileSync(process.env.GITHUB_OUTPUT, 'has_changes=false\n');
+            process.exit(0);
+          }
+
+          const files = readdirSync(POSTS_DIR).filter((f) => /\.(md|mdx)$/i.test(f) && !f.startsWith('-'));
+          const candidates = [];
+
+          for (const file of files) {
+            const filePath = join(POSTS_DIR, file);
+            const raw = readFileSync(filePath, 'utf-8');
+            const parsed = matter(raw);
+            const fm = parsed.data || {};
+
+            if (!fm.image || fm.image_alt) continue;
+
+            const imgRelPath = String(fm.image).replace(/^\/+/, '');
+            const imgAbsPath = join(PUBLIC_DIR, imgRelPath);
+
+            if (!existsSync(imgAbsPath)) continue;
+
+            candidates.push({ file: filePath, title: fm.title || file, imgAbsPath });
+          }
+
+          const selected = candidates.slice(0, MAX_PER_RUN);
+          console.log(`Found ${candidates.length} post(s) missing image_alt - processing ${selected.length} this run.`);
+
+          if (selected.length === 0) {
+            appendFileSync(process.env.GITHUB_OUTPUT, 'has_changes=false\n');
+            process.exit(0);
+          }
+
+          function mimeFromExt(p) {
+            const ext = p.split('.').pop().toLowerCase();
+            if (ext === 'webp') return 'image/webp';
+            if (ext === 'png') return 'image/png';
+            if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+            return 'image/webp';
+          }
+
+          async function generateAltText(imgPath, postTitle) {
+            const imgBuffer = readFileSync(imgPath);
+            const base64Data = imgBuffer.toString('base64');
+            const mimeType = mimeFromExt(imgPath);
+
+            const prompt =
+              'You are an SEO expert. Look at this image and write ONE concise, ' +
+              'descriptive, keyword-rich HTML alt text attribute value for it, ' +
+              'in Sinhala language, under 125 characters. Do not use quotes. ' +
+              'Do not mention explicit/adult content details - describe general ' +
+              'scene, setting, mood, and visible elements only, safely. ' +
+              `The blog post title for context is: "${postTitle}". ` +
+              'Return ONLY the alt text string, nothing else.';
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+            const body = {
+              contents: [
+                {
+                  parts: [
+                    { text: prompt },
+                    { inline_data: { mime_type: mimeType, data: base64Data } },
+                  ],
+                },
+              ],
+            };
+
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+
+            if (!res.ok) {
+              const errText = await res.text().catch(() => '');
+              throw new Error(`Gemini API error ${res.status}: ${errText}`);
+            }
+
+            const data = await res.json();
+            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (!text) throw new Error('Empty response from Gemini API');
+            return text.trim().replace(/^["']|["']$/g, '').slice(0, 160);
+          }
+
+          function upsertImageAltField(raw, altText) {
+            const safeAlt = altText.replace(/"/g, "'");
+            const altLine = `image_alt: "${safeAlt}"`;
+
+            const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+            if (!fmMatch) return null;
+
+            let fmBlock = fmMatch[1];
+
+            if (/^image_alt:\s*.*$/m.test(fmBlock)) {
+              fmBlock = fmBlock.replace(/^image_alt:\s*.*$/m, altLine);
+            } else if (/^image:\s*.*$/m.test(fmBlock)) {
+              fmBlock = fmBlock.replace(/^(image:\s*.*)$/m, `$1\n${altLine}`);
+            } else {
+              fmBlock = `${fmBlock}\n${altLine}`;
+            }
+
+            return raw.replace(/^---\r?\n[\s\S]*?\r?\n---/, `---\n${fmBlock}\n---`);
+          }
+
+          const touched = [];
+
+          for (const item of selected) {
+            try {
+              const altText = await generateAltText(item.imgAbsPath, item.title);
+              const original = readFileSync(item.file, 'utf-8');
+
+              const updatedRaw = upsertImageAltField(original, altText);
+              if (!updatedRaw) {
+                console.warn(`SELF-TEST FAILED (no frontmatter block): ${item.file} - skipped.`);
+                continue;
+              }
+
+              const reparsed = matter(updatedRaw);
+              if (!reparsed.data.image_alt || !reparsed.data.title) {
+                console.warn(`SELF-TEST FAILED (integrity check): ${item.file} - skipped.`);
+                continue;
+              }
+
+              writeFileSync(item.file, updatedRaw, 'utf-8');
+              touched.push({ file: item.file, title: item.title, alt: altText });
+              console.log(`Generated alt text for ${item.file}: "${altText}"`);
+            } catch (err) {
+              console.warn(`Skipped ${item.file}: ${err.message}`);
+            }
+          }
+
+          writeFileSync('/tmp/alttext-summary.json', JSON.stringify(touched, null, 2));
+          appendFileSync(process.env.GITHUB_OUTPUT, `has_changes=${touched.length > 0 ? 'true' : 'false'}\n`);
+          EOF
+
+      - name: Verify build integrity before commit
+        if: steps.generate.outputs.has_changes == 'true'
+        run: |
+          corepack enable
+          yarn install
+          yarn build
+
+      - name: Commit generated alt text
+        id: commit
+        if: steps.generate.outputs.has_changes == 'true'
+        run: |
+          git add src/content/posts/*.md src/content/posts/*.mdx || true
+          if git diff --staged --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Auto: AI-generated image alt text for posts (Gemini Vision)"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push branch
+        if: steps.commit.outputs.has_changes == 'true'
+        run: git push origin "${{ steps.branch.outputs.branch_name }}"
+
+      - name: Open Pull Request
+        if: steps.commit.outputs.has_changes == 'true'
+        env:
+          BRANCH_NAME: ${{ steps.branch.outputs.branch_name }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.existsSync('/tmp/alttext-summary.json')
+              ? JSON.parse(fs.readFileSync('/tmp/alttext-summary.json', 'utf8'))
+              : [];
+
+            const rows = summary
+              .map((s) => `- **${s.title}** (\`${s.file}\`)\n  Alt: _${s.alt}_`)
+              .join('\n');
+
+            const body = [
+              '## 🤖 AI-Generated Image Alt Text (Gemini Vision)',
+              '',
+              'Gemini Vision API එකෙන් generate කරපු alt text pull request එකකි.',
+              '',
+              '### ✅ Merge කරන්න කලින් check කරන්න:',
+              '- [x] `yarn build` සාර්ථකව සම්පූර්ණ විය.',
+              '- [ ] Alt text descriptions නිවැරදිද, appropriate ද කියලා manually review කරන්න.',
+              '',
+              '### 📝 Generated Alt Text:',
+              rows || '(none)',
+              '',
+              '_මෙම PR එක ස්වයංක්‍රීයව scan-and-propose කරන bot එකකින් සාදන ලදී._',
+            ].join('\n');
+
+            await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🤖 Auto: AI-generated image alt text',
+              head: process.env.BRANCH_NAME,
+              base: 'main',
+              body,
+            });
+
+      - name: No changes detected
+        if: steps.generate.outputs.has_changes != 'true'
+        run: echo "No posts needed alt-text generation this run."
