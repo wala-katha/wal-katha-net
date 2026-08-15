@@ -47,7 +47,7 @@ const { posts } = Astro.props;
                 <Image
                   class="w-full h-full object-contain rounded-lg border border-white/5 group-hover:border-emerald-500/40 transition-all duration-300 relative z-0"
                   src={post.data.image}
-                  alt={post.data.title}
+                  alt={post.data.image_alt || post.data.title}
                   width={500}
                   height={666}
                   loading={imgLoading}
