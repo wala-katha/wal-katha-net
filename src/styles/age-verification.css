@@ -1,0 +1,27 @@
+/* ==========================================================
+   🔞 AGE VERIFICATION GATE - BLUR OVERLAY STYLES
+   ==========================================================
+   html.age-gate-pending class එක Base.astro තුල inline script
+   එකකින්, <head> එකේ මුලින්ම (paint වීමට කලින්) add කරයි -
+   flash-of-unblurred-content වළක්වයි.
+
+   SEO SAFETY: filter:blur() පමණක් යොදන නිසා DOM/HTML content එක
+   100% ක්ම present වේ - display:none/visibility:hidden කිසිවක්
+   යොදන්නේ නැත. Googlebot ට site එකේ සම්පූර්ණ content එක
+   කියවිය හැක (cloaking/hidden-text risk නැත).
+   ========================================================== */
+html.age-gate-pending body > *:not(#age-gate-overlay) {
+  filter: blur(14px);
+  pointer-events: none;
+  user-select: none;
+  transition: filter 0.4s ease;
+}
+html.age-gate-pending body {
+  overflow: hidden;
+}
+#age-gate-overlay {
+  display: none;
+}
+html.age-gate-pending #age-gate-overlay {
+  display: flex;
+}
