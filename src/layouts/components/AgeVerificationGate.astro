@@ -1,5 +1,5 @@
 ---
-import { BiErrorCircle } from "react-icons/bi";
+import { BiErrorCircle, BiCheckCircle } from "react-icons/bi";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 ---
 
@@ -11,41 +11,52 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
   aria-labelledby="age-gate-title"
   aria-describedby="age-gate-desc"
 >
-  <div class="age-gate-card">
-    <div class="age-gate-icon-badge" aria-hidden="true">
-      <BiErrorCircle className="age-gate-icon-svg" />
+  <div id="age-gate-card" class="age-gate-card">
+    <div id="age-gate-form-state">
+      <div class="age-gate-icon-badge" aria-hidden="true">
+        <BiErrorCircle className="age-gate-icon-svg" />
+      </div>
+
+      <p class="age-gate-brand">WALA KATHA</p>
+
+      <h2 id="age-gate-title" class="age-gate-title">
+        මෙම වෙබ් අඩවිය <span class="age-gate-title-accent">වැඩිහිටියන් (18+) සඳහා පමණි!</span>
+      </h2>
+
+      <p id="age-gate-desc" class="age-gate-desc">
+        මෙම වෙබ් අඩවියට පිවිසීමෙන්, මට වයස අවුරුදු 18ට වැඩි බවත්, මෙහි ඇති සියලුම කතා ප්‍රබන්ධ (Fiction) බවත් මම තහවුරු කරමි.
+        පහත <a href={withTrailingSlash("/privacy-policy")} class="age-gate-link" target="_blank" rel="noopener noreferrer">නියම සහ කොන්දේසි</a> වලට මම එකඟ වෙමි.
+      </p>
+
+      <div class="age-gate-actions">
+        <button id="age-gate-enter-btn" type="button" class="age-gate-enter-btn">
+          ඇතුල් වන්න - මට වයස අවුරුදු 18ට වැඩිය
+        </button>
+        <a href="https://www.google.com" class="age-gate-exit-btn">
+          මට අවුරුදු 18 නෑ - පිටවෙන්න
+        </a>
+      </div>
+
+      <p class="age-gate-footer-note">
+        <a
+          href={withTrailingSlash("/parental-control")}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="age-gate-parents-link"
+        >
+          දෙමව්පියන් සඳහා - ඔබේ දරුවන් ආරක්ෂා කර ගැනීමට මෙය කියවන්න
+        </a>
+      </p>
     </div>
 
-    <p class="age-gate-brand">WALA KATHA</p>
-
-    <h2 id="age-gate-title" class="age-gate-title">
-      මෙම වෙබ් අඩවිය <span class="age-gate-title-accent">වැඩිහිටියන් (18+) සඳහා පමණි!</span>
-    </h2>
-
-    <p id="age-gate-desc" class="age-gate-desc">
-      මෙම වෙබ් අඩවියට පිවිසීමෙන්, මට වයස අවුරුදු 18ට වැඩි බවත්, මෙහි ඇති සියලුම කතා ප්‍රබන්ධ (Fiction) බවත් මම තහවුරු කරමි.
-      පහත <a href={withTrailingSlash("/privacy-policy")} class="age-gate-link">නියම සහ කොන්දේසි</a> වලට මම එකඟ වෙමි.
-    </p>
-
-    <div class="age-gate-actions">
-      <button id="age-gate-enter-btn" type="button" class="age-gate-enter-btn">
-        ඇතුල් වන්න - මට වයස අවුරුදු 18ට වැඩිය
-      </button>
-      <a href="https://www.google.com" class="age-gate-exit-link">
-        මට අවුරුදු 18 නෑ - පිටවෙන්න
-      </a>
+    <div id="age-gate-success-state" class="age-gate-success-state" hidden>
+      <div class="age-gate-success-badge" aria-hidden="true">
+        <BiCheckCircle className="age-gate-success-svg" />
+      </div>
+      <p class="age-gate-success-text">
+        ස්තූතියි! දැන් ඔබට මෙම වෙබ් අඩවිය සම්පූර්ණයෙන් පරිශීලනය කළ හැක.
+      </p>
     </div>
-
-    <p class="age-gate-footer-note">
-      <a
-        href={withTrailingSlash("/parental-control")}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="age-gate-parents-link"
-      >
-        දෙමව්පියන් සඳහා - ඔබේ දරුවන් ආරක්ෂා කර ගැනීමට මෙය කියවන්න
-      </a>
-    </p>
   </div>
 </div>
 
@@ -59,12 +70,28 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
     }
     function initAgeGate() {
       var enterBtn = document.getElementById("age-gate-enter-btn");
-      if (!enterBtn) return;
+      var overlay = document.getElementById("age-gate-overlay");
+      var formState = document.getElementById("age-gate-form-state");
+      var successState = document.getElementById("age-gate-success-state");
+      if (!enterBtn || !overlay || !formState || !successState) return;
+
       var freshBtn = enterBtn.cloneNode(true);
       enterBtn.parentNode.replaceChild(freshBtn, enterBtn);
+
       freshBtn.addEventListener("click", function () {
         setVerified();
-        document.documentElement.classList.remove("age-gate-pending");
+
+        formState.hidden = true;
+        successState.hidden = false;
+
+        setTimeout(function () {
+          overlay.classList.add("age-gate-overlay--closing");
+          document.documentElement.classList.remove("age-gate-pending");
+
+          setTimeout(function () {
+            overlay.style.display = "none";
+          }, 450);
+        }, 950);
       });
     }
     document.addEventListener("astro:page-load", initAgeGate);
@@ -82,6 +109,12 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
     justify-content: center;
     padding: 1rem;
     background: rgba(1, 2, 3, 0.75);
+    opacity: 1;
+    transition: opacity 0.45s ease;
+  }
+  .age-gate-overlay--closing {
+    opacity: 0;
+    pointer-events: none;
   }
   .age-gate-card {
     width: 100%;
@@ -139,9 +172,11 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
   .age-gate-actions {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    align-items: center;
+    gap: 0.7rem;
   }
   .age-gate-enter-btn {
+    width: 100%;
     background-color: #01ad9f;
     color: #010203;
     font-weight: 800;
@@ -155,10 +190,23 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
   .age-gate-enter-btn:hover {
     background-color: #01c4b4;
   }
-  .age-gate-exit-link {
-    color: rgba(248, 248, 255, 0.5);
-    font-size: 0.78rem;
-    text-decoration: underline;
+  .age-gate-exit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    font-weight: 700;
+    font-size: 0.72rem;
+    padding: 0.45rem 1.1rem;
+    border-radius: 999px;
+    text-decoration: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  .age-gate-exit-btn:hover {
+    background-color: #ef4444;
+    color: #ffffff;
   }
   .age-gate-footer-note {
     margin-top: 1.1rem;
@@ -170,5 +218,45 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
     font-weight: 700;
     color: #01ad9f;
     text-decoration: underline;
+  }
+  .age-gate-success-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem 0;
+  }
+  .age-gate-success-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    margin: 0 auto 1rem;
+    border-radius: 999px;
+    background: rgba(1, 173, 159, 0.12);
+    border: 1px solid rgba(1, 173, 159, 0.4);
+    color: #01ad9f;
+    animation: age-gate-success-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .age-gate-success-svg {
+    width: 2rem;
+    height: 2rem;
+  }
+  .age-gate-success-text {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #f8f8ff;
+    line-height: 1.6;
+  }
+  @keyframes age-gate-success-pop {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .age-gate-overlay,
+    .age-gate-success-badge {
+      transition: none;
+      animation: none;
+    }
   }
 </style>
