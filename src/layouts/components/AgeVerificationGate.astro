@@ -1,0 +1,174 @@
+---
+import { BiErrorCircle } from "react-icons/bi";
+import { withTrailingSlash } from "@/lib/utils/urlHelper";
+---
+
+<div
+  id="age-gate-overlay"
+  class="age-gate-overlay"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="age-gate-title"
+  aria-describedby="age-gate-desc"
+>
+  <div class="age-gate-card">
+    <div class="age-gate-icon-badge" aria-hidden="true">
+      <BiErrorCircle className="age-gate-icon-svg" />
+    </div>
+
+    <p class="age-gate-brand">WALA KATHA</p>
+
+    <h2 id="age-gate-title" class="age-gate-title">
+      මෙම වෙබ් අඩවිය <span class="age-gate-title-accent">වැඩිහිටියන් (18+) සඳහා පමණි!</span>
+    </h2>
+
+    <p id="age-gate-desc" class="age-gate-desc">
+      මෙම වෙබ් අඩවියට පිවිසීමෙන්, මට වයස අවුරුදු 18ට වැඩි බවත්, මෙහි ඇති සියලුම කතා ප්‍රබන්ධ (Fiction) බවත් මම තහවුරු කරමි.
+      පහත <a href={withTrailingSlash("/privacy-policy")} class="age-gate-link">නියම සහ කොන්දේසි</a> වලට මම එකඟ වෙමි.
+    </p>
+
+    <div class="age-gate-actions">
+      <button id="age-gate-enter-btn" type="button" class="age-gate-enter-btn">
+        ඇතුල් වන්න - මට වයස අවුරුදු 18ට වැඩිය
+      </button>
+      <a href="https://www.google.com" class="age-gate-exit-link">
+        මට අවුරුදු 18 නෑ - පිටවෙන්න
+      </a>
+    </div>
+
+    <p class="age-gate-footer-note">
+      <a
+        href={withTrailingSlash("/parental-control")}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="age-gate-parents-link"
+      >
+        දෙමව්පියන් සඳහා - ඔබේ දරුවන් ආරක්ෂා කර ගැනීමට මෙය කියවන්න
+      </a>
+    </p>
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    var STORAGE_KEY = "wk_age_verified";
+    function setVerified() {
+      try {
+        localStorage.setItem(STORAGE_KEY, "true");
+      } catch (e) {}
+    }
+    function initAgeGate() {
+      var enterBtn = document.getElementById("age-gate-enter-btn");
+      if (!enterBtn) return;
+      var freshBtn = enterBtn.cloneNode(true);
+      enterBtn.parentNode.replaceChild(freshBtn, enterBtn);
+      freshBtn.addEventListener("click", function () {
+        setVerified();
+        document.documentElement.classList.remove("age-gate-pending");
+      });
+    }
+    document.addEventListener("astro:page-load", initAgeGate);
+    initAgeGate();
+  })();
+</script>
+
+<style>
+  .age-gate-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(1, 2, 3, 0.75);
+  }
+  .age-gate-card {
+    width: 100%;
+    max-width: 26rem;
+    background: #0c0d10;
+    border: 1px solid rgba(1, 173, 159, 0.35);
+    border-radius: 1.25rem;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+    padding: 1.75rem 1.5rem;
+    text-align: center;
+  }
+  .age-gate-icon-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    margin: 0 auto 0.75rem;
+    border-radius: 999px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #f87171;
+  }
+  .age-gate-icon-svg {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+  .age-gate-brand {
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    color: #01ad9f;
+    margin: 0 0 0.5rem;
+  }
+  .age-gate-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #f8f8ff;
+    margin: 0 0 0.75rem;
+    line-height: 1.5;
+  }
+  .age-gate-title-accent {
+    color: #f87171;
+  }
+  .age-gate-desc {
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: rgba(248, 248, 255, 0.65);
+    margin: 0 0 1.25rem;
+  }
+  .age-gate-link {
+    color: #01ad9f;
+    text-decoration: underline;
+  }
+  .age-gate-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .age-gate-enter-btn {
+    background-color: #01ad9f;
+    color: #010203;
+    font-weight: 800;
+    font-size: 0.85rem;
+    padding: 0.85rem 1.5rem;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  .age-gate-enter-btn:hover {
+    background-color: #01c4b4;
+  }
+  .age-gate-exit-link {
+    color: rgba(248, 248, 255, 0.5);
+    font-size: 0.78rem;
+    text-decoration: underline;
+  }
+  .age-gate-footer-note {
+    margin-top: 1.1rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .age-gate-parents-link {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #01ad9f;
+    text-decoration: underline;
+  }
+</style>
