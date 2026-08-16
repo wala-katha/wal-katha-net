@@ -1,8 +1,16 @@
 ---
 import { BiErrorCircle, BiCheckCircle } from "react-icons/bi";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
+
+interface Props {
+  // "parental-control" page එකට gate එක සම්පූර්ණයෙන්ම skip කිරීමට.
+  // Base.astro එකෙන් pathname එක අනුව ගණනය කර pass කරයි.
+  skip?: boolean;
+}
+const { skip = false } = Astro.props;
 ---
 
+{!skip && (
 <div
   id="age-gate-overlay"
   class="age-gate-overlay"
@@ -17,7 +25,7 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
         <BiErrorCircle className="age-gate-icon-svg" />
       </div>
 
-      <p class="age-gate-brand">WALA KATHA</p>
+      <p class="age-gate-brand">WAL KATHA</p>
 
       <h2 id="age-gate-title" class="age-gate-title">
         මෙම වෙබ් අඩවිය <span class="age-gate-title-accent">වැඩිහිටියන් (18+) සඳහා පමණි!</span>
@@ -59,10 +67,16 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
     </div>
   </div>
 </div>
+)}
 
 <script is:inline>
   (function () {
     var STORAGE_KEY = "wk_age_verified";
+    // 🎯 පරිශීලකයාට ස්තූති පණිවිඩය කියවීමට ප්‍රමාණවත් වේලාවක් දීම
+    // සඳහා පෙන්වන කාලය සුළුවෙන් වැඩි කරන ලදී (950ms -> 1700ms).
+    var SUCCESS_VISIBLE_MS = 1700;
+    var FADE_OUT_MS = 500;
+
     function setVerified() {
       try {
         localStorage.setItem(STORAGE_KEY, "true");
@@ -90,8 +104,8 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
 
           setTimeout(function () {
             overlay.style.display = "none";
-          }, 450);
-        }, 950);
+          }, FADE_OUT_MS);
+        }, SUCCESS_VISIBLE_MS);
       });
     }
     document.addEventListener("astro:page-load", initAgeGate);
@@ -137,10 +151,24 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
     background: rgba(239, 68, 68, 0.12);
     border: 1px solid rgba(239, 68, 68, 0.35);
     color: #f87171;
+    /* 🎯 නොනවත්වා දිගටම, වේගවත්ව pulse වන animation එකක් - "!" icon
+       එක නොනවත්වා ලොකු-කුඩා වෙමින්, glow ring එකක් ඉස්සුරින් යවමින්
+       දිගටම ක්‍රියාත්මක වේ (infinite loop). */
+    animation: age-gate-icon-pulse 1.4s ease-in-out infinite;
   }
   .age-gate-icon-svg {
     width: 1.75rem;
     height: 1.75rem;
+  }
+  @keyframes age-gate-icon-pulse {
+    0%, 100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+    }
+    50% {
+      transform: scale(1.15);
+      box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
+    }
   }
   .age-gate-brand {
     font-size: 0.7rem;
@@ -254,7 +282,8 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
   }
   @media (prefers-reduced-motion: reduce) {
     .age-gate-overlay,
-    .age-gate-success-badge {
+    .age-gate-success-badge,
+    .age-gate-icon-badge {
       transition: none;
       animation: none;
     }
