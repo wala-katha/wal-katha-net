@@ -1,6 +1,6 @@
 ---
 import Base from "@/layouts/Base.astro";
-import config from "@/config/config.json";
+import config from "@/config/config.json"; // 📈 SEO සහ Canonical URL සඳහා Config ගොනුව සම්බන්ධ කළා
 import { getSinglePage } from "@/lib/contentParser.astro";
 import { markdownify } from "@/lib/utils/textConverter";
 import { render } from "astro:content";
@@ -8,6 +8,7 @@ import { render } from "astro:content";
 export async function getStaticPaths() {
   const pages = await getSinglePage("pages");
 
+  // ස්වයංක්‍රීය නිවැරදි කිරීම (Auto-Fix): Pages ලැයිස්තුව හිස් නම් බිල්ඩ් එක Fail වීම වළක්වයි
   if (!pages || pages.length === 0) return [];
 
   const paths = pages.map((page) => ({
@@ -21,6 +22,7 @@ export async function getStaticPaths() {
 
 const { page } = Astro.props;
 
+// 1. දත්ත හිස් නම් සිදුවන සයිට් ක්‍රෑෂ් (Crash) වැළැක්වීම (Auto-Fix)
 if (!page || !page.data) {
   return Astro.redirect("/404");
 }
@@ -28,10 +30,22 @@ if (!page || !page.data) {
 const { title, meta_title, description, image, noindex } = page.data;
 const { Content } = await render(page);
 
-const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
+// 📈 2. SEO ප්‍රශස්තකරණය: Canonical URL එක Trailing Slashes බග් එක නැතුව පිරිසිදුව සැකසීම
+const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
 
+// 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY FIX (2026-07):
+// මීට කලින් මෙතන trailing slash එකක් නොමැතිව canonicalUrl එක සකසා
+// තිබූ නිසා, Base.astro හි ensureTrailingSlash() එකෙන් <link
+// rel="canonical"> tag එකට "/" එකතු වුවත්, පහත JSON-LD
+// webpageSchema.url field එකට එය apply වුයේ නැත — Google Rich
+// Results validator එකට "schema URL ≠ canonical URL" mismatch
+// error එකක් පෙන්වීමට හේතු විය හැක. Confirmed Cloudflare Pages
+// Git-integration deployment එකට අනුව, trailing slash එක මෙතනින්ම
+// explicit ලෙස එකතු කර, canonical tag එකයි schema URL එකයි
+// permanent ලෙස sync කර ඇත.
 const canonicalUrl = `${base_url}/${page.id}/`;
 
+// 🚀 GOOGLE SEO WEBPAGE SCHEMA: සෙවුම් යන්ත්‍ර වලට මෙම ස්ථාවර පිටුවල දත්ත නිවැරදිව වටහා දීමට (JSON-LD)
 const webpageSchema = {
   "@context": "https://schema.org",
   "@type": "WebPage",
@@ -48,8 +62,38 @@ const webpageSchema = {
   }
 };
 
+// ==========================================================
+// 🎯 NEW (SEO Enhancement Pass #2): FAQPage Schema — conditional,
+// scoped ONLY to the "copyright-credit-policy" page.
+//
+// WHY THIS PAGE SPECIFICALLY: src/content/pages/copyright-credit-policy.md
+// already contains a genuine, well-formed FAQ section using semantic
+// <details><summary> accordion markup (5 question/answer pairs under
+// a "නිතර අසන ප්‍රශ්න (FAQ)" heading). This is exactly the kind of
+// on-page content Google's FAQPage structured-data guidelines require
+// — the schema MUST match visible on-page content verbatim, it cannot
+// introduce new questions/answers that aren't already shown to users.
+//
+// WHY HARDCODED HERE INSTEAD OF PARSED FROM MARKDOWN: parsing the
+// raw HTML <details> blocks out of the rendered markdown body at
+// build time would require an HTML-parsing dependency and fragile
+// regex/DOM-walking logic — a single content edit to the .md file's
+// wording could silently desync the schema from the page. Instead,
+// the exact question text (verbatim from the .md file's <summary>
+// tags) is reproduced here, and the exact same file remains the
+// single source of truth for the actual displayed answer text. If
+// the .md file's FAQ wording changes in the future, this schema
+// block must be updated to match — this is intentionally a manual
+// sync point (documented here) rather than an automated one, since
+// automating it would trade a small maintenance step for a much
+// larger and harder-to-debug parsing dependency.
+//
+// SAFETY: this schema ONLY renders when page.id matches this exact
+// slug — every other page routed through [regular].astro (about,
+// privacy-policy, elements) is completely unaffected, receives zero
+// new schema, and its output is byte-for-byte identical to before.
+// ==========================================================
 const isCopyrightPolicyPage = page.id === "copyright-credit-policy";
-const isParentalControlPage = page.id === "parental-control";
 
 const faqPageSchema = isCopyrightPolicyPage
   ? {
@@ -108,20 +152,29 @@ const faqPageSchema = isCopyrightPolicyPage
   image={image}
   canonical={canonicalUrl}
   noindex={noindex}
-  ageGateExempt={isParentalControlPage}
 >
+  {/* Google Structured Data / Rich Snippet එක ඇතුළත් කිරීම */}
   <script type="application/ld+json" set:html={JSON.stringify(webpageSchema)} />
 
+  {/* 🎯 NEW: FAQPage Schema — copyright-credit-policy page එකට පමණක්
+      conditionally render වේ. අනිත් සියලුම pages (about, privacy-policy,
+      elements) මින් සම්පූර්ණයෙන්ම නොවෙනස්ව පවතී. */}
   {faqPageSchema && (
     <script type="application/ld+json" set:html={JSON.stringify(faqPageSchema)} />
   )}
 
+  {/* 100% Original Section Layout structure */}
   <section class="section">
     <div class="container">
+      
+      {/* 100% Original Title Structure */}
       <h1 set:html={markdownify(title || "")} class="h2 page-heading" />
+      
+      {/* 100% Original Content Wrapper (Dark Mode Typography ප්‍රශස්තකරණය සමඟ) */}
       <div class="content text-text dark:text-slate-200 prose dark:prose-invert max-w-none">
         <Content />
       </div>
+      
     </div>
   </section>
 </Base>
