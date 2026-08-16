@@ -76,6 +76,10 @@
     {
       "name": "Privacy Policy",
       "url": "/privacy-policy/"
+    },
+    {
+      "name": "Parental Control",
+      "url": "/parental-control/"
     }
   ]
 }
