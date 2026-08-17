@@ -112,35 +112,34 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     {/* ==========================================================
         AGE VERIFICATION GATE - BLUR + FULL SCROLL-LOCK
 
-        🎯 "is:global" REQUIRED: #age-gate-overlay, <header>,
-        <footer> are all rendered by SEPARATE components
-        (AgeVerificationGate.astro, Header.astro, Footer.astro), not
-        written directly inside Base.astro's own template. A scoped
-        (non-global) <style> block in Astro only ever matches
-        elements literally authored in that SAME file - without
-        "is:global" here, these cross-component selectors silently
-        fail to match, which is why the overlay/blur previously
-        broke. Same root cause and fix already applied to
-        #content-protection-toast further below.
+        🎯 CRITICAL FIX (Late/Delayed Notice Bug - Zero-Flash Fix):
+        This block MUST use "is:inline" (not just "is:global").
+        Root cause: astro.config.mjs sets
+        "build.inlineStylesheets: 'never'", which forces Astro to
+        extract EVERY <style> block (even ones written literally
+        inline in the source) into an external, separately-loaded
+        CSS file linked via <link rel="stylesheet">. Combined with
+        the post-build Beasties critical-CSS step (which cannot
+        detect ".age-gate-pending" as "critical" since that class
+        only ever exists in the DOM at runtime via JS, never in the
+        static build-time HTML), this CSS was being deferred/async
+        loaded - meaning the classList.add() above ran instantly,
+        but the matching CSS rules only became active after a
+        network round-trip. Result: new visitors briefly saw the
+        full unblurred site before the age-gate notice "popped in".
 
-        BLUR AMOUNT: restored to the original, lighter blur(14px) -
-        no saturate() reduction - matching the site's original
-        pre-existing intensity (not the heavier value used in an
-        earlier iteration).
-
-        FULL SCROLL LOCK: "position: fixed" pins <body> the instant
-        the gate is pending (page-load time only, before any visitor
-        scroll, so no scrollY save/restore needed - removing
-        "age-gate-pending" instantly restores normal scrolling).
-        "touch-action: none" additionally hard-blocks any drag
-        gesture from registering while the gate is up, fixing iOS
-        Safari's known touch-drag-bypasses-overflow:hidden issue.
-
-        ZERO-FLASH: kept INLINE directly in <head> (not a separate
-        imported stylesheet) so it can never be deferred by the
-        Beasties post-build critical-CSS step.
+        "is:inline" tells Astro to leave this exact <style> block
+        untouched, unbundled, unscoped, and rendered literally at
+        this exact position in the HTML - completely bypassing both
+        "inlineStylesheets: never" and Beasties' critical-CSS
+        pass (Beasties' own "reduceInlineStyles: false" config in
+        scripts/inline-critical-css.mjs guarantees it never touches
+        already-inline style content). This guarantees the blur/
+        lock rules are present and active in the exact same HTML
+        response as the class-injection script above - zero network
+        round-trip, zero flash, for every single visitor.
        ========================================================== */}
-    <style is:global>
+    <style is:inline>
       html.age-gate-pending,
       html.age-gate-pending body {
         height: 100%;
