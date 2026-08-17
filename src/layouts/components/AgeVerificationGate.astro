@@ -155,11 +155,8 @@ const { skip = false } = Astro.props;
   }
 
   /* ==========================================================
-     🎯 LIVE BLINKING DOT — fixed to the top-RIGHT corner of the
-     card. Animates the dot's own background-color directly back
-     and forth between red and near-black (site body color), using
-     steps(1) so each swap is an instant, hard color-flip - a true
-     "නිවෙනවා-පත්තුවෙනවා" blink, not a fade/opacity trick.
+     🎯 STATIC RED DOT — fixed to the top-right corner of the
+     card. No animation - a plain, always-visible solid red dot.
   ========================================================== */
   .age-gate-live-dot {
     position: absolute;
@@ -169,19 +166,7 @@ const { skip = false } = Astro.props;
     height: 0.6rem;
     border-radius: 999px;
     background-color: #ef4444;
-    animation: age-gate-live-blink 1s steps(1, end) infinite;
     z-index: 2;
-  }
-  @keyframes age-gate-live-blink {
-    0% {
-      background-color: #ef4444;
-    }
-    50% {
-      background-color: #050505;
-    }
-    100% {
-      background-color: #ef4444;
-    }
   }
 
   .age-gate-icon-badge {
@@ -427,8 +412,7 @@ const { skip = false } = Astro.props;
   @media (prefers-reduced-motion: reduce) {
     .age-gate-overlay,
     .age-gate-success-badge,
-    .age-gate-icon-badge,
-    .age-gate-live-dot {
+    .age-gate-icon-badge {
       transition: none;
       animation: none;
     }
