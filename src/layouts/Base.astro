@@ -7,7 +7,6 @@ import { plainify } from "@/lib/utils/textConverter";
 import Footer from "@/partials/Footer.astro";
 import Header from "@/partials/Header.astro";
 import "@/styles/main.css";
-import "@/styles/age-verification.css";
 import { Font } from "astro:assets";
 import { ClientRouter } from "astro:transitions";
 
@@ -22,7 +21,7 @@ export interface Props {
   image?: string;
   noindex?: boolean;
   canonical?: string;
-  isArticle?: boolean; // 🎯 පෝස්ට් එකක්ද කියලා අඳුරගන්න අලුත් Prop එකක්
+  isArticle?: boolean;
 }
 
 const { title, meta_title, description, image, noindex, canonical, isArticle = false } = Astro.props;
@@ -41,36 +40,16 @@ const calculatedDescription = plainify(
     : config.metadata.meta_description
 );
 
-// 🎯 2026 GOOGLE-SAFE KEYWORD STRUCTURE
 const siteKeywords = "Wal Katha, Sinhala Wal Katha, Aluth Wal Katha, Wal Katha PDF, Wala Katha, Wela Katha, New Sinhala Wal Katha, Sinhala Wela Katha, Wal Katha New, Aluth Sinhala Wal Katha";
 
 const cleanBaseUrl = config.site.base_url.endsWith("/")
   ? config.site.base_url.slice(0, -1)
   : config.site.base_url;
 
-// 🎯 CLOUDFLARE PAGES TRAILING-SLASH FIX:
-// Cloudflare Pages (Git-integrated deployment, not native Workers Static
-// Assets) ignores wrangler.jsonc's html_handling setting completely and
-// enforces its own default: any no-trailing-slash directory-style URL
-// (e.g. "/authors") is 308-redirected to the trailing-slash version
-// ("/authors/"). This is a Cloudflare Pages platform-level default that
-// cannot be overridden via _redirects for this direction.
-//
-// Rather than fight the platform, we align the canonical tag itself with
-// Cloudflare's actual serving behavior: every canonical URL now ends in
-// a trailing slash (except file-like paths that contain a dot, e.g.
-// sitemap.xml, robots.txt — which should never get a trailing slash).
-// This guarantees the canonical URL always resolves with 0 redirects,
-// which is what Ahrefs/Google check for.
 function ensureTrailingSlash(url: string): string {
-  // Don't touch URLs that already end in "/"
   if (url.endsWith("/")) return url;
-
-  // Don't touch file-like URLs (has a dot in the last path segment,
-  // e.g. /sitemap-index.xml, /robots.txt, /favicon.ico)
   const lastSegment = url.split("/").pop() || "";
   if (lastSegment.includes(".")) return url;
-
   return `${url}/`;
 }
 
@@ -84,137 +63,14 @@ const finalImageUrl = image
     : `${cleanBaseUrl}${image.startsWith("/") ? image : "/" + image}`
   : `${cleanBaseUrl}${config.metadata.meta_image.startsWith("/") ? config.metadata.meta_image : "/" + config.metadata.meta_image}`;
 
-// ✅ Home page පමණයි slider preload කරනවා
 const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
 
-// 🎯 NEW (SEO Enhancement Pass #2): og:image:type / twitter image dimension
-// auto-detection. Determines the correct MIME type from the final image
-// URL's file extension so Facebook/Twitter/LinkedIn crawlers can reliably
-// parse the image regardless of format (webp, jpg, png) — this was
-// previously omitted, leaving crawlers to guess the MIME type, which can
-// cause some platforms (older Facebook scrapers in particular) to skip
-// rendering the preview image entirely for non-jpg formats. Purely
-// additive: derived at build-time from the same finalImageUrl already
-// computed above, zero new props, zero risk to existing image logic.
-function detectImageMimeType(url: string): string {
-  const ext = url.split(".").pop()?.toLowerCase().split("?")[0] ?? "";
-  switch (ext) {
-    case "webp":
-      return "image/webp";
-    case "png":
-      return "image/png";
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "gif":
-      return "image/gif";
-    case "svg":
-      return "image/svg+xml";
-    default:
-      return "image/webp"; // site-wide default output format (see astro.config.mjs sharpImageService)
-  }
-}
-const finalImageMimeType = detectImageMimeType(finalImageUrl);
-
-// ==========================================================
-// 🎯 UNIVERSAL hreflang / CONTENT-LANGUAGE INJECTION (NEW —
-// SEO Enhancement Pass #1: hreflang & Content-Language Consistency)
-//
-// ROOT CAUSE THIS SOLVES: previously, "content-language" meta +
-// "hreflang" self-referencing <link> tags existed ONLY inside
-// search.astro, manually hand-written there and nowhere else. Every
-// other route on the site ([regular].astro, blog/[single].astro,
-// authors/[single].astro, categories/*, tags/*, contact.astro,
-// page/[slug].astro, 404.astro, index.astro) had ZERO hreflang or
-// content-language signal — an inconsistent, page-by-page patchwork
-// instead of a site-wide guarantee.
-//
-// Even for a genuinely single-language site (si only, no translated
-// variants), explicitly declaring hreflang="si" + hreflang="x-default"
-// self-referencing tags on every page removes ambiguity for search
-// engines about which language/region variant is canonical — this
-// matters most when a domain is reachable via multiple host variants
-// (www vs non-www) or when third-party aggregators scrape and re-host
-// content, since it gives Google an unambiguous, page-level signal of
-// "this exact URL is the canonical si-language version" independent
-// of the html lang attribute alone.
-//
-// PERMANENT, SELF-HEALING FIX: this block now lives ONCE, in
-// Base.astro (the single layout every page in the site imports),
-// computed from the SAME "currentCanonical" value already used for
-// <link rel="canonical"> below — so hreflang/content-language can
-// never drift out of sync with the canonical URL, no matter how many
-// new page types are added in the future. Any new route added later
-// automatically inherits this without any additional code, since it
-// is impossible to render a page through Base.astro without also
-// getting these tags.
-//
-// NOTE: the previous manual duplicate of these exact three tags
-// inside src/pages/search.astro has been removed as part of this same
-// change, since rendering them twice on the same page (once from
-// here, once from search.astro's own <Fragment slot="head">) would be
-// an invalid duplicate <link>/<meta> emission.
-//
-// 🎯 2026-07 W3C VALIDATOR FIX (vnu.validator.w3.org — 2 errors):
-// ROOT CAUSE 1: A previous version of this file manually emitted
-// <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-// inside <head>. Astro ALREADY auto-injects its own
-// <meta charset="UTF-8" /> as the very first node inside every page's
-// <head> (this happens automatically at the framework level and
-// cannot be disabled/is not written anywhere in this file's source —
-// it is emitted by Astro's compiler itself). The W3C HTML spec
-// (and the Nu Html Checker) explicitly FORBIDS a document from having
-// BOTH a <meta charset="..."> element AND a
-// <meta http-equiv="Content-Type" content="...; charset=..."> element
-// at the same time — exactly one charset-declaring meta is permitted.
-// Since Astro's own <meta charset="UTF-8"> already satisfies this
-// requirement completely, the manual http-equiv="Content-Type" meta
-// tag was 100% redundant AND spec-violating. It has been permanently
-// removed. No charset functionality is lost — Astro's own directive
-// is the single source of truth for this site's character encoding on
-// every single page, permanently and automatically (self-healing: any
-// future page added to the site automatically inherits Astro's
-// charset meta with zero manual code required, and can never
-// re-introduce this duplicate-charset error since there is no longer
-// any manual charset-related meta tag anywhere in this file).
-//
-// ROOT CAUSE 2: A previous version of this file also manually emitted
-// <meta http-equiv="content-language" content="si" />. The W3C HTML
-// spec has marked the "content-language" http-equiv meta as OBSOLETE
-// — the correct, modern, spec-compliant way to declare a document's
-// primary language is the <html lang="..."> attribute alone, which
-// this file ALREADY sets via <html lang="si" ...> below. Since that
-// attribute already fully satisfies the language-declaration
-// requirement (and is what search engines/browsers actually consult),
-// the obsolete http-equiv="content-language" meta tag has been
-// permanently removed. No language signal is lost — <html lang="si">
-// remains the single, spec-compliant source of truth for this site's
-// declared language on every page, permanently.
-//
-// 🎯 2026-07 PAGESPEED FORCED-REFLOW FIX (ClientRouter fallback mode):
-// ROOT CAUSE: <ClientRouter /> below previously used Astro's default
-// fallback behavior ("animate"). When a browser lacks native support
-// for the View Transitions API (older Safari, some Android WebViews),
-// Astro's ClientRouter simulates a transition by measuring DOM
-// geometry (offsetWidth/getBoundingClientRect-style calls) after style
-// invalidation — this is a textbook "forced synchronous reflow"
-// pattern, and PageSpeed Insights' "Forced reflow" audit flagged this
-// exact behavior at /_astro/ClientRouter.astro_ast....js (288ms total
-// reflow time observed).
-//
-// PERMANENT FIX: fallback="swap" tells ClientRouter to perform an
-// instant DOM swap (no animation, no geometry measurement) for
-// non-supporting browsers, while leaving native View Transitions API
-// browsers (Chrome, Edge, modern Safari) completely untouched — those
-// browsers already use GPU-accelerated CSS transitions, not JS-driven
-// reflow, so they see zero behavioral change. Critically, this does
-// NOT disable ClientRouter or remove it: the astro:page-load /
-// astro:before-swap event lifecycle that Header.astro,
-// FeaturedSlider.astro, Posts.astro, SimilarPosts.astro, and
-// PostSingle.astro all depend on continues to fire exactly as before,
-// so zero site functionality is affected — only the reflow-triggering
-// animation-simulation codepath is skipped.
-// ==========================================================
+// AGE VERIFICATION GATE - PAGE-SPECIFIC SKIP LOGIC
+// "දෙමව්පියන් සඳහා" (Parental Control) පිටුවට පමණක් gate එක skip කරයි.
+// සෙසු සියලුම පිටුවලට (home, blog posts, categories, tags, authors,
+// search ආදී සියල්ල ඇතුළුව) gate එක සැමවිටම, bypass කළ නොහැකි ලෙස පෙන්වයි.
+const normalizedPathname = Astro.url.pathname.replace(/\/+$/, "") || "/";
+const isParentalControlPage = normalizedPathname === "/parental-control";
 ---
 
 <!doctype html>
@@ -223,58 +79,95 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
 
     {/* ==========================================================
-        🔞 AGE VERIFICATION GATE - EARLY (PRE-PAINT) CLASS INJECTION
-        ==========================================================
-        Flash-of-unblurred-content වළක්වන්නට, body paint වීමට කලින්ම
-        (head එකේ මුලින්ම, synchronous inline script එකකින්) localStorage
-        එක check කර "age-gate-pending" class එක <html> ට add කරයි.
-        Enter button click කළ පසු, localStorage "wk_age_verified" = "true"
-        වන අතර browser cache clear කරන තුරු නැවත gate එක පෙන්වන්නේ නැත.
+        AGE VERIFICATION GATE - EARLY (PRE-PAINT) CLASS INJECTION
+        Body paint වීමට කලින්ම localStorage check කර "age-gate-pending"
+        class එක <html> ට add කරයි. skipAgeGate server-side එකේදීම
+        (isParentalControlPage) ගණනය කර pass කරයි.
        ========================================================== */}
-    <script is:inline>
+    <script is:inline define:vars={{ skipAgeGate: isParentalControlPage }}>
       (function () {
         try {
-          if (localStorage.getItem("wk_age_verified") !== "true") {
+          if (!skipAgeGate && localStorage.getItem("wk_age_verified") !== "true") {
             document.documentElement.classList.add("age-gate-pending");
           }
         } catch (e) {}
       })();
     </script>
 
+    {/* ==========================================================
+        AGE VERIFICATION GATE - CRITICAL BLUR + FULL SCROLL-LOCK
+
+        🎯 CRITICAL FIX (ROOT CAUSE — notice card never appeared,
+        page stuck permanently blurred with no way to confirm age):
+        Astro scopes every non-"is:global" <style> block in a .astro
+        file to ONLY the elements literally authored in that SAME
+        file's own template (via a hidden data-astro-cid-* attribute
+        stamped onto matching selectors). #age-gate-overlay is NOT
+        written anywhere in Base.astro's own template — it is
+        rendered entirely by the separate <AgeVerificationGate />
+        component. Likewise <header>/<footer> come from Header.astro/
+        Footer.astro, not from Base.astro directly. Without
+        "is:global" here, the "html.age-gate-pending #age-gate-overlay
+        { display: flex }" rule could never match that element at
+        all (wrong scope), so the popup card + Enter button never
+        appeared — only <main>, which IS authored directly inside
+        Base.astro's own template, ever received the blur rule.
+        This is the exact same class of bug already documented and
+        fixed elsewhere in this codebase for #content-protection-toast
+        (built at runtime, appended to document.body) — see that
+        block's own comment further below for the identical root
+        cause. "is:global" here removes the scope-attribute
+        requirement entirely, so blur + overlay visibility now apply
+        correctly across every component (Header, Footer, the age
+        gate itself), not just Base.astro's own <main> tag.
+
+        FULL, UNBYPASSABLE SCROLL LOCK: "position: fixed" pins <body>
+        the instant the gate is pending — this only ever happens at
+        page-load time (before any visitor scroll), so no scrollY
+        save/restore is needed; removing "age-gate-pending" instantly
+        restores normal scrolling. "touch-action: none" additionally
+        hard-blocks any drag gesture from registering while the gate
+        is up (fixes iOS Safari touch-drag scroll bypassing plain
+        overflow:hidden, the same known limitation already documented
+        in TrustpilotReview.astro's lockBodyScroll()).
+
+        ZERO-FLASH: this block stays INLINE directly in <head> (not a
+        separately-imported stylesheet) so it can never be deferred by
+        the Beasties post-build critical-CSS step — it is guaranteed
+        active before the browser paints a single pixel of <body>.
+       ========================================================== */}
+    <style is:global>
+      html.age-gate-pending,
+      html.age-gate-pending body {
+        height: 100%;
+        overflow: hidden !important;
+        overscroll-behavior: none;
+      }
+      html.age-gate-pending body {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        touch-action: none;
+      }
+      html.age-gate-pending body > *:not(#age-gate-overlay) {
+        filter: blur(28px) saturate(0.6);
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-select: none;
+        transition: filter 0.4s ease;
+      }
+      #age-gate-overlay {
+        display: none;
+      }
+      html.age-gate-pending #age-gate-overlay {
+        display: flex;
+      }
+    </style>
+
     <style>
-      /* 🎯 FIXED (CRITICAL — Horizontal Page Wobble/Shake Bug — Android Chrome):
-         .row class එකට (tw-bs-grid.mjs) Bootstrap-style negative margin
-         (calc(var(--bs-gutter-x) / -2)) තියෙනවා — මේක grid gutter alignment
-         සඳහා අවශ්‍ය සාමාන්‍ය pattern එකක්. 
-
-         මීට පෙර html/body වලට විතරක් overflow-x: hidden දාලා තිබ්බා, ඒත් ඒක
-         scrollbar එක "hide" කරනවා විතරයි — Android Chrome එකේ, document එකේ
-         actual scrollable width එක viewport එකට වඩා ලොකු වුනොත් (negative
-         margins, transforms, badge/tag text content නිසා), touch-drag කරන
-         විට Chrome එකේ horizontal pan gesture එක තාමත් "catch" වෙලා content
-         එක පොඩ්ඩක් පැත්තට move වෙනවා (elastic/rubber-band නොවුනත් drag
-         ස්වභාවයක්) — scrollbar නොපෙනුනත් underlying overflow එක තිබුණු නිසා.
-
-         🎯 PERMANENT ROOT-LEVEL FIX (2-Layer Defense):
-         1. touch-action: pan-y — html/body මට්ටමින්ම browser එකට කියනවා
-            vertical pan/scroll පමණක් allow කරන්න, horizontal pan gesture
-            එකක් කිසිසේත් trigger වෙන්නේ නැති පරිදි hard-block කරනවා. මේක
-            Android Chrome + iOS Safari දෙකෙටම වැඩ කරන cross-browser fix
-            එකක්, vertical scroll එකට කිසිම බලපෑමක් නැත.
-         2. .row (Bootstrap-grid negative margin source) එකටම සෘජුවම
-            overflow-x: hidden + max-width: 100% දාලා, root cause එකම
-            (negative margin causing width overflow) contain කරනවා —
-            html/body level fix එක විතරක් "safety net" එකක් විදිහට තියාගෙන,
-            .row level එකේ ම root cause එක clamp කරනවා. මේක site එකේ .row
-            පාවිච්චි කරන ඕනෑම component එකකට (Posts.astro, SimilarPosts.astro,
-            Authors.astro, PostSingle.astro ආදී) automatic ලෙස apply වෙනවා —
-            single central point එකෙන් අනාගතයේ අලුත් component එකකින්
-            wobble bug එකක් ආවත් මෙතනින්ම block වෙනවා (self-healing).
-
-         මේ දෙකම එකතු කිරීමෙන්, existing layout, design, spacing, gutter
-         alignment කිසිවකට බලපෑමක් නැත — document width එක viewport width
-         එකට strictly clamp කරලා, horizontal pan gesture එකම browser එකෙන්
-         hard-disable කරනවා. */
+      /* 🎯 FIXED (CRITICAL — Horizontal Page Wobble/Shake Bug — Android Chrome) */
       html, body {
         background-color: #050505;
         color: #f8fafc;
@@ -294,33 +187,7 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
     </style>
 
     <style>
-      /* ==========================================================
-         🛡️ CONTENT PROTECTION — SMOOTH SELECTION RESTRICTION
-         (Anti-Scraping, Site-Wide, SEO-SAFE)
-
-         🎯 WHY THIS IS 100% SAFE FOR INDEXING/RANKING:
-         "user-select" is a purely visual/interaction CSS property that
-         controls whether a HUMAN using a mouse/touch can highlight text
-         with a cursor. It has ZERO effect on:
-         - The raw HTML delivered to Googlebot/Bingbot/ClaudeBot/any
-           crawler (they read DOM text nodes directly via HTTP fetch +
-           HTML parsing, never via "click-and-drag selection").
-         - The accessibility tree used by screen readers (a11y APIs
-           read text content independent of user-select).
-         - robots.txt / meta robots / sitemap eligibility (unrelated
-           layers entirely).
-         This is fundamentally different from display:none / 
-         visibility:hidden / aria-hidden, which DO hide content from
-         crawlers — none of those techniques are used here. Content
-         remains 100% visible, readable, and indexable; only the
-         mouse-drag "highlight-then-copy" workflow used by scrapers is
-         made smooth-but-inconvenient.
-
-         🎯 SCOPE: Global default (body-level) with explicit opt-back-in
-         for every genuinely-interactive form field (input/textarea/
-         select/contenteditable) — so the Contact form, Comment box,
-         and Search bar remain 100% typeable/selectable/functional.
-      ========================================================== */
+      /* CONTENT PROTECTION — SMOOTH SELECTION RESTRICTION */
       body {
         -webkit-user-select: none;
         -moz-user-select: none;
@@ -338,66 +205,10 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
         -ms-user-select: text !important;
         user-select: text !important;
       }
-      /* Images shouldn't be drag-out-able (common easy-scrape vector) */
       img {
         -webkit-user-drag: none;
         user-drag: none;
       }
-
-      /* 🎯 2026-08 REDESIGN: CENTERED "COPY-BLOCKED" NOTICE CARD
-         (previously a small bottom-fixed pill toast; now a proper
-         centered, rounded card that pops into the middle of the
-         screen so it reads as a deliberate, polished notice rather
-         than a cramped strip of text at the bottom edge).
-
-         WHY CENTERED, NOT BOTTOM: a copy/select attempt happens
-         wherever the user's finger/cursor currently is on the page —
-         a bottom-pinned toast is easy to miss or overlaps the
-         floating comment button (#comment-floating-btn) on post
-         pages. A centered card is impossible to miss, matches the
-         same dark "modal card" visual language already used by
-         TrustpilotReview.astro's popup and PostSingle.astro's like
-         success toast, and disappears on its own — no dismiss button
-         needed since it is purely informational and non-blocking
-         (pointer-events: none while hidden, and the whole card is
-         intentionally compact so it never covers meaningful content
-         for long).
-
-         STRUCTURE: a rounded card (not a pill) with a soft teal-ringed
-         lock icon on top and the message centered underneath — same
-         proportions/spacing rhythm as the site's other modal/toast
-         components (#0c0d10 background, teal accent border, heavy
-         drop shadow). Animates in with a gentle scale+fade "pop"
-         (matches the like-success-toast's spring easing) and fades
-         back out automatically after NOTICE_VISIBLE_MS.
-
-         🎯 2026-08 CRITICAL FIX (ROOT CAUSE — style never applying,
-         icon rendering as a giant unstyled shape shoved under the
-         footer instead of a small centered card):
-         Astro scopes every <style> block in a .astro file to ONLY
-         the elements literally written in that same file's own
-         template — it does this by compiling each selector to
-         require a hidden `data-astro-cid-*` attribute, and only
-         stamps that attribute onto elements that were part of this
-         component's server-rendered output. #content-protection-toast
-         is never written in this template at all — it is created
-         entirely at RUNTIME by the initContentProtection() script
-         below via document.createElement()/appendChild(document.body),
-         so it can never receive that scope attribute. Result: every
-         rule in this block silently failed to match, the element got
-         zero positioning/sizing/color, and it rendered as a bare,
-         unstyled, un-fixed SVG inserted at the very end of <body> —
-         i.e. visually "under the footer", exactly as reported.
-         FIX: `is:global` on this <style> tag removes the scope-
-         attribute requirement entirely, so these plain selectors
-         match `#content-protection-toast` no matter when/how the
-         element was created. This is the exact same fix already
-         proven elsewhere in this codebase — see
-         TrustpilotReview.astro's own `:global(...)` modal rules and
-         PostSingle.astro's `<style is:global>` block, both used for
-         the identical reason (elements built/moved via JS at
-         runtime, appended to document.body).
-      ========================================================== */
     </style>
     <style is:global>
       #content-protection-toast {
@@ -458,14 +269,8 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
     </style>
 
     <link rel="shortcut icon" href={config.site.favicon} />
-
-    {/* 🎯 2026 PWA MANIFEST: "Add to Home Screen" installability සඳහා.
-        ⚠️ NOTE: public/manifest.json හි icons (192x192, 512x512) දැන්
-        app-icon.webp (512x512 square PWA icon) reference කරයි —
-        optimize-images.yml workflow එකෙන් auto-synced. */}
     <link rel="manifest" href="/manifest.json" />
 
-    {/* 🎯 FIXED SYNTAX ERROR: ඩූපිලිකේට් වැටිලා තිබ්බ <link ටැග් එක හැදුවා */}
     {isHomePage && (
       <link rel="preload" as="image" href="/images/slider/slide-1.webp" fetchpriority="high" />
     )}
@@ -482,27 +287,13 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
     <meta name="theme-name" content="bookworm-light-astro" />
     <meta name="generator" content={Astro.generator} />
 
-    {/* 🎯 UNIVERSAL hreflang BLOCK (SEO Enhancement Pass #1) — see full
-        rationale in the frontmatter comment above. Rendered site-wide,
-        once, for every page that goes through Base.astro. Computed
-        from the same currentCanonical value used by
-        <link rel="canonical"> below, so these can never drift out of
-        sync with the canonical URL.
-        NOTE (2026-07 W3C fix): the manual
-        <meta http-equiv="content-language" content="si" /> tag that
-        used to sit here has been permanently removed — it was flagged
-        obsolete by the W3C Nu Html Checker. <html lang="si"> above is
-        the single, spec-compliant source of truth for this site's
-        declared language now. */}
     <link rel="alternate" hreflang="si" href={currentCanonical} />
     <link rel="alternate" hreflang="x-default" href={currentCanonical} />
 
-    {/* 👑 CORE SEO TAGS (භාවිතා වෙන්නේ එක පාරක් පමණි) */}
     <title>{calculatedTitle}</title>
     <link rel="canonical" href={currentCanonical} />
     <meta name="description" content={calculatedDescription} />
 
-    {/* 🎯 Article එකක් නොවේ නම් පමණක් Base Meta ටැග්ස් දමයි (Duplicate වැළැක්වීමට) */}
     {!isArticle && (
       <>
         <meta name="keywords" content={siteKeywords} />
@@ -511,188 +302,50 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
           ? <meta name="robots" content="noindex,nofollow" />
           : <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
         }
-        
-        {/* Open Graph for Default Pages */}
         <meta property="og:title" content={calculatedTitle} />
         <meta property="og:description" content={calculatedDescription} />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={currentCanonical} />
         <meta property="og:locale" content="si_LK" />
         <meta property="og:site_name" content={config.site.title} />
-
-        {/* Twitter for Default Pages */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={calculatedTitle} />
         <meta name="twitter:description" content={calculatedDescription} />
-
-        {/* 🎯 NEW (SEO Enhancement Pass #2): twitter:image dimensions —
-            previously PostSingle.astro (article pages) had these, but
-            default/non-article pages (home, about, contact, categories,
-            tags, search, 404) never emitted them. Twitter/X's card
-            validator uses these to pre-allocate the preview image's
-            aspect ratio; omitting them can cause a layout shift or a
-            fallback to a smaller "summary" card instead of the larger
-            "summary_large_image" card requested above. Purely additive —
-            same 1200x630 convention already used for og:image below. */}
         <meta name="twitter:image:width" content="1200" />
         <meta name="twitter:image:height" content="630" />
       </>
     )}
 
-    {/* Image tags හැමෝටම පොදුවේ දුවන්න පුළුවන් */}
     <meta property="og:image" content={finalImageUrl} />
     <meta property="og:image:secure_url" content={finalImageUrl} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    {/* 🎯 NEW (SEO Enhancement Pass #2): og:image:type — auto-detected
-        MIME type from the final image URL's extension (see
-        detectImageMimeType() in the frontmatter above). Some social
-        crawlers (notably older Facebook scraper versions) skip
-        rendering a preview image entirely if they cannot confidently
-        determine its MIME type from the URL alone; declaring it
-        explicitly removes that ambiguity for every page site-wide. */}
-    <meta property="og:image:type" content={finalImageMimeType} />
+    <meta property="og:image:type" content="image/webp" />
     <meta name="twitter:image" content={finalImageUrl} />
 
-    {/* ⚡ DYNAMIC HEAD SLOT: PostSingle.astro එකෙන් එවන Meta/Schema ටැග්ස් මෙතනට වදියි */}
     <slot name="head" />
 
-    {/* ==========================================================
-        🎯 PWA SERVICE WORKER — EARLY (HEAD-LEVEL), ONE-TIME
-        REGISTRATION (Home page එකේ "Install app" simple dialog vs
-        Post page එකේ "Install + Create shortcut" richer dialog අතර
-        වෙනස විසඳීම)
-
-        🔍 ROOT CAUSE: කලින් SW registration script එක <body> එකේ
-        අගට දාලා, "load" event එකට පස්සේ විතරක් register වුනා. Chrome
-        ගේ richer install dialog (Install + Create shortcut options
-        දෙකම) එක trigger වෙන්නේ, SW එක page එකට "controller" විදිහට
-        active වෙලා තියෙනවා කියලා Chrome ට high-confidence එකක් තියෙනකොට
-        විතරයි.
-
-        ✅ FIX: Registration script එක <head> එකට, "load" event එකට
-        කලින්ම (blocking network request එකක් නොවන "register()" call
-        එකක්, main content render එකට කිසිම බලපෑමක් නැති async call
-        එකක්) දාලා, Chrome ට SW එක install+active වෙන්න හැකි තරම්
-        ඉක්මනින්ම ලැබෙන chance එක වැඩි කරනවා.
-
-        🎯 2026-08 SIMPLIFIED FIX (Duplicate Registration - Root Cause
-        Removal): මීට කලින් "astro:page-load" listener එකකුත් attach
-        කරලා තිබුණි, closure-scoped "hasRegistered" flag එකකින් guard
-        කරගෙන. ඒ guard එක real browsers/users ලාට නිවැරදිව වැඩ කළත්,
-        Google Search Console URL Inspection tool එක වගේ testing
-        tools, එකම URL එකට render pass 2ක් (HTML tab සඳහා එකක්,
-        Screenshot tab සඳහා එකක්) කරද්දී, සෑම render pass එකකදීම මුළු
-        script එකම fresh එකක් විදිහට re-execute වෙනවා - closure එකත්
-        අලුතින් හැදෙන නිසා "hasRegistered" flag එකත් "false" ලෙස
-        reset වෙනවා. ඒ නිසා tool එකේ එකම test එකේදීම render pass
-        දෙකකින් duplicate "SW registration failed" warning එකක් log
-        වුනා.
-
-        PERMANENT FIX: "astro:page-load" listener එක සම්පූර්ණයෙන්ම
-        ඉවත් කර ඇත. Service Worker එකක් origin එකකට register කරන්න
-        ඕන එක්වරයි විතරයි - browser එක ඒ registration එක browsing
-        session එක පුරාම persist කරගෙන ඉන්නවා. Astro's View
-        Transitions (ClientRouter) client-side SPA navigation එකකදී
-        full page reload එකක් කවදාවත් trigger කරන්නේ නෑ, ඒ නිසා මෙම
-        script එක මුලින්ම parse වෙනකොට කරන එකම registration call එක
-        ඊළඟ සියලුම in-app navigations සඳහාත් valid/active ලෙසම
-        පවතිනවා - real user කෙනෙක්ගේ browser එකට මෙය දෙවනි වතාවක්
-        run කරන්න ඕන කිසිම scenario එකක් නෑ. මෙයින් duplicate-call
-        vector එකම root level එකේදීම ඉවත් වේ - real users ලාටත්,
-        page එක බහුවිට render කරන ඕනෑම testing tool එකකටත්.
-       ========================================================== */}
     <script is:inline>
       (function registerServiceWorkerEarly() {
         if (!("serviceWorker" in navigator)) return;
-
-        // 🎯 ASAP, ONE-TIME TRIGGER: script tag එක parse වෙන ගමන්ම
-        // register() call කරනවා (load event එකට කලින්ම). register()
-        // call එක itself non-blocking (Promise-based) නිසා, main
-        // content render/paint එකට කිසිම delay එකක් හෝ blocking
-        // side-effect එකක් ඇති නොකරයි. Registration එක origin එකටම
-        // browsing session එක පුරාම persist වෙන නිසා, View
-        // Transitions client-side navigation එකකදී නැවත register
-        // කරන්න අවශ්‍ය නැත.
         navigator.serviceWorker
           .register("/sw.js")
           .then((registration) => {
             console.log("SW registered (early):", registration.scope);
           })
           .catch((err) => {
-            // ⚠️ ආරක්ෂිත fallback: offline first-load, unsupported
-            // browser edge-case, හෝ Service Worker API restrictions
-            // ඇති sandboxed testing environment එකක් (උදා: සමහර
-            // crawler/inspection tools) නිසා registration fail
-            // වුවත්, core site functionality කිසිවකට බලපෑමක් නැත.
             console.warn("SW registration failed:", err);
           });
       })();
     </script>
 
-    {/* ==========================================================
-        🎯 NEW: CORE WEB VITALS MONITORING (SEO Enhancement Pass #2)
-
-        WHY: Core Web Vitals (LCP, CLS, INP) are a confirmed Google
-        ranking factor. Without any client-side measurement, there is
-        no visibility into real-user performance regressions — issues
-        only surface reactively via PageSpeed Insights manual checks.
-
-        WHAT THIS DOES: Uses the browser's native PerformanceObserver
-        API (zero external dependencies, zero extra HTTP requests,
-        ~15 lines of vanilla JS) to capture LCP, CLS, and INP as they
-        occur, then logs them to the console in development and
-        (if Google Tag Manager is enabled per config.json) pushes them
-        into the existing dataLayer so they surface in GA4/GTM
-        reports the site may already have configured — reusing the
-        SAME gtm.dataLayer array that astro-gtm-lite (already an
-        active dependency, see astro.config.mjs) creates, rather than
-        introducing a second, competing analytics mechanism.
-
-        SAFE-BY-DEFAULT: if config.google_tag_manager.enable is false
-        (the current default in config.json), this script simply
-        console.logs the metrics locally and does nothing else —
-        zero network calls, zero external services contacted, fully
-        inert on production until GTM is turned on.
-
-        PERFORMANCE: this script is deferred (`is:inline` + attached
-        after the "load" event fires, not before) so it can never
-        compete with or delay LCP/FCP itself — instrumentation code
-        must never be the thing that harms the metrics it measures.
-
-        🎯 2026-08 FIX (Misleading CLS Console Display — Google Search
-        Console URL Inspection tool logged "[Web Vitals] CLS: 4",
-        which reads as an alarmingly high score even though the real
-        underlying CLS was an excellent 0.004): ROOT CAUSE was that
-        the console-logged "value" for CLS was always the *1000-scaled
-        integer (the same value intentionally used for the GA4/GTM
-        dataLayer push, matching that platform's existing numeric
-        convention), so a genuinely great CLS of 0.004 displayed as a
-        bare "4" with no decimal/scale context in the console log
-        text itself. FIX: the human-readable console log now shows
-        CLS with real decimal precision (e.g. "0.004") while the
-        GA4/GTM dataLayer push keeps the exact same scaled-integer
-        value as before (zero change to any existing analytics/report
-        pipeline depending on that convention) - display and analytics
-        values are now computed and used separately.
-       ========================================================== */}
     <script is:inline define:vars={{ gtmEnabled: config.google_tag_manager.enable }}>
       (function initWebVitalsMonitoring() {
         if (typeof PerformanceObserver === "undefined") return;
 
         function reportMetric(name, value, extra) {
-          // Display value: CLS is a small decimal (e.g. 0.004-0.1) and
-          // is now shown with real decimals instead of a scaled
-          // integer, since "CLS: 4" (meaning 0.004 after *1000
-          // scaling) reads as an alarming score when reviewed in
-          // tools like Google Search Console's console log viewer,
-          // even though it represents an excellent (near-zero) score.
           const displayValue = name === "CLS" ? value.toFixed(3) : Math.round(value);
-          // Analytics value: kept as the scaled integer (CLS * 1000)
-          // for GA4/GTM dataLayer push, matching the existing/standard
-          // convention already used by this integration - unchanged.
           const analyticsValue = Math.round(name === "CLS" ? value * 1000 : value);
-
           console.log(`[Web Vitals] ${name}:`, displayValue, extra || "");
           if (gtmEnabled && window.dataLayer) {
             window.dataLayer.push({
@@ -705,14 +358,12 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
 
         window.addEventListener("load", function () {
           try {
-            // Largest Contentful Paint
             new PerformanceObserver((list) => {
               const entries = list.getEntries();
               const last = entries[entries.length - 1];
               if (last) reportMetric("LCP", last.renderTime || last.loadTime || last.startTime);
             }).observe({ type: "largest-contentful-paint", buffered: true });
 
-            // Cumulative Layout Shift
             let clsValue = 0;
             new PerformanceObserver((list) => {
               for (const entry of list.getEntries()) {
@@ -721,76 +372,18 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
               reportMetric("CLS", clsValue);
             }).observe({ type: "layout-shift", buffered: true });
 
-            // Interaction to Next Paint (event timing)
             new PerformanceObserver((list) => {
               for (const entry of list.getEntries()) {
                 if (entry.duration) reportMetric("INP", entry.duration, entry.name);
               }
             }).observe({ type: "event", buffered: true, durationThreshold: 40 });
           } catch (err) {
-            // Older browsers without support for these entry types —
-            // fail silently, core site functionality unaffected.
             console.warn("Web Vitals monitoring unavailable:", err);
           }
         });
       })();
     </script>
 
-    {/* ==========================================================
-        🛡️ CONTENT PROTECTION — ANTI-SCRAPING BEHAVIOR LAYER
-        (Smooth Selection Restriction + Friendly Centered Notice)
-
-        WHAT THIS DOES:
-        - Blocks the default browser "copy" action (Ctrl+C, right-click
-          → Copy, long-press → Copy on mobile) anywhere OUTSIDE form
-          fields, and shows a short, friendly, auto-fading CENTERED
-          card notice instead of a jarring native alert() or a
-          bottom-pinned strip of text.
-        - Blocks the native right-click context menu outside form
-          fields (the #1 easy vector casual scrapers/visitors use to
-          "Save As" or "Inspect → Copy").
-        - Blocks dragging images out of the page (another easy-copy
-          vector for images).
-        - selectstart is prevented as a defensive fallback for older
-          mobile WebViews that don't fully respect the CSS
-          user-select:none rule declared above.
-
-        WHAT THIS DELIBERATELY DOES NOT DO (by design):
-        - Does NOT touch input/textarea/select/contenteditable targets
-          — Contact form, Comment box, and Search bar remain 100%
-          normal (typing, native text selection/copy/paste all work).
-        - Does NOT attempt to block browser DevTools or "View Page
-          Source" — this is technically impossible to reliably block,
-          and real scraping bots fetch raw HTML via HTTP directly
-          (never through a rendered browser+mouse), so blocking
-          DevTools would add user friction for zero actual anti-scrape
-          benefit. This layer targets the casual "select-and-copy"
-          human workflow, not automated bot fetching (robots.txt /
-          IndexNow / crawler rules already govern that layer).
-        - Does NOT run more than once per short window — a 2.2s
-          throttle prevents the notice from spamming if a person
-          repeatedly right-clicks/tries to copy.
-
-        SELF-HEALING: the notice element is created on-demand via
-        JavaScript (not a static DOM node), so it can never end up in
-        a broken/missing state across Astro View Transitions
-        (ClientRouter) page swaps — every time it's needed, if it
-        isn't already in the live DOM, it's freshly created and
-        appended to <body>.
-
-        Listeners are registered once at document level (delegation),
-        which persists for the full SPA session regardless of
-        ClientRouter page swaps — no re-registration/cleanup needed,
-        since these are not tied to any specific page's DOM nodes.
-
-        2026-08 REDESIGN: the notice moved from a small bottom-fixed
-        pill to a centered, rounded modal-style card (see the
-        #content-protection-toast CSS rules above, in the earlier
-        <style> block). The DOM structure built here now includes a
-        dedicated icon wrapper (cp-icon-wrap, holding a lock SVG)
-        instead of the old small colored dot — everything else about
-        the throttle/timing/targeting logic is unchanged.
-       ========================================================== */}
     <script is:inline>
       (function initContentProtection() {
         let lastNoticeAt = 0;
@@ -803,17 +396,11 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
           const tag = target.tagName.toLowerCase();
           if (tag === "input" || tag === "textarea" || tag === "select" || tag === "option") return true;
           if (target.isContentEditable) return true;
-          // Allow selection inside any element explicitly opted back in
           if (target.closest && target.closest("[data-allow-select]")) return true;
           return false;
         }
 
         function buildLockIconSvg() {
-          // width/height set directly on the <svg> tag (not only via
-          // CSS) as a defensive belt-and-suspenders measure — this
-          // guarantees a correctly-sized 17x17 icon even in the
-          // unlikely event the stylesheet hasn't parsed yet at the
-          // exact instant this element is inserted.
           return (
             '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
             'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -859,39 +446,28 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
           }, NOTICE_VISIBLE_MS);
         }
 
-        // Right-click / long-press context menu — main "Save As / Copy"
-        // vector outside form fields.
         document.addEventListener("contextmenu", function (e) {
           if (isEditableTarget(e.target)) return;
           e.preventDefault();
           showProtectionNotice();
         });
 
-        // Ctrl+C / Cmd+C / right-click → Copy — all funnel through the
-        // native "copy" event regardless of trigger method.
         document.addEventListener("copy", function (e) {
           if (isEditableTarget(e.target)) return;
           e.preventDefault();
           showProtectionNotice();
         });
 
-        // Cut is meaningless outside editable fields, block silently
-        // (no notice spam needed — copy/contextmenu already inform).
         document.addEventListener("cut", function (e) {
           if (isEditableTarget(e.target)) return;
           e.preventDefault();
         });
 
-        // Defensive fallback for browsers/WebViews that don't fully
-        // respect the CSS user-select:none rule declared above.
         document.addEventListener("selectstart", function (e) {
           if (isEditableTarget(e.target)) return;
           e.preventDefault();
         });
 
-        // Prevent dragging images out of the page (easy image-scrape
-        // vector). Scoped to <img> only — does not affect FeaturedSlider
-        // touch-swipe logic (that uses touchstart/touchend, not drag).
         document.addEventListener("dragstart", function (e) {
           const target = e.target;
           if (target && target.tagName && target.tagName.toLowerCase() === "img") {
@@ -905,7 +481,7 @@ const finalImageMimeType = detectImageMimeType(finalImageUrl);
   </head>
 
   <body class="bg-[#050505] text-[#f8fafc] min-h-screen flex flex-col antialiased selection:bg-emerald-500/30 selection:text-[#34d399] overflow-x-hidden" style="touch-action: pan-y; overscroll-behavior-x: none;">
-    <AgeVerificationGate />
+    <AgeVerificationGate skip={isParentalControlPage} />
     <TwSizeIndicator />
     <Header />
     <main id="main-content" class="min-h-[60vh] flex-1 bg-[#050505]">
