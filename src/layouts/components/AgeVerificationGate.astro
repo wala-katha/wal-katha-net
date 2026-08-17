@@ -3,8 +3,8 @@ import { BiErrorCircle, BiCheckCircle } from "react-icons/bi";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 
 interface Props {
-  // "parental-control" page එකට gate එක සම්පූර්ණයෙන්ම skip කිරීමට.
-  // Base.astro එකෙන් pathname එක අනුව ගණනය කර pass කරයි.
+  // "parental-control" පිටුව වගේ policy පිටුවලට gate එක සම්පූර්ණයෙන්ම
+  // skip කිරීමට. Base.astro එකෙන් pathname එක අනුව ගණනය කර pass කරයි.
   skip?: boolean;
 }
 const { skip = false } = Astro.props;
@@ -33,7 +33,7 @@ const { skip = false } = Astro.props;
 
       <p id="age-gate-desc" class="age-gate-desc">
         මෙම වෙබ් අඩවියට පිවිසීමෙන්, මට වයස අවුරුදු 18ට වැඩි බවත්, මෙහි ඇති සියලුම කතා ප්‍රබන්ධ (Fiction) බවත් මම තහවුරු කරමි.
-        පහත <a href={withTrailingSlash("/privacy-policy")} class="age-gate-link" target="_blank" rel="noopener noreferrer">නියම සහ කොන්දේසි</a> වලට මම එකඟ වෙමි.
+        පහත <a href={withTrailingSlash("/terms-and-conditions")} class="age-gate-link" target="_blank" rel="noopener noreferrer">භාවිත නියමයන් සහ කොන්දේසි</a> සහ <a href={withTrailingSlash("/privacy-policy")} class="age-gate-link" target="_blank" rel="noopener noreferrer">පුද්ගලිකත්ව ප්‍රතිපත්තිය</a> වලට මම එකඟ වෙමි.
       </p>
 
       <div class="age-gate-actions">
