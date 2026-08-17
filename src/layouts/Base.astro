@@ -66,15 +66,23 @@ const finalImageUrl = image
 const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
 
 // AGE VERIFICATION GATE - PAGE-SPECIFIC SKIP LOGIC
-// "දෙමව්පියන් සඳහා" (Parental Control) සහ "නියමයන් සහ කොන්දෙසි"
-// (Privacy Policy / Terms & Conditions) පිටු දෙකට පමණක් gate එක skip
-// කරයි — Age Verification Gate එකෙන්ම "පහත නියම සහ කොන්දේසි" ලින්ක් එක
-// /privacy-policy/ පිටුවට යොමු වන නිසා, එම නීති කියවීමට කලින්ම නැවත
-// gate එකකින් අවහිර වීම වළක්වයි. සෙසු සියලුම පිටුවලට (home, blog posts,
-// categories, tags, authors, search ආදී සියල්ල ඇතුළුව) gate එක සැමවිටම,
-// bypass කළ නොහැකි ලෙස පෙන්වයි. අනාගතයේ තවත් පිටුවක් exclude කිරීමට
-// අවශ්‍ය වුවහොත් මෙම array එකට path එකක් එකතු කිරීම පමණක් ප්‍රමාණවත් වේ.
-const AGE_GATE_EXCLUDED_PATHS = ["/parental-control", "/privacy-policy"];
+// "දෙමව්පියන් සඳහා" (Parental Control), "නියමයන් සහ කොන්දෙසි"
+// (Privacy Policy / Terms & Conditions), "Copyright & Credit Policy",
+// සහ "Contact Us" පිටුවලට gate එක skip කරයි — Age Verification Gate
+// එකෙන්ම "පහත නියම සහ කොන්දේසි" ලින්ක් එක /privacy-policy/ පිටුවට
+// යොමු වන නිසාත්, copyright/contact වැනි ප්‍රතිපත්ති/සම්බන්ධතා පිටු
+// වයස් තහවුරු කිරීමකින් තොරව කියවීමට/භාවිතයට ඉඩ දිය යුතු නිසාත්, මෙම
+// පිටු gate එකෙන් exempt කර ඇත. සෙසු සියලුම පිටුවලට (home, blog
+// posts, categories, tags, authors, search ආදී සියල්ල ඇතුළුව) gate
+// එක සැමවිටම, bypass කළ නොහැකි ලෙස පෙන්වයි. අනාගතයේ තවත් පිටුවක්
+// exclude කිරීමට අවශ්‍ය වුවහොත් මෙම array එකට path එකක් එකතු කිරීම
+// පමණක් ප්‍රමාණවත් වේ.
+const AGE_GATE_EXCLUDED_PATHS = [
+  "/parental-control",
+  "/privacy-policy",
+  "/copyright-credit-policy",
+  "/contact",
+];
 const normalizedPathname = Astro.url.pathname.replace(/\/+$/, "") || "/";
 const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathname);
 ---
