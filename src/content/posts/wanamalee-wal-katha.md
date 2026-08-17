@@ -7,7 +7,7 @@ image: "/images/posts/Wanamalee-wal-katha.webp"
 draft: false
 authors: ["WalaKatha"]
 tags: ["wala-katha", "aluth-katha", "sex-katha"]
-categories: ["other-wala-katha"]
+categories: ["other-wal-katha"]
 ---
 
 
