@@ -95,46 +95,35 @@ const isParentalControlPage = normalizedPathname === "/parental-control";
     </script>
 
     {/* ==========================================================
-        AGE VERIFICATION GATE - CRITICAL BLUR + FULL SCROLL-LOCK
+        AGE VERIFICATION GATE - BLUR + FULL SCROLL-LOCK
 
-        🎯 CRITICAL FIX (ROOT CAUSE — notice card never appeared,
-        page stuck permanently blurred with no way to confirm age):
-        Astro scopes every non-"is:global" <style> block in a .astro
-        file to ONLY the elements literally authored in that SAME
-        file's own template (via a hidden data-astro-cid-* attribute
-        stamped onto matching selectors). #age-gate-overlay is NOT
-        written anywhere in Base.astro's own template — it is
-        rendered entirely by the separate <AgeVerificationGate />
-        component. Likewise <header>/<footer> come from Header.astro/
-        Footer.astro, not from Base.astro directly. Without
-        "is:global" here, the "html.age-gate-pending #age-gate-overlay
-        { display: flex }" rule could never match that element at
-        all (wrong scope), so the popup card + Enter button never
-        appeared — only <main>, which IS authored directly inside
-        Base.astro's own template, ever received the blur rule.
-        This is the exact same class of bug already documented and
-        fixed elsewhere in this codebase for #content-protection-toast
-        (built at runtime, appended to document.body) — see that
-        block's own comment further below for the identical root
-        cause. "is:global" here removes the scope-attribute
-        requirement entirely, so blur + overlay visibility now apply
-        correctly across every component (Header, Footer, the age
-        gate itself), not just Base.astro's own <main> tag.
+        🎯 "is:global" REQUIRED: #age-gate-overlay, <header>,
+        <footer> are all rendered by SEPARATE components
+        (AgeVerificationGate.astro, Header.astro, Footer.astro), not
+        written directly inside Base.astro's own template. A scoped
+        (non-global) <style> block in Astro only ever matches
+        elements literally authored in that SAME file - without
+        "is:global" here, these cross-component selectors silently
+        fail to match, which is why the overlay/blur previously
+        broke. Same root cause and fix already applied to
+        #content-protection-toast further below.
 
-        FULL, UNBYPASSABLE SCROLL LOCK: "position: fixed" pins <body>
-        the instant the gate is pending — this only ever happens at
-        page-load time (before any visitor scroll), so no scrollY
-        save/restore is needed; removing "age-gate-pending" instantly
-        restores normal scrolling. "touch-action: none" additionally
-        hard-blocks any drag gesture from registering while the gate
-        is up (fixes iOS Safari touch-drag scroll bypassing plain
-        overflow:hidden, the same known limitation already documented
-        in TrustpilotReview.astro's lockBodyScroll()).
+        BLUR AMOUNT: restored to the original, lighter blur(14px) -
+        no saturate() reduction - matching the site's original
+        pre-existing intensity (not the heavier value used in an
+        earlier iteration).
 
-        ZERO-FLASH: this block stays INLINE directly in <head> (not a
-        separately-imported stylesheet) so it can never be deferred by
-        the Beasties post-build critical-CSS step — it is guaranteed
-        active before the browser paints a single pixel of <body>.
+        FULL SCROLL LOCK: "position: fixed" pins <body> the instant
+        the gate is pending (page-load time only, before any visitor
+        scroll, so no scrollY save/restore needed - removing
+        "age-gate-pending" instantly restores normal scrolling).
+        "touch-action: none" additionally hard-blocks any drag
+        gesture from registering while the gate is up, fixing iOS
+        Safari's known touch-drag-bypasses-overflow:hidden issue.
+
+        ZERO-FLASH: kept INLINE directly in <head> (not a separate
+        imported stylesheet) so it can never be deferred by the
+        Beasties post-build critical-CSS step.
        ========================================================== */}
     <style is:global>
       html.age-gate-pending,
@@ -152,7 +141,7 @@ const isParentalControlPage = normalizedPathname === "/parental-control";
         touch-action: none;
       }
       html.age-gate-pending body > *:not(#age-gate-overlay) {
-        filter: blur(28px) saturate(0.6);
+        filter: blur(14px);
         pointer-events: none;
         user-select: none;
         -webkit-user-select: none;
