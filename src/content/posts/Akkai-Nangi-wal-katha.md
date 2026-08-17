@@ -7,7 +7,7 @@ image: "/images/posts/Akkai-Nangi-Wal-Katha.webp"
 draft: false
 authors: ["WalaKatha"]
 tags: ["wala-katha", "akka-katha", "family-katha", "nangi-katha"]
-categories: ["family-wala-katha"]
+categories: ["family-wal-katha"]
 ---
 
 මම සිතුම්, වයස 24යි. මගේ ගම මොණරාගල . හැබැයි මම වැඩ කරන්නේ නුගේගොඩ. කාටත් ඉතින් කියන්න ඕන නැහැනේ මොනරාගල ඉඳලා නුගේගොඩ වැඩට යන්න බැහැ කියල. ඉතින් මම අපේ නැන්දා කෙනෙක්ගේ ගෙදර නැවතිලා තමයි වැඩට ගියේ. 
