@@ -113,9 +113,22 @@ const { skip = false } = Astro.props;
   })();
 </script>
 
-<style>
+<style is:inline>
   /* ==========================================================
-     🎯 FULLY RESPONSIVE ACROSS MOBILE / TABLET / DESKTOP
+     🎯 CRITICAL FIX (Late/Delayed Notice Bug - Zero-Flash Fix):
+     "is:inline" here guarantees this overlay's own visual styling
+     (position:fixed centering, dark backdrop, card background,
+     borders, typography) is embedded directly in the HTML response
+     - never extracted to an external stylesheet. Without this, even
+     though Base.astro's blur/display:flex rules apply instantly,
+     this component's own CSS could still be loading asynchronously
+     (due to astro.config.mjs's "inlineStylesheets: never" setting),
+     causing the overlay to briefly render as an unstyled, unpositioned
+     block instead of a proper full-screen modal. Combined with the
+     Base.astro fix, the entire age-gate now renders fully-styled in
+     the very first paint for every visitor, with zero flash/delay.
+     ==========================================================
+     FULLY RESPONSIVE ACROSS MOBILE / TABLET / DESKTOP
      ==========================================================
      BASE (mobile-first): card sits centered with fluid clamp()
      typography so text scales smoothly between the smallest and
