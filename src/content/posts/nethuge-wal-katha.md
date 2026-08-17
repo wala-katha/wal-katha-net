@@ -7,7 +7,7 @@ image: "/images/posts/nethuge-wal-katha.webp"
 draft: false
 authors: ["WalKatha"]
 tags: ["wal-katha-school", "sri-lankan-school-stories", "sinhala-school-katha"]
-categories: ["school-wala-katha"]
+categories: ["school-wal-katha"]
 ---
 
  මේ සිද්ධිය උනේ මීට අවුරුදු කීපයකට කලින්, මම ගම්පහ ප්‍රසිද්ධ ජාත්‍යන්තර පාසලකට ගියෙ. මේ සිද්ධිය වෙනකොට මම උසස්පෙල පංතියට ගියා විතරයි. මගෙ නම නෙතූ, මම තරමක් සුදු සාමාන්‍ය උසක් තිබ්බ උසේ ගානට හරියන්න ඇගකුත් තිබ්බ කෙල්ලෙක්. මගෙ පුක සාමාන්‍ය ගානට තිබ්බ, මගෙ ගොඩක්ම කැපිල පෙනුනෙ පිරිච්ච් තන්දෙක. මගෙ වයසෙ අනිත් කෙල්ලන්ට වඩා මගෙ තන්දෙක තිබ්බ.
