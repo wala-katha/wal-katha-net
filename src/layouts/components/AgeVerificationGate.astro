@@ -3,8 +3,8 @@ import { BiErrorCircle, BiCheckCircle } from "react-icons/bi";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 
 interface Props {
-  // "parental-control" පිටුව වගේ policy පිටුවලට gate එක සම්පූර්ණයෙන්ම
-  // skip කිරීමට. Base.astro එකෙන් pathname එක අනුව ගණනය කර pass කරයි.
+  // Policy pages (e.g. parental-control) skip the gate entirely.
+  // Base.astro computes this from the pathname and passes it down.
   skip?: boolean;
 }
 const { skip = false } = Astro.props;
@@ -18,6 +18,7 @@ const { skip = false } = Astro.props;
   aria-modal="true"
   aria-labelledby="age-gate-title"
   aria-describedby="age-gate-desc"
+  data-nosnippet
 >
   <div id="age-gate-card" class="age-gate-card">
     <span class="age-gate-live-dot" aria-hidden="true"></span>
@@ -46,6 +47,12 @@ const { skip = false } = Astro.props;
           මට අවුරුදු 18 නෑ - පිටවෙන්න
         </a>
       </div>
+
+      <noscript>
+        <p class="age-gate-noscript-note">
+          තහවුරු කිරීමේ බොත්තම ක්‍රියාත්මක වීමට ඔබේ browser එකේ JavaScript සක්‍රීය කර තිබිය යුතුය.
+        </p>
+      </noscript>
 
       <p class="age-gate-footer-note">
         <a
@@ -77,10 +84,31 @@ const { skip = false } = Astro.props;
     var SUCCESS_VISIBLE_MS = 1700;
     var FADE_OUT_MS = 500;
 
+    function isVerified() {
+      try {
+        return localStorage.getItem(STORAGE_KEY) === "true";
+      } catch (e) {
+        return false;
+      }
+    }
     function setVerified() {
       try {
         localStorage.setItem(STORAGE_KEY, "true");
       } catch (e) {}
+    }
+    // Hard state sync: gate state always follows verification state.
+    // Runs on first load AND every astro:page-load, so client-side
+    // navigations (ClientRouter) can never leak an un-gated page or
+    // re-show the gate to an already verified visitor.
+    function syncState() {
+      var overlay = document.getElementById("age-gate-overlay");
+      if (!overlay) return;
+      if (isVerified()) {
+        document.documentElement.classList.remove("age-gate-pending");
+        overlay.style.display = "none";
+      } else {
+        document.documentElement.classList.add("age-gate-pending");
+      }
     }
     function initAgeGate() {
       var enterBtn = document.getElementById("age-gate-enter-btn");
@@ -88,6 +116,8 @@ const { skip = false } = Astro.props;
       var formState = document.getElementById("age-gate-form-state");
       var successState = document.getElementById("age-gate-success-state");
       if (!enterBtn || !overlay || !formState || !successState) return;
+
+      syncState();
 
       var freshBtn = enterBtn.cloneNode(true);
       enterBtn.parentNode.replaceChild(freshBtn, enterBtn);
@@ -114,29 +144,9 @@ const { skip = false } = Astro.props;
 </script>
 
 <style is:inline>
-  /* ==========================================================
-     🎯 CRITICAL FIX (Late/Delayed Notice Bug - Zero-Flash Fix):
-     "is:inline" here guarantees this overlay's own visual styling
-     (position:fixed centering, dark backdrop, card background,
-     borders, typography) is embedded directly in the HTML response
-     - never extracted to an external stylesheet. Without this, even
-     though Base.astro's blur/display:flex rules apply instantly,
-     this component's own CSS could still be loading asynchronously
-     (due to astro.config.mjs's "inlineStylesheets: never" setting),
-     causing the overlay to briefly render as an unstyled, unpositioned
-     block instead of a proper full-screen modal. Combined with the
-     Base.astro fix, the entire age-gate now renders fully-styled in
-     the very first paint for every visitor, with zero flash/delay.
-     ==========================================================
-     FULLY RESPONSIVE ACROSS MOBILE / TABLET / DESKTOP
-     ==========================================================
-     BASE (mobile-first): card sits centered with fluid clamp()
-     typography so text scales smoothly between the smallest and
-     largest breakpoints without needing a media query for every
-     step in between. max-height + overflow-y:auto guards against
-     short-viewport landscape phones where the card could otherwise
-     overflow past the top/bottom of the screen.
-  ========================================================== */
+  /* is:inline keeps this CSS embedded in the HTML response itself, so the
+     overlay is fully styled in the very first paint - no external CSS
+     round-trip, no unstyled/late modal on slow networks. */
   .age-gate-overlay {
     position: fixed;
     inset: 0;
@@ -146,6 +156,11 @@ const { skip = false } = Astro.props;
     justify-content: center;
     padding: 1rem;
     background: rgba(1, 2, 3, 0.75);
+    /* Second, independent blur layer: even if the body-content blur ever
+       fails or lags on a weak device, backdrop-filter still obscures
+       everything behind the overlay. Belt-and-braces content protection. */
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
     opacity: 1;
     transition: opacity 0.45s ease;
   }
@@ -167,10 +182,7 @@ const { skip = false } = Astro.props;
     text-align: center;
   }
 
-  /* ==========================================================
-     🎯 STATIC RED DOT — fixed to the top-right corner of the
-     card. No animation - a plain, always-visible solid red dot.
-  ========================================================== */
+  /* Static red dot fixed to the top-right corner of the card. */
   .age-gate-live-dot {
     position: absolute;
     top: 0.85rem;
@@ -275,6 +287,12 @@ const { skip = false } = Astro.props;
     background-color: #ef4444;
     color: #ffffff;
   }
+  .age-gate-noscript-note {
+    font-size: clamp(0.68rem, 2.2vw, 0.74rem);
+    line-height: 1.6;
+    color: #f87171;
+    margin: 0.9rem 0 0;
+  }
   .age-gate-footer-note {
     margin-top: 1.1rem;
     padding-top: 0.9rem;
@@ -320,11 +338,8 @@ const { skip = false } = Astro.props;
     100% { transform: scale(1); opacity: 1; }
   }
 
-  /* ==========================================================
-     🎯 SMALL PHONES (<=360px width) — tighten spacing further so
-     the card never feels cramped against the screen edges on the
-     narrowest common devices.
-  ========================================================== */
+  /* Small phones (<=360px): tighten spacing so the card never feels
+     cramped against the screen edges. */
   @media (max-width: 360px) {
     .age-gate-overlay {
       padding: 0.75rem;
@@ -347,11 +362,7 @@ const { skip = false } = Astro.props;
     }
   }
 
-  /* ==========================================================
-     🎯 TABLETS & UP (>=768px) — card gets a touch more breathing
-     room and slightly larger typography so it doesn't look
-     undersized/lost in the middle of a large screen.
-  ========================================================== */
+  /* Tablets and up (>=768px): more breathing room, row actions. */
   @media (min-width: 768px) {
     .age-gate-card {
       max-width: 30rem;
@@ -379,26 +390,14 @@ const { skip = false } = Astro.props;
     }
   }
 
-  /* ==========================================================
-     🎯 DESKTOP / LARGE SCREENS (>=1200px) — cap the card at a
-     comfortable reading width; centered layout already handles
-     positioning, this just prevents it from feeling small on very
-     wide monitors while staying visually consistent with the
-     mobile/tablet design.
-  ========================================================== */
+  /* Desktop / large screens (>=1200px): cap card at comfortable width. */
   @media (min-width: 1200px) {
     .age-gate-card {
       max-width: 32rem;
     }
   }
 
-  /* ==========================================================
-     🎯 SHORT-HEIGHT VIEWPORTS (landscape phones, small laptops
-     with browser chrome eating vertical space) — shrink vertical
-     paddings/gaps so the whole card comfortably fits without
-     needing to scroll on most devices; max-height + overflow-y on
-     .age-gate-card above still catches any remaining overflow.
-  ========================================================== */
+  /* Short-height viewports (landscape phones): shrink vertical spacing. */
   @media (max-height: 480px) {
     .age-gate-card {
       padding-top: 1rem;
