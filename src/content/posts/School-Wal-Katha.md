@@ -7,7 +7,7 @@ image: "/images/posts/School-Wal-Katha.webp"
 draft: false
 authors: ["WalKatha"]
 tags: ["wala-katha", "wal katha school", "sri lankan school stories", "sinhala school katha"]
-categories: ["school-wala-katha"]
+categories: ["school-wal-katha"]
 ---
 
 මේක වෙන්නෙ මගේ සුන්දරතම පාසල් සමයේ.. මම කොහොමත් යන්නෙ ඉතිම් 8 පහුවෙලා තමයි ඉස්කෝලෙට යන්නෙ .. ඉස්කෝලෙ සර්ලා මාව මරාගෙන කන්නෙ නැතිටික විතරයි.
