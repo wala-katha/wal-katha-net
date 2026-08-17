@@ -5,32 +5,32 @@
       "url": "/"
     },
     {
-      "name": "Amma Wala Katha",
-      "url": "/categories/amma-wala-katha/"
+      "name": "Amma Wal Katha",
+      "url": "/categories/amma-wal-katha/"
     },
     {
-      "name": "School Wala Katha",
-      "url": "/categories/school-wala-katha/"
+      "name": "School Wal Katha",
+      "url": "/categories/school-wal-katha/"
     },
     {
-      "name": "Lesbian & Guy Wala Katha",
-      "url": "/categories/lesbian-guy-wala-katha/"
+      "name": "Lesbian & Guy Wal Katha",
+      "url": "/categories/lesbian-guy-wal-katha/"
     },
     {
-      "name": "Family Wala Katha",
-      "url": "/categories/family-wala-katha/"
+      "name": "Family Wal Katha",
+      "url": "/categories/family-wal-katha/"
     },
     {
-      "name": "New Wala Katha",
-      "url": "/categories/new-wala-katha/"
+      "name": "New Wal Katha",
+      "url": "/categories/new-wal-katha/"
     },
     {
-      "name": "Old Wala Katha",
-      "url": "/categories/old-wala-katha/"
+      "name": "Old Wal Katha",
+      "url": "/categories/old-wal-katha/"
     },
     {
-      "name": "Other Wala Katha",
-      "url": "/categories/other-wala-katha/"
+      "name": "Other Wal Katha",
+      "url": "/categories/other-wal-katha/"
     },
     {
       "name": "Pages",
@@ -52,6 +52,10 @@
         {
           "name": "Privacy Policy",
           "url": "/privacy-policy/"
+        },
+        {
+          "name": "Terms & Conditions",
+          "url": "/terms-and-conditions/"
         }
       ]
     }
@@ -76,6 +80,10 @@
     {
       "name": "Privacy Policy",
       "url": "/privacy-policy/"
+    },
+    {
+      "name": "Terms & Conditions",
+      "url": "/terms-and-conditions/"
     },
     {
       "name": "Parental Control",
