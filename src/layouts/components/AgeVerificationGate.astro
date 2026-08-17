@@ -20,15 +20,9 @@ const { skip = false } = Astro.props;
   aria-describedby="age-gate-desc"
 >
   <div id="age-gate-card" class="age-gate-card">
-    <div id="age-gate-form-state">
-      <div class="age-gate-live-indicator" aria-hidden="true">
-        <span class="age-gate-live-dot-wrap">
-          <span class="age-gate-live-dot-ring"></span>
-          <span class="age-gate-live-dot"></span>
-        </span>
-        <span class="age-gate-live-text">LIVE</span>
-      </div>
+    <span class="age-gate-live-dot" aria-hidden="true"></span>
 
+    <div id="age-gate-form-state">
       <div class="age-gate-icon-badge" aria-hidden="true">
         <BiErrorCircle className="age-gate-icon-svg" />
       </div>
@@ -147,6 +141,7 @@ const { skip = false } = Astro.props;
     pointer-events: none;
   }
   .age-gate-card {
+    position: relative;
     width: 100%;
     max-width: 26rem;
     max-height: 92vh;
@@ -160,76 +155,27 @@ const { skip = false } = Astro.props;
   }
 
   /* ==========================================================
-     🎯 LIVE BLINKING DOT INDICATOR — sits above the notice card
-     content (above the brand/icon badge). Purely decorative status
-     indicator: a small red dot that pulses (fades in/out) with an
-     expanding glow ring underneath it, plus a "LIVE" label. Uses
-     the same pulse-animation language already established
-     elsewhere in this codebase (age-gate-icon-pulse,
-     comment-btn-ring), just scoped to this new element.
+     🎯 LIVE BLINKING DOT — small red dot fixed to the top-left
+     corner of the card. Pure on/off opacity toggle (no scale, no
+     glow ring, no expanding halo) so it never bleeds outside its
+     own footprint - a simple, calm "blinking" indicator.
   ========================================================== */
-  .age-gate-live-indicator {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.4rem;
-    margin: 0 auto clamp(0.6rem, 2vw, 0.85rem);
-    padding: 0.3rem 0.75rem;
-    border-radius: 999px;
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    width: fit-content;
-  }
-  .age-gate-live-dot-wrap {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  .age-gate-live-dot {
+    position: absolute;
+    top: 0.85rem;
+    left: 0.85rem;
     width: 0.55rem;
     height: 0.55rem;
-    flex-shrink: 0;
-  }
-  .age-gate-live-dot {
-    position: relative;
-    z-index: 1;
-    display: block;
-    width: 0.5rem;
-    height: 0.5rem;
     border-radius: 999px;
     background: #ef4444;
-    box-shadow: 0 0 6px rgba(239, 68, 68, 0.9);
-    animation: age-gate-live-blink 1.4s ease-in-out infinite;
-  }
-  .age-gate-live-dot-ring {
-    position: absolute;
-    inset: 0;
-    border-radius: 999px;
-    background: rgba(239, 68, 68, 0.6);
-    animation: age-gate-live-ring 1.4s ease-out infinite;
-  }
-  .age-gate-live-text {
-    font-size: 0.65rem;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    color: #f87171;
+    animation: age-gate-live-blink 1.3s steps(1, end) infinite;
+    z-index: 2;
   }
   @keyframes age-gate-live-blink {
-    0%, 100% {
+    0%, 49% {
       opacity: 1;
-      transform: scale(1);
     }
-    50% {
-      opacity: 0.35;
-      transform: scale(0.85);
-    }
-  }
-  @keyframes age-gate-live-ring {
-    0% {
-      transform: scale(0.9);
-      opacity: 0.7;
-    }
-    100% {
-      transform: scale(2.4);
+    50%, 100% {
       opacity: 0;
     }
   }
@@ -384,6 +330,10 @@ const { skip = false } = Astro.props;
     .age-gate-card {
       border-radius: 1rem;
     }
+    .age-gate-live-dot {
+      top: 0.7rem;
+      left: 0.7rem;
+    }
     .age-gate-icon-badge {
       width: 2.75rem;
       height: 2.75rem;
@@ -392,9 +342,6 @@ const { skip = false } = Astro.props;
     .age-gate-icon-svg {
       width: 1.5rem;
       height: 1.5rem;
-    }
-    .age-gate-live-indicator {
-      margin-bottom: 0.5rem;
     }
   }
 
@@ -455,9 +402,6 @@ const { skip = false } = Astro.props;
       padding-top: 1rem;
       padding-bottom: 1rem;
     }
-    .age-gate-live-indicator {
-      margin-bottom: 0.4rem;
-    }
     .age-gate-icon-badge {
       width: 2.25rem;
       height: 2.25rem;
@@ -480,8 +424,7 @@ const { skip = false } = Astro.props;
     .age-gate-overlay,
     .age-gate-success-badge,
     .age-gate-icon-badge,
-    .age-gate-live-dot,
-    .age-gate-live-dot-ring {
+    .age-gate-live-dot {
       transition: none;
       animation: none;
     }
