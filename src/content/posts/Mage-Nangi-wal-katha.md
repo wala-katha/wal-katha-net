@@ -7,7 +7,7 @@ image: "/images/posts/mage-nangi-wal-katha.webp"
 draft: false
 authors: ["WalKatha"]
 tags: ["wal-katha", "aluth-katha", "family-katha", "nangi-katha"]
-categories: ["family-wala-katha"]
+categories: ["family-wal-katha"]
 ---
 
 
