@@ -72,8 +72,6 @@ const { skip = false } = Astro.props;
 <script is:inline>
   (function () {
     var STORAGE_KEY = "wk_age_verified";
-    // 🎯 පරිශීලකයාට ස්තූති පණිවිඩය කියවීමට ප්‍රමාණවත් වේලාවක් දීම
-    // සඳහා පෙන්වන කාලය සුළුවෙන් වැඩි කරන ලදී (950ms -> 1700ms).
     var SUCCESS_VISIBLE_MS = 1700;
     var FADE_OUT_MS = 500;
 
@@ -114,6 +112,16 @@ const { skip = false } = Astro.props;
 </script>
 
 <style>
+  /* ==========================================================
+     🎯 FULLY RESPONSIVE ACROSS MOBILE / TABLET / DESKTOP
+     ==========================================================
+     BASE (mobile-first): card sits centered with fluid clamp()
+     typography so text scales smoothly between the smallest and
+     largest breakpoints without needing a media query for every
+     step in between. max-height + overflow-y:auto guards against
+     short-viewport landscape phones where the card could otherwise
+     overflow past the top/bottom of the screen.
+  ========================================================== */
   .age-gate-overlay {
     position: fixed;
     inset: 0;
@@ -133,11 +141,13 @@ const { skip = false } = Astro.props;
   .age-gate-card {
     width: 100%;
     max-width: 26rem;
+    max-height: 92vh;
+    overflow-y: auto;
     background: #0c0d10;
     border: 1px solid rgba(1, 173, 159, 0.35);
     border-radius: 1.25rem;
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
-    padding: 1.75rem 1.5rem;
+    padding: clamp(1.25rem, 4vw, 1.75rem) clamp(1rem, 4vw, 1.5rem);
     text-align: center;
   }
   .age-gate-icon-badge {
@@ -151,9 +161,6 @@ const { skip = false } = Astro.props;
     background: rgba(239, 68, 68, 0.12);
     border: 1px solid rgba(239, 68, 68, 0.35);
     color: #f87171;
-    /* 🎯 නොනවත්වා දිගටම, වේගවත්ව pulse වන animation එකක් - "!" icon
-       එක නොනවත්වා ලොකු-කුඩා වෙමින්, glow ring එකක් ඉස්සුරින් යවමින්
-       දිගටම ක්‍රියාත්මක වේ (infinite loop). */
     animation: age-gate-icon-pulse 1.4s ease-in-out infinite;
   }
   .age-gate-icon-svg {
@@ -171,14 +178,14 @@ const { skip = false } = Astro.props;
     }
   }
   .age-gate-brand {
-    font-size: 0.7rem;
+    font-size: clamp(0.65rem, 1.6vw, 0.7rem);
     font-weight: 800;
     letter-spacing: 0.15em;
     color: #01ad9f;
     margin: 0 0 0.5rem;
   }
   .age-gate-title {
-    font-size: 1.15rem;
+    font-size: clamp(1rem, 4vw, 1.2rem);
     font-weight: 800;
     color: #f8f8ff;
     margin: 0 0 0.75rem;
@@ -188,7 +195,7 @@ const { skip = false } = Astro.props;
     color: #f87171;
   }
   .age-gate-desc {
-    font-size: 0.82rem;
+    font-size: clamp(0.76rem, 2.6vw, 0.84rem);
     line-height: 1.6;
     color: rgba(248, 248, 255, 0.65);
     margin: 0 0 1.25rem;
@@ -208,8 +215,8 @@ const { skip = false } = Astro.props;
     background-color: #01ad9f;
     color: #010203;
     font-weight: 800;
-    font-size: 0.85rem;
-    padding: 0.85rem 1.5rem;
+    font-size: clamp(0.8rem, 2.8vw, 0.87rem);
+    padding: clamp(0.7rem, 2.5vw, 0.85rem) 1.5rem;
     border: none;
     border-radius: 999px;
     cursor: pointer;
@@ -226,7 +233,7 @@ const { skip = false } = Astro.props;
     color: #f87171;
     border: 1px solid rgba(239, 68, 68, 0.4);
     font-weight: 700;
-    font-size: 0.72rem;
+    font-size: clamp(0.68rem, 2.2vw, 0.74rem);
     padding: 0.45rem 1.1rem;
     border-radius: 999px;
     text-decoration: none;
@@ -242,7 +249,7 @@ const { skip = false } = Astro.props;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
   .age-gate-parents-link {
-    font-size: 0.75rem;
+    font-size: clamp(0.7rem, 2.4vw, 0.76rem);
     font-weight: 700;
     color: #01ad9f;
     text-decoration: underline;
@@ -271,7 +278,7 @@ const { skip = false } = Astro.props;
     height: 2rem;
   }
   .age-gate-success-text {
-    font-size: 0.9rem;
+    font-size: clamp(0.85rem, 2.8vw, 0.9rem);
     font-weight: 700;
     color: #f8f8ff;
     line-height: 1.6;
@@ -280,6 +287,105 @@ const { skip = false } = Astro.props;
     0% { transform: scale(0.5); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
   }
+
+  /* ==========================================================
+     🎯 SMALL PHONES (<=360px width) — tighten spacing further so
+     the card never feels cramped against the screen edges on the
+     narrowest common devices.
+  ========================================================== */
+  @media (max-width: 360px) {
+    .age-gate-overlay {
+      padding: 0.75rem;
+    }
+    .age-gate-card {
+      border-radius: 1rem;
+    }
+    .age-gate-icon-badge {
+      width: 2.75rem;
+      height: 2.75rem;
+      margin-bottom: 0.6rem;
+    }
+    .age-gate-icon-svg {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+  }
+
+  /* ==========================================================
+     🎯 TABLETS & UP (>=768px) — card gets a touch more breathing
+     room and slightly larger typography so it doesn't look
+     undersized/lost in the middle of a large screen.
+  ========================================================== */
+  @media (min-width: 768px) {
+    .age-gate-card {
+      max-width: 30rem;
+      padding: 2.25rem 2.25rem;
+      border-radius: 1.5rem;
+    }
+    .age-gate-icon-badge {
+      width: 3.75rem;
+      height: 3.75rem;
+      margin-bottom: 1rem;
+    }
+    .age-gate-icon-svg {
+      width: 2rem;
+      height: 2rem;
+    }
+    .age-gate-actions {
+      flex-direction: row;
+      justify-content: center;
+      gap: 0.9rem;
+    }
+    .age-gate-enter-btn {
+      width: auto;
+      flex: 1 1 auto;
+      max-width: 20rem;
+    }
+  }
+
+  /* ==========================================================
+     🎯 DESKTOP / LARGE SCREENS (>=1200px) — cap the card at a
+     comfortable reading width; centered layout already handles
+     positioning, this just prevents it from feeling small on very
+     wide monitors while staying visually consistent with the
+     mobile/tablet design.
+  ========================================================== */
+  @media (min-width: 1200px) {
+    .age-gate-card {
+      max-width: 32rem;
+    }
+  }
+
+  /* ==========================================================
+     🎯 SHORT-HEIGHT VIEWPORTS (landscape phones, small laptops
+     with browser chrome eating vertical space) — shrink vertical
+     paddings/gaps so the whole card comfortably fits without
+     needing to scroll on most devices; max-height + overflow-y on
+     .age-gate-card above still catches any remaining overflow.
+  ========================================================== */
+  @media (max-height: 480px) {
+    .age-gate-card {
+      padding-top: 1rem;
+      padding-bottom: 1rem;
+    }
+    .age-gate-icon-badge {
+      width: 2.25rem;
+      height: 2.25rem;
+      margin-bottom: 0.4rem;
+    }
+    .age-gate-icon-svg {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+    .age-gate-desc {
+      margin-bottom: 0.75rem;
+    }
+    .age-gate-footer-note {
+      margin-top: 0.6rem;
+      padding-top: 0.5rem;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .age-gate-overlay,
     .age-gate-success-badge,
