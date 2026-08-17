@@ -21,6 +21,14 @@ const { skip = false } = Astro.props;
 >
   <div id="age-gate-card" class="age-gate-card">
     <div id="age-gate-form-state">
+      <div class="age-gate-live-indicator" aria-hidden="true">
+        <span class="age-gate-live-dot-wrap">
+          <span class="age-gate-live-dot-ring"></span>
+          <span class="age-gate-live-dot"></span>
+        </span>
+        <span class="age-gate-live-text">LIVE</span>
+      </div>
+
       <div class="age-gate-icon-badge" aria-hidden="true">
         <BiErrorCircle className="age-gate-icon-svg" />
       </div>
@@ -150,6 +158,82 @@ const { skip = false } = Astro.props;
     padding: clamp(1.25rem, 4vw, 1.75rem) clamp(1rem, 4vw, 1.5rem);
     text-align: center;
   }
+
+  /* ==========================================================
+     🎯 LIVE BLINKING DOT INDICATOR — sits above the notice card
+     content (above the brand/icon badge). Purely decorative status
+     indicator: a small red dot that pulses (fades in/out) with an
+     expanding glow ring underneath it, plus a "LIVE" label. Uses
+     the same pulse-animation language already established
+     elsewhere in this codebase (age-gate-icon-pulse,
+     comment-btn-ring), just scoped to this new element.
+  ========================================================== */
+  .age-gate-live-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    margin: 0 auto clamp(0.6rem, 2vw, 0.85rem);
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    width: fit-content;
+  }
+  .age-gate-live-dot-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0.55rem;
+    height: 0.55rem;
+    flex-shrink: 0;
+  }
+  .age-gate-live-dot {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: #ef4444;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.9);
+    animation: age-gate-live-blink 1.4s ease-in-out infinite;
+  }
+  .age-gate-live-dot-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: rgba(239, 68, 68, 0.6);
+    animation: age-gate-live-ring 1.4s ease-out infinite;
+  }
+  .age-gate-live-text {
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: #f87171;
+  }
+  @keyframes age-gate-live-blink {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.35;
+      transform: scale(0.85);
+    }
+  }
+  @keyframes age-gate-live-ring {
+    0% {
+      transform: scale(0.9);
+      opacity: 0.7;
+    }
+    100% {
+      transform: scale(2.4);
+      opacity: 0;
+    }
+  }
+
   .age-gate-icon-badge {
     display: flex;
     align-items: center;
@@ -309,6 +393,9 @@ const { skip = false } = Astro.props;
       width: 1.5rem;
       height: 1.5rem;
     }
+    .age-gate-live-indicator {
+      margin-bottom: 0.5rem;
+    }
   }
 
   /* ==========================================================
@@ -368,6 +455,9 @@ const { skip = false } = Astro.props;
       padding-top: 1rem;
       padding-bottom: 1rem;
     }
+    .age-gate-live-indicator {
+      margin-bottom: 0.4rem;
+    }
     .age-gate-icon-badge {
       width: 2.25rem;
       height: 2.25rem;
@@ -389,7 +479,9 @@ const { skip = false } = Astro.props;
   @media (prefers-reduced-motion: reduce) {
     .age-gate-overlay,
     .age-gate-success-badge,
-    .age-gate-icon-badge {
+    .age-gate-icon-badge,
+    .age-gate-live-dot,
+    .age-gate-live-dot-ring {
       transition: none;
       animation: none;
     }
