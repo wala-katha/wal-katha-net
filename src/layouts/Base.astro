@@ -170,7 +170,7 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
         touch-action: none;
       }
       html.age-gate-pending body > *:not(#age-gate-overlay) {
-        filter: blur(6px);
+        filter: blur(14px);
         pointer-events: none;
         user-select: none;
         -webkit-user-select: none;
@@ -193,7 +193,7 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
         align-items: center;
         justify-content: center;
         padding: 1rem;
-        background: rgba(1, 2, 3, 0.75);
+        background: rgba(1, 2, 3, 0.4);
         -webkit-backdrop-filter: blur(18px);
         backdrop-filter: blur(18px);
         opacity: 1;
@@ -545,7 +545,7 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
         border: 1px solid rgba(1, 173, 159, 0.35);
         color: #01AD9F;
         flex-shrink: 0;
-        box-shadow: 0 0 6px rgba(1, 173, 159, 0.25);
+        box-shadow: 0 0 14px rgba(1, 173, 159, 0.25);
       }
       #content-protection-toast .cp-icon-wrap svg {
         display: block;
