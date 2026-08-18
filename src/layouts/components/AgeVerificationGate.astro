@@ -3,221 +3,186 @@ import { BiErrorCircle, BiCheckCircle } from "react-icons/bi";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 
 interface Props {
-  // Policy pages (e.g. parental-control) skip the gate
+  // Policy pages (e.g. parental-control) skip the gate entirely.
+  // Base.astro computes this from the pathname and passes it down.
   skip?: boolean;
 }
-
 const { skip = false } = Astro.props;
 ---
 
 {!skip && (
-  <div
-    id="age-gate-overlay"
-    class="age-gate-overlay"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="age-gate-title"
-    aria-describedby="age-gate-desc"
-  >
-    <div class="age-gate-card" id="age-gate-card">
-      <span class="age-gate-live-dot" aria-hidden="true"></span>
+<div
+  id="age-gate-overlay"
+  class="age-gate-overlay"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="age-gate-title"
+  aria-describedby="age-gate-desc"
+  data-nosnippet
+>
+  <div id="age-gate-card" class="age-gate-card">
+    <span class="age-gate-live-dot" aria-hidden="true"></span>
 
-      <div id="age-gate-form-state">
-        <div class="age-gate-icon-badge" aria-hidden="true">
-          <BiErrorCircle className="age-gate-icon-svg" />
-        </div>
-
-        <p class="age-gate-brand">WAL KATHA</p>
-
-        <h2 id="age-gate-title" class="age-gate-title">
-          මෙම වෙබ් අඩවිය වැඩිහිටියන් (18+) සඳහා පමණි
-        </h2>
-
-        <p id="age-gate-desc" class="age-gate-desc">
-          මෙහි අන්තර්ගතය නිර්මාණාත්මක ප්‍රබන්ධ (Fiction) වන අතර, වයස අවුරුදු 18 ට වැඩි පුද්ගලයින් සඳහා පමණක් සුදුසුය.
-          <br />
-          ඉදිරියට යාමෙන් ඔබ ඔබගේ වයස අවුරුදු 18 ට වැඩි බව තහවුරු කරන අතර, මෙම අන්තර්ගතය නීත්‍යානුකූලව ප්‍රවේශ වීමට ඔබට අයිතිය ඇති බව පිළිගන්නෙමු.
-        </p>
-
-        <div class="age-gate-actions">
-          <button
-            id="age-gate-enter"
-            class="age-gate-btn age-gate-btn-primary"
-            type="button"
-          >
-            මට වයස අවුරුදු 18ට වැඩිය — ඉදිරියට යන්න
-          </button>
-
-          <a
-            href="https://www.google.com"
-            class="age-gate-btn age-gate-btn-secondary"
-            rel="noopener noreferrer"
-          >
-            මට වයස අවුරුදු 18ට අඩුයි — පිටවන්න
-          </a>
-        </div>
-
-        <p class="age-gate-footer">
-          දෙමාපියන් සඳහා මාර්ගෝපදේශ:
-          <a href={withTrailingSlash("/parental-control")} class="age-gate-link">
-            Parental Control Guide
-          </a>
-        </p>
+    <div id="age-gate-form-state">
+      <div class="age-gate-icon-badge" aria-hidden="true">
+        <BiErrorCircle className="age-gate-icon-svg" />
       </div>
 
-      <div id="age-gate-success-state" class="age-gate-success-state" hidden>
-        <div class="age-gate-success-badge" aria-hidden="true">
-          <BiCheckCircle className="age-gate-success-svg" />
-        </div>
-        <p class="age-gate-success-text">ස්වයංක්‍රීයව ඉදිරියට යමින්...</p>
+      <p class="age-gate-brand">WAL KATHA</p>
+
+      <h2 id="age-gate-title" class="age-gate-title">
+        මෙම වෙබ් අඩවිය <span class="age-gate-title-accent">වැඩිහිටියන් (18+) සඳහා පමණි!</span>
+      </h2>
+
+      <p id="age-gate-desc" class="age-gate-desc">
+        මෙම වෙබ් අඩවියට පිවිසීමෙන්, ඔබගේ වයස අවුරුදු 18ට වැඩි බව තහවුරු කරන අතර, මෙහි ඇති සියලුම කතා ප්‍රබන්ධ (Fiction) බවත් මෙම අන්තර්ගතය නීත්‍යානුකූලව ප්‍රවේශ වීමට ඔබට අයිතිය ඇති බව පිළිගන්නෙමු.
+        පහත <a href={withTrailingSlash("/terms-and-conditions")} class="age-gate-link" target="_blank" rel="noopener noreferrer">භාවිත නියමයන් සහ කොන්දේසි</a> සහ <a href={withTrailingSlash("/privacy-policy")} class="age-gate-link" target="_blank" rel="noopener noreferrer">පුද්ගලිකත්ව ප්‍රතිපත්තිය</a> වලට මම එකඟ වෙමි.
+      </p>
+
+      <div class="age-gate-actions">
+        <button id="age-gate-enter-btn" type="button" class="age-gate-enter-btn">
+          ඇතුල් වන්න - මට වයස අවුරුදු 18ට වැඩිය
+        </button>
+        <a href="https://www.google.com" class="age-gate-exit-btn">
+          මට වයස අවුරුදු 18ට අඩුයි — පිටවන්න
+        </a>
       </div>
+
+      <noscript>
+        <p class="age-gate-noscript-note">
+          තහවුරු කිරීමේ බොත්තම ක්‍රියාත්මක වීමට ඔබේ browser එකේ JavaScript සක්‍රීය කර තිබිය යුතුය.
+        </p>
+      </noscript>
+
+      <p class="age-gate-footer-note">
+        <a
+          href={withTrailingSlash("/parental-control")}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="age-gate-parents-link"
+        >
+          දෙමව්පියන් සඳහා - ඔබේ දරුවන් ආරක්ෂා කර ගැනීමට මෙය කියවන්න
+        </a>
+      </p>
+    </div>
+
+    <div id="age-gate-success-state" class="age-gate-success-state" hidden>
+      <div class="age-gate-success-badge" aria-hidden="true">
+        <BiCheckCircle className="age-gate-success-svg" />
+      </div>
+      <p class="age-gate-success-text">
+        ස්තූතියි! දැන් ඔබට මෙම වෙබ් අඩවිය සම්පූර්ණයෙන් පරිශීලනය කළ හැක.
+      </p>
     </div>
   </div>
+</div>
 )}
 
 <script is:inline>
-(function () {
-  const OVERLAY_ID = "age-gate-overlay";
-  const CARD_ID = "age-gate-card";
-  const BTN_ID = "age-gate-enter";
-  const FORM_STATE_ID = "age-gate-form-state";
-  const SUCCESS_STATE_ID = "age-gate-success-state";
-  const STORAGE_KEY = "wk_age_verified_v1";
+  (function () {
+    var STORAGE_KEY = "wk_age_verified";
+    var SUCCESS_VISIBLE_MS = 1700;
+    var FADE_OUT_MS = 500;
 
-  function getOverlay() {
-    return document.getElementById(OVERLAY_ID);
-  }
-  function getCard() {
-    return document.getElementById(CARD_ID);
-  }
-
-  function dismissGate() {
-    const overlay = getOverlay();
-    const card = getCard();
-    if (!overlay || !card) return;
-
-    card.classList.add("age-gate-card-exit");
-    setTimeout(function () {
-      overlay.classList.add("age-gate-hidden");
-      document.body.classList.remove("age-gate-locked");
-    }, 420);
-  }
-
-  function showSuccessThenDismiss() {
-    const formState = document.getElementById(FORM_STATE_ID);
-    const successState = document.getElementById(SUCCESS_STATE_ID);
-    if (!formState || !successState) {
-      dismissGate();
-      return;
-    }
-    formState.hidden = true;
-    successState.hidden = false;
-    setTimeout(dismissGate, 680);
-  }
-
-  function verifyAndStore() {
-    try {
-      localStorage.setItem(STORAGE_KEY, "1");
-    } catch (e) {
-      // noop — private mode or storage disabled
-    }
-    showSuccessThenDismiss();
-  }
-
-  function isVerified() {
-    try {
-      return localStorage.getItem(STORAGE_KEY) === "1";
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function init() {
-    if (isVerified()) {
-      const overlay = getOverlay();
-      if (overlay) overlay.classList.add("age-gate-hidden");
-      return;
-    }
-
-    document.body.classList.add("age-gate-locked");
-
-    var btn = document.getElementById(BTN_ID);
-    if (!btn) return;
-
-    function onClick(e) {
-      e.preventDefault();
-      verifyAndStore();
-    }
-    function onKey(e) {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        verifyAndStore();
+    function isVerified() {
+      try {
+        return localStorage.getItem(STORAGE_KEY) === "true";
+      } catch (e) {
+        return false;
       }
     }
+    function setVerified() {
+      try {
+        localStorage.setItem(STORAGE_KEY, "true");
+      } catch (e) {}
+    }
+    // Hard state sync: gate state always follows verification state.
+    // Runs on first load AND every astro:page-load, so client-side
+    // navigations (ClientRouter) can never leak an un-gated page or
+    // re-show the gate to an already verified visitor.
+    function syncState() {
+      var overlay = document.getElementById("age-gate-overlay");
+      if (!overlay) return;
+      if (isVerified()) {
+        document.documentElement.classList.remove("age-gate-pending");
+        overlay.style.display = "none";
+      } else {
+        document.documentElement.classList.add("age-gate-pending");
+      }
+    }
+    function initAgeGate() {
+      var enterBtn = document.getElementById("age-gate-enter-btn");
+      var overlay = document.getElementById("age-gate-overlay");
+      var formState = document.getElementById("age-gate-form-state");
+      var successState = document.getElementById("age-gate-success-state");
+      if (!enterBtn || !overlay || !formState || !successState) return;
 
-    btn.addEventListener("click", onClick);
-    btn.addEventListener("keydown", onKey);
-  }
+      syncState();
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
-  }
-})();
+      var freshBtn = enterBtn.cloneNode(true);
+      enterBtn.parentNode.replaceChild(freshBtn, enterBtn);
+
+      freshBtn.addEventListener("click", function () {
+        setVerified();
+
+        formState.hidden = true;
+        successState.hidden = false;
+
+        setTimeout(function () {
+          overlay.classList.add("age-gate-overlay--closing");
+          document.documentElement.classList.remove("age-gate-pending");
+
+          setTimeout(function () {
+            overlay.style.display = "none";
+          }, FADE_OUT_MS);
+        }, SUCCESS_VISIBLE_MS);
+      });
+    }
+    document.addEventListener("astro:page-load", initAgeGate);
+    initAgeGate();
+  })();
 </script>
 
 <style is:inline>
-  /* Prevent body scroll while gate is open */
-  body.age-gate-locked {
-    overflow: hidden !important;
-  }
-
+  /* is:inline keeps this CSS embedded in the HTML response itself, so the
+     overlay is fully styled in the very first paint - no external CSS
+     round-trip, no unstyled/late modal on slow networks. */
   .age-gate-overlay {
     position: fixed;
     inset: 0;
-    z-index: 2147483647;
-    display: flex;
+    z-index: 999999;
+    display: none;
     align-items: center;
     justify-content: center;
     padding: 1rem;
-    background-color: rgba(1, 2, 3, 0.92);
-    backdrop-filter: blur(8px) saturate(140%);
-    -webkit-backdrop-filter: blur(8px) saturate(140%);
+    background: rgba(1, 2, 3, 0.75);
+    /* Second, independent blur layer: even if the body-content blur ever
+       fails or lags on a weak device, backdrop-filter still obscures
+       everything behind the overlay. Belt-and-braces content protection. */
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
     opacity: 1;
-    transition: opacity 0.42s ease, visibility 0.42s ease;
-    visibility: visible;
+    transition: opacity 0.45s ease;
   }
-
-  .age-gate-overlay.age-gate-hidden {
+  .age-gate-overlay--closing {
     opacity: 0;
-    visibility: hidden;
     pointer-events: none;
   }
-
   .age-gate-card {
     position: relative;
     width: 100%;
-    max-width: 28rem;
-    background-color: #0d1117;
-    border: 1px solid #1f2937;
+    max-width: 26rem;
+    max-height: 92vh;
+    overflow-y: auto;
+    background: #0c0d10;
+    border: 1px solid rgba(1, 173, 159, 0.35);
     border-radius: 1.25rem;
-    padding: 2rem 1.5rem 1.5rem;
-    box-shadow:
-      0 24px 60px rgba(0, 0, 0, 0.55),
-      0 0 0 1px rgba(255, 255, 255, 0.04);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+    padding: clamp(1.25rem, 4vw, 1.75rem) clamp(1rem, 4vw, 1.5rem);
     text-align: center;
-    transform: translateY(0) scale(1);
-    opacity: 1;
-    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-                opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .age-gate-card-exit {
-    transform: translateY(-12px) scale(0.98);
-    opacity: 0;
-  }
-
+  /* Static red dot fixed to the top-right corner of the card. */
   .age-gate-live-dot {
     position: absolute;
     top: 0.85rem;
@@ -226,28 +191,7 @@ const { skip = false } = Astro.props;
     height: 0.6rem;
     border-radius: 999px;
     background-color: #ef4444;
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
     z-index: 2;
-    animation: age-gate-dot-pulse 1.8s ease-in-out infinite;
-    will-change: transform, background-color, box-shadow;
-  }
-
-  @keyframes age-gate-dot-pulse {
-    0% {
-      background-color: #010203;
-      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
-      transform: scale(1);
-    }
-    50% {
-      background-color: #dc2626;
-      box-shadow: 0 0 0 5px rgba(239, 68, 68, 0);
-      transform: scale(1.3);
-    }
-    100% {
-      background-color: #010203;
-      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
-      transform: scale(1);
-    }
   }
 
   .age-gate-icon-badge {
@@ -258,164 +202,149 @@ const { skip = false } = Astro.props;
     height: 3.25rem;
     margin: 0 auto 0.75rem;
     border-radius: 999px;
-    background-color: rgba(239, 68, 68, 0.12);
-    border: 1px solid rgba(239, 68, 68, 0.25);
-    color: #ef4444;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #f87171;
+    animation: age-gate-icon-pulse 1.4s ease-in-out infinite;
   }
-
   .age-gate-icon-svg {
-    width: 1.6rem;
-    height: 1.6rem;
+    width: 1.75rem;
+    height: 1.75rem;
   }
-
+  @keyframes age-gate-icon-pulse {
+    0%, 100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+    }
+    50% {
+      transform: scale(1.15);
+      box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
+    }
+  }
   .age-gate-brand {
-    font-size: 0.75rem;
+    font-size: clamp(0.65rem, 1.6vw, 0.7rem);
     font-weight: 800;
-    letter-spacing: 0.18em;
-    color: #01AD9F;
+    letter-spacing: 0.15em;
+    color: #01ad9f;
     margin: 0 0 0.5rem;
-    text-transform: uppercase;
   }
-
   .age-gate-title {
-    font-size: 1.25rem;
+    font-size: clamp(1rem, 4vw, 1.2rem);
     font-weight: 800;
-    color: #F8F8FF;
-    line-height: 1.35;
-    margin: 0 0 0.6rem;
+    color: #f8f8ff;
+    margin: 0 0 0.75rem;
+    line-height: 1.5;
   }
-
+  .age-gate-title-accent {
+    color: #f87171;
+  }
   .age-gate-desc {
-    font-size: 0.95rem;
-    color: #94a3b8;
-    line-height: 1.65;
+    font-size: clamp(0.76rem, 2.6vw, 0.84rem);
+    line-height: 1.6;
+    color: rgba(248, 248, 255, 0.65);
     margin: 0 0 1.25rem;
   }
-
+  .age-gate-link {
+    color: #01ad9f;
+    text-decoration: underline;
+  }
   .age-gate-actions {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
-    margin-bottom: 0.9rem;
+    align-items: center;
+    gap: 0.7rem;
   }
-
-  .age-gate-btn {
+  .age-gate-enter-btn {
+    width: 100%;
+    background-color: #01ad9f;
+    color: #010203;
+    font-weight: 800;
+    font-size: clamp(0.8rem, 2.8vw, 0.87rem);
+    padding: clamp(0.7rem, 2.5vw, 0.85rem) 1.5rem;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  .age-gate-enter-btn:hover {
+    background-color: #01c4b4;
+  }
+  .age-gate-exit-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    padding: 0.85rem 1rem;
-    border-radius: 0.85rem;
-    font-size: 0.95rem;
+    background-color: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.4);
     font-weight: 700;
+    font-size: clamp(0.68rem, 2.2vw, 0.74rem);
+    padding: 0.45rem 1.1rem;
+    border-radius: 999px;
     text-decoration: none;
-    cursor: pointer;
-    border: 1px solid transparent;
-    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
-    line-height: 1.3;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
-
-  .age-gate-btn:hover {
-    transform: translateY(-1px);
+  .age-gate-exit-btn:hover {
+    background-color: #ef4444;
+    color: #ffffff;
   }
-
-  .age-gate-btn:active {
-    transform: translateY(0);
+  .age-gate-noscript-note {
+    font-size: clamp(0.68rem, 2.2vw, 0.74rem);
+    line-height: 1.6;
+    color: #f87171;
+    margin: 0.9rem 0 0;
   }
-
-  .age-gate-btn-primary {
-    background-color: #01AD9F;
-    color: #010203;
-    border-color: #01AD9F;
-    box-shadow: 0 6px 18px rgba(1, 173, 159, 0.22);
+  .age-gate-footer-note {
+    margin-top: 1.1rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
-
-  .age-gate-btn-primary:hover {
-    background-color: #02c4b4;
-    box-shadow: 0 8px 24px rgba(1, 173, 159, 0.32);
-  }
-
-  .age-gate-btn-secondary {
-    background-color: transparent;
-    color: #94a3b8;
-    border-color: #1f2937;
-  }
-
-  .age-gate-btn-secondary:hover {
-    color: #F8F8FF;
-    border-color: #374151;
-    background-color: rgba(255, 255, 255, 0.03);
-  }
-
-  .age-gate-footer {
-    font-size: 0.8rem;
-    color: #64748b;
-    margin: 0;
-  }
-
-  .age-gate-link {
-    color: #01AD9F;
+  .age-gate-parents-link {
+    font-size: clamp(0.7rem, 2.4vw, 0.76rem);
+    font-weight: 700;
+    color: #01ad9f;
     text-decoration: underline;
-    text-underline-offset: 2px;
   }
-
-  .age-gate-link:hover {
-    color: #02c4b4;
-  }
-
   .age-gate-success-state {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: 2rem 0.5rem;
-    text-align: center;
+    padding: 1rem 0;
   }
-
-  .age-gate-success-state[hidden] {
-    display: none;
-  }
-
   .age-gate-success-badge {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 3.5rem;
     height: 3.5rem;
-    margin-bottom: 0.75rem;
+    margin: 0 auto 1rem;
     border-radius: 999px;
-    background-color: rgba(1, 173, 159, 0.12);
-    border: 1px solid rgba(1, 173, 159, 0.25);
-    color: #01AD9F;
-    animation: age-gate-success-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+    background: rgba(1, 173, 159, 0.12);
+    border: 1px solid rgba(1, 173, 159, 0.4);
+    color: #01ad9f;
+    animation: age-gate-success-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
-
-  @keyframes age-gate-success-pop {
-    0% {
-      transform: scale(0.6);
-      opacity: 0;
-    }
-    100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-  }
-
   .age-gate-success-svg {
-    width: 1.8rem;
-    height: 1.8rem;
+    width: 2rem;
+    height: 2rem;
   }
-
   .age-gate-success-text {
-    font-size: 1rem;
+    font-size: clamp(0.85rem, 2.8vw, 0.9rem);
     font-weight: 700;
-    color: #01AD9F;
-    margin: 0;
+    color: #f8f8ff;
+    line-height: 1.6;
+  }
+  @keyframes age-gate-success-pop {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
   }
 
-  @media (max-width: 480px) {
+  /* Small phones (<=360px): tighten spacing so the card never feels
+     cramped against the screen edges. */
+  @media (max-width: 360px) {
+    .age-gate-overlay {
+      padding: 0.75rem;
+    }
     .age-gate-card {
-      padding: 1.5rem 1.1rem 1.25rem;
       border-radius: 1rem;
     }
     .age-gate-live-dot {
@@ -428,41 +357,74 @@ const { skip = false } = Astro.props;
       margin-bottom: 0.6rem;
     }
     .age-gate-icon-svg {
-      width: 1.35rem;
-      height: 1.35rem;
-    }
-    .age-gate-brand {
-      font-size: 0.7rem;
-      letter-spacing: 0.14em;
-    }
-    .age-gate-title {
-      font-size: 1.05rem;
-    }
-    .age-gate-desc {
-      font-size: 0.88rem;
-    }
-    .age-gate-btn {
-      padding: 0.75rem 0.9rem;
-      font-size: 0.9rem;
-    }
-    .age-gate-success-badge {
-      width: 3rem;
-      height: 3rem;
-    }
-    .age-gate-success-svg {
       width: 1.5rem;
       height: 1.5rem;
     }
-    .age-gate-success-text {
-      font-size: 0.92rem;
+  }
+
+  /* Tablets and up (>=768px): more breathing room, row actions. */
+  @media (min-width: 768px) {
+    .age-gate-card {
+      max-width: 30rem;
+      padding: 2.25rem 2.25rem;
+      border-radius: 1.5rem;
+    }
+    .age-gate-icon-badge {
+      width: 3.75rem;
+      height: 3.75rem;
+      margin-bottom: 1rem;
+    }
+    .age-gate-icon-svg {
+      width: 2rem;
+      height: 2rem;
+    }
+    .age-gate-actions {
+      flex-direction: row;
+      justify-content: center;
+      gap: 0.9rem;
+    }
+    .age-gate-enter-btn {
+      width: auto;
+      flex: 1 1 auto;
+      max-width: 20rem;
+    }
+  }
+
+  /* Desktop / large screens (>=1200px): cap card at comfortable width. */
+  @media (min-width: 1200px) {
+    .age-gate-card {
+      max-width: 32rem;
+    }
+  }
+
+  /* Short-height viewports (landscape phones): shrink vertical spacing. */
+  @media (max-height: 480px) {
+    .age-gate-card {
+      padding-top: 1rem;
+      padding-bottom: 1rem;
+    }
+    .age-gate-icon-badge {
+      width: 2.25rem;
+      height: 2.25rem;
+      margin-bottom: 0.4rem;
+    }
+    .age-gate-icon-svg {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+    .age-gate-desc {
+      margin-bottom: 0.75rem;
+    }
+    .age-gate-footer-note {
+      margin-top: 0.6rem;
+      padding-top: 0.5rem;
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .age-gate-overlay,
     .age-gate-success-badge,
-    .age-gate-icon-badge,
-    .age-gate-live-dot {
+    .age-gate-icon-badge {
       transition: none;
       animation: none;
     }
