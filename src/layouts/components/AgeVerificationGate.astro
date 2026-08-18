@@ -1,4 +1,3 @@
----
 import { BiErrorCircle, BiCheckCircle } from "react-icons/bi";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 
@@ -25,7 +24,7 @@ const { skip = false } = Astro.props;
 
     <div id="age-gate-form-state">
       <div class="age-gate-icon-badge" aria-hidden="true">
-        <BiErrorCircle className="age-gate-icon-svg" />
+        <BiErrorCircle className="age-gate-icon-svg"/>
       </div>
 
       <p class="age-gate-brand">WAL KATHA</p>
@@ -36,7 +35,7 @@ const { skip = false } = Astro.props;
 
       <p id="age-gate-desc" class="age-gate-desc">
         මෙම වෙබ් අඩවියට පිවිසීමෙන්, ඔබගේ වයස අවුරුදු 18ට වැඩි බව තහවුරු කරන අතර, මෙහි ඇති සියලුම කතා ප්‍රබන්ධ (Fiction) බවත් මෙම අන්තර්ගතය නීත්‍යානුකූලව ප්‍රවේශ වීමට ඔබට අයිතිය ඇති බව පිළිගන්නෙමු.
-        පහත <a href={withTrailingSlash("/terms-and-conditions")} class="age-gate-link" target="_blank" rel="noopener noreferrer">භාවිත නියමයන් සහ කොන්දේසි</a> සහ <a href={withTrailingSlash("/privacy-policy")} class="age-gate-link" target="_blank" rel="noopener noreferrer">පුද්ගලිකත්ව ප්‍රතිපත්තිය</a> වලට මම එකඟ වෙමි.
+        පහත <a href={withTrailingSlash("/terms-and-conditions")} class="age-gate-link" target="_blank" rel="noopener noreferrer">භාවිත නියමයන් සහ කොන්දේසි</a> සහ <a href={withTrailingSlash("/privacy-policy")} class="age-gate-link" target="_blank" rel="noopener noreferrer">පුද්ගලිකත්ව ප්‍රතිපත්තිය</a> වලටද මම එකඟ වෙමි.
       </p>
 
       <div class="age-gate-actions">
@@ -50,7 +49,7 @@ const { skip = false } = Astro.props;
 
       <noscript>
         <p class="age-gate-noscript-note">
-          තහවුරු කිරීමේ බොත්තම ක්‍රියාත්මක වීමට ඔබේ browser එකේ JavaScript සක්‍රීය කර තිබිය යුතුය.
+          තහවුරු කිරීමේ බොත්තම ක්‍රියාත්මක වීම සඳහා ඔබේ බ්‍රවුසරයේ (Browser) JavaScript සක්‍රීය කර තිබිය යුතුය. කරුණාකර මෙම වෙබ් අඩවියට පිවිසීම සඳහා ඔබේ බ්‍රවුසරයේ සැකසුම් (Settings) වෙත ගොස් JavaScript සක්‍රීය කර, ඉන්පසු මෙම වෙබ් අඩවිය නැවත Refresh (Reload) කරන්න.
         </p>
       </noscript>
 
@@ -68,7 +67,7 @@ const { skip = false } = Astro.props;
 
     <div id="age-gate-success-state" class="age-gate-success-state" hidden>
       <div class="age-gate-success-badge" aria-hidden="true">
-        <BiCheckCircle className="age-gate-success-svg" />
+        <BiCheckCircle className="age-gate-success-svg"/>
       </div>
       <p class="age-gate-success-text">
         ස්තූතියි! දැන් ඔබට මෙම වෙබ් අඩවිය සම්පූර්ණයෙන් පරිශීලනය කළ හැක.
@@ -290,7 +289,11 @@ const { skip = false } = Astro.props;
   .age-gate-noscript-note {
     font-size: clamp(0.68rem, 2.2vw, 0.74rem);
     line-height: 1.6;
-    color: #f87171;
+    color: #01ad9f;
+    background-color: rgba(1, 173, 159, 0.08);
+    border: 1px solid rgba(1, 173, 159, 0.35);
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
     margin: 0.9rem 0 0;
   }
   .age-gate-footer-note {
