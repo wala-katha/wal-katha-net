@@ -65,9 +65,28 @@ const finalImageUrl = image
 
 const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
 
-// Age gate page-specific skip logic: policy/contact pages stay exempt
-// (the gate itself links to them), every other page is gated.
-// Add a path here to exempt a future page.
+// og:image MIME type auto-detection from file extension, for accurate
+// social-crawler (Facebook/Twitter/LinkedIn) preview rendering.
+function detectImageMimeType(url: string): string {
+  const ext = url.split(".").pop()?.toLowerCase().split("?")[0] ?? "";
+  switch (ext) {
+    case "webp":
+      return "image/webp";
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "gif":
+      return "image/gif";
+    case "svg":
+      return "image/svg+xml";
+    default:
+      return "image/webp";
+  }
+}
+const finalImageMimeType = detectImageMimeType(finalImageUrl);
+
 const AGE_GATE_EXCLUDED_PATHS = [
   "/parental-control",
   "/privacy-policy",
@@ -88,13 +107,6 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
     <meta name="color-scheme" content="dark" />
 
-    {/* Age gate pre-paint state sync (fail-closed design):
-        the "age-gate-pending" class is now baked into <html> at build
-        time, so for a new visitor the blur + gate are part of the very
-        first paint - zero JS timing dependency, zero flash, on any
-        network/CPU. This script only needs to REMOVE the class before
-        paint for already-verified visitors (and re-add it after
-        client-side navigations that started from an exempt page). */}
     <script is:inline define:vars={{ skipAgeGate: isAgeGateExcludedPage }}>
       (function () {
         try {
@@ -109,48 +121,6 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
       })();
     </script>
 
-    {/* Age gate blur + scroll-lock + FULL CARD STYLING. MUST stay
-        is:inline: this guarantees every rule below ships inside the
-        HTML response itself, bypassing "build.inlineStylesheets: never"
-        and the Beasties critical-CSS pass (reduceInlineStyles: false),
-        so they are active from the exact first frame.
-
-        ROOT-CAUSE FIX (unstyled-content flash on the age-verification
-        card): AgeVerificationGate.astro's markup (#age-gate-overlay,
-        .age-gate-card, .age-gate-desc, etc.) previously had its own
-        <style is:inline> block placed AFTER its own HTML in that
-        component file. Because that component renders near the very
-        start of <body>, but its <style> tag physically sits further
-        down the document (after its own markup, and after this
-        component's own <script>), a streaming browser parser could
-        paint the raw overlay HTML - including the age-gate-desc notice
-        text - for one frame BEFORE that component-local stylesheet was
-        parsed and applied. This produced exactly the symptom described:
-        the notice text briefly appearing unstyled/"outside" the card on
-        first load, then snapping into its correct boxed layout a moment
-        later.
-
-        THE FIX: every single class used by AgeVerificationGate.astro's
-        markup (.age-gate-overlay, .age-gate-card, .age-gate-live-dot,
-        .age-gate-icon-badge, .age-gate-icon-svg, .age-gate-brand,
-        .age-gate-title, .age-gate-title-accent, .age-gate-desc,
-        .age-gate-link, .age-gate-actions, .age-gate-enter-btn,
-        .age-gate-exit-btn, .age-gate-noscript-note,
-        .age-gate-footer-note, .age-gate-parents-link,
-        .age-gate-success-state, .age-gate-success-badge,
-        .age-gate-success-svg, .age-gate-success-text, plus every
-        keyframe/animation and every responsive @media breakpoint) is
-        now defined here, in this document's <head>, ahead of any
-        <body> content whatsoever. This guarantees the browser has 100%
-        of the styling information needed to render the card correctly
-        on its very first paint - there is no longer any window where
-        the overlay's HTML can be visible without its styles applied.
-        AgeVerificationGate.astro's own duplicate <style is:inline>
-        block has been removed (see that file) to avoid shipping the
-        same CSS twice; its HTML markup, IDs, classes, and <script>
-        logic are all byte-for-byte unchanged, so behavior, animations,
-        and responsive layout remain 100% identical - only the ordering
-        of when the CSS becomes available to the parser has changed. */}
     <style is:inline>
       html {
         background-color: #050505;
@@ -183,9 +153,6 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
         display: flex;
       }
 
-      /* ===== Age Verification Card - full styling, moved here from
-         AgeVerificationGate.astro so it is guaranteed to be parsed
-         and applied before any part of the overlay's markup paints. */
       .age-gate-overlay {
         position: fixed;
         inset: 0;
@@ -463,7 +430,6 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     </style>
 
     <style>
-      /* Horizontal page wobble fix (Android Chrome) */
       html, body {
         background-color: #050505;
         color: #f8fafc;
@@ -483,7 +449,6 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     </style>
 
     <style>
-      /* Content protection - smooth selection restriction */
       body {
         -webkit-user-select: none;
         -moz-user-select: none;
@@ -616,7 +581,7 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     <meta property="og:image:secure_url" content={finalImageUrl} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:type" content="image/webp" />
+    <meta property="og:image:type" content={finalImageMimeType} />
     <meta name="twitter:image" content={finalImageUrl} />
 
     <slot name="head" />
