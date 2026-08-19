@@ -4,6 +4,7 @@ meta_title: "Mage Nangi Wal Katha | best sinhala wal katha website"
 description: "අපෙ පවුලෙ අම්ම තාත්ත ඇරුනම මට හිටියෙ නංගි මමයි, නංගී පොඩි කාලෙ ඉදන් ගොඩක් එකතුයි. මගෙයි එයාගෙයි වයස් පරතරය අවුරුදු 6.."
 date: 2026-08-05
 image: "/images/posts/mage-nangi-wal-katha.webp"
+image_alt: "සිංහල වැල් කතා අලුත් කතාවල පීච් පැහැති ඇඳුමෙන් සිනාසෙන නංගිගේ රූපය"
 draft: false
 authors: ["WalKatha"]
 tags: ["wal-katha", "aluth-katha", "family-katha", "nangi-katha"]

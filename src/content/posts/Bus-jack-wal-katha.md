@@ -4,6 +4,7 @@ meta_title: "Bus Wal Katha Sinhala - Best Sri Lankan Bus Stories"
 description: "මම බස් එකේ තමයි වැඩ ඉවර වෙලා එන්නේ. එදත් මම පුරුදුවිදිහට බස් එකට නැග්ග."
 date: 2026-08-07
 image: "/images/posts/​​Bus-jack-wal-katha.webp"
+image_alt: "සිංහල වැල කතා අලුත් වැල කතා එකතුවේ බස් ගමනක් පදනම් කරගත් තද රෝස සාරියක් ඇඳි යුවතිය."
 draft: false
 authors: ["WalKatha"]
 tags: ["bus-wal-katha", "sinhala-bus-katha", "bus-wal-katha-sinhala", "sri-lankan-wal-katha", "latest-bus-wal-katha"]

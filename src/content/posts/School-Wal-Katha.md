@@ -4,6 +4,7 @@ meta_title: "Sinhala Wal Katha School Collection - Best Sri Lankan School Storie
 description: "රශ්මි ගැන කිව්වොත් නෝර්මල් කෙල්ලෙක්… සුදු.. අමුතු ලස්සනකුත් තිබ්බ, කෙල්ල අලුතින් ආපු නිසා ලස්සන වැඩියි."
 date: 2026-08-06
 image: "/images/posts/School-Wal-Katha.webp"
+image_alt: "Sinhala Wal Katha පාසල් ප්‍රේමය වෙනුවෙන් සුදු කමිසය සහ නිල් ටයි පටිය පැළඳ සිටින සිසුවිය wal katha 2026"
 draft: false
 authors: ["WalKatha"]
 tags: ["wala-katha", "wal katha school", "sri lankan school stories", "sinhala school katha"]
