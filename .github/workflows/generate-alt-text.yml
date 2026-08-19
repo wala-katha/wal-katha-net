@@ -52,11 +52,21 @@ jobs:
           const GEMINI_MODEL = 'gemini-2.5-flash';
           const SITE_BRAND = 'Wal Katha';
           const apiKey = process.env.GEMINI_API_KEY;
+          // DIAGNOSTIC (2026-08): explicit, loud confirmation of key
+          // presence so a missing GEMINI_API_KEY secret is immediately
+          // obvious in the Actions log, instead of silently producing
+          // an unexplained "No changes detected" result.
           if (!apiKey) {
-            console.warn('GEMINI_API_KEY secret not set - skipping alt-text generation.');
+            console.error('========================================');
+            console.error('DIAGNOSTIC: GEMINI_API_KEY secret is NOT SET.');
+            console.error('Go to: Settings > Secrets and variables > Actions');
+            console.error('and add a repository secret named GEMINI_API_KEY.');
+            console.error('Skipping alt-text generation for this run.');
+            console.error('========================================');
             appendFileSync(process.env.GITHUB_OUTPUT, 'has_changes=false\n');
             process.exit(0);
           }
+          console.log('DIAGNOSTIC: GEMINI_API_KEY secret detected (length: ' + apiKey.length + ' chars).');
           function humanizeSlug(value) {
             if (!value) return '';
             return String(value)
@@ -66,16 +76,28 @@ jobs:
               .replace(/^[a-z]/, (m) => m.toUpperCase());
           }
           const files = readdirSync(POSTS_DIR).filter((f) => /\.(md|mdx)$/i.test(f) && !f.startsWith('-'));
+          console.log(`DIAGNOSTIC: Scanned ${files.length} post file(s) in ${POSTS_DIR}.`);
           const candidates = [];
+          const skippedReasons = [];
           for (const file of files) {
             const filePath = join(POSTS_DIR, file);
             const raw = readFileSync(filePath, 'utf-8');
             const parsed = matter(raw);
             const fm = parsed.data || {};
-            if (!fm.image || fm.image_alt) continue;
+            if (!fm.image) {
+              skippedReasons.push(`${file}: SKIPPED - no "image" field in frontmatter.`);
+              continue;
+            }
+            if (fm.image_alt) {
+              skippedReasons.push(`${file}: SKIPPED - "image_alt" already set.`);
+              continue;
+            }
             const imgRelPath = String(fm.image).replace(/^\/+/, '');
             const imgAbsPath = join(PUBLIC_DIR, imgRelPath);
-            if (!existsSync(imgAbsPath)) continue;
+            if (!existsSync(imgAbsPath)) {
+              skippedReasons.push(`${file}: SKIPPED - image file NOT FOUND at "${imgAbsPath}". Check that this file was actually committed to the repo (case-sensitive path, correct extension).`);
+              continue;
+            }
             const category = Array.isArray(fm.categories) && fm.categories.length > 0
               ? humanizeSlug(fm.categories[0])
               : '';
@@ -86,6 +108,13 @@ jobs:
               imgAbsPath,
             });
           }
+          console.log('DIAGNOSTIC: --- Skip reasons for every non-candidate post ---');
+          if (skippedReasons.length > 0) {
+            skippedReasons.forEach((r) => console.log('  ' + r));
+          } else {
+            console.log('  (no posts were skipped)');
+          }
+          console.log('DIAGNOSTIC: -----------------------------------------------');
           const selected = candidates.slice(0, MAX_PER_RUN);
           console.log(`Found ${candidates.length} post(s) missing image_alt - processing ${selected.length} this run.`);
           if (selected.length === 0) {
@@ -226,8 +255,6 @@ jobs:
               '## 🤖 AI-Generated SEO Image Alt Text (Gemini Vision)',
               '',
               'Gemini Vision API එකෙන් generate කරපු, "Wal Katha" brand keyword එකත් category keyword එකත් natural ලෙස ඇතුළත් කරගත් SEO alt text pull request එකකි.',
-              '',
-              'මෙම workflow එක දැන් `push` events වලට අමතරව **දිනපතා (daily schedule)** ස්වයංක්‍රීයව run වේ - manual trigger එකක් අවශ්‍ය නොවේ.',
               '',
               '### ✅ Merge කරන්න කලින් check කරන්න:',
               '- [x] `yarn build` සාර්ථකව සම්පූර්ණ විය.',
