@@ -1,3 +1,4 @@
+
 name: Auto-Generate Image Alt Text (AI, PR-Based)
 on:
   push:
@@ -51,13 +52,15 @@ jobs:
           const MAX_PER_RUN = 5;
           const GEMINI_MODEL_PRIMARY = 'gemini-3.6-flash';
           const GEMINI_MODEL_FALLBACKS = ['gemini-2.5-flash', 'gemini-flash-latest'];
-          const SITE_BRAND = 'Wal Katha';
-          // Google Image Search LSI/secondary keyword cluster - one is
-          // picked deterministically per post (based on filename hash,
-          // not random per-run) so the same post always gets the same
-          // secondary keyword assigned across retries, avoiding
-          // inconsistent SEO signals if a run is re-triggered.
-          const SEO_KEYWORD_CLUSTER = [
+          const SINHALA_TAG = 'සිංහල වැල් කතා';
+          // Singlish (Latin-script) search-intent keyword cluster. One is
+          // picked deterministically per post (based on filename hash, not
+          // random per-run) so the same post always gets the same
+          // Singlish opener across retries. Placed at the START of the
+          // alt text because Google Image Crawler weighs the first 3-4
+          // words most heavily, and most Sri Lankan search traffic for
+          // this content types Singlish terms rather than Unicode Sinhala.
+          const SINGLISH_KEYWORD_CLUSTER = [
             'sinhala wal katha',
             'aluth wal katha',
             'wal katha 2026',
@@ -84,12 +87,12 @@ jobs:
               .replace(/\s+/g, ' ')
               .replace(/^[a-z]/, (m) => m.toUpperCase());
           }
-          function pickSecondaryKeyword(seedString) {
+          function pickSingaishKeyword(seedString) {
             let hash = 0;
             for (let i = 0; i < seedString.length; i++) {
               hash = (hash * 31 + seedString.charCodeAt(i)) >>> 0;
             }
-            return SEO_KEYWORD_CLUSTER[hash % SEO_KEYWORD_CLUSTER.length];
+            return SINGLISH_KEYWORD_CLUSTER[hash % SINGLISH_KEYWORD_CLUSTER.length];
           }
           const files = readdirSync(POSTS_DIR).filter((f) => /\.(md|mdx)$/i.test(f) && !f.startsWith('-'));
           console.log(`DIAGNOSTIC: Scanned ${files.length} post file(s) in ${POSTS_DIR}.`);
@@ -122,7 +125,7 @@ jobs:
               title: fm.title || file,
               category,
               imgAbsPath,
-              secondaryKeyword: pickSecondaryKeyword(file),
+              singlishKeyword: pickSingaishKeyword(file),
             });
           }
           console.log('DIAGNOSTIC: --- Skip reasons for every non-candidate post ---');
@@ -145,28 +148,57 @@ jobs:
             if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
             return 'image/webp';
           }
-          function buildPrompt(postTitle, category, secondaryKeyword) {
+          // STRICT SEO STRUCTURE PATTERN:
+          // "[Singlish Keyword] - [Human-Written Sinhala Context] | [සිංහල වැල් කතා]"
+          //
+          // Middle-segment design goals (2026-08 refinement):
+          // 1. NEVER use generic AI-filler nouns like "ඡායාරූපය"/"පින්තූරය" -
+          //    these carry zero Google Image SEO value and read as
+          //    machine-generated rather than human-written.
+          // 2. Blend a story-character role (නැන්දා, අක්කා, ටීචර්, නංගී,
+          //    බිරිඳ, etc.) with the visible details ONLY when that role
+          //    is a reasonable, natural fit for both the post title AND
+          //    what is actually visible in the image - this raises the
+          //    title+image co-occurrence relevance signal without
+          //    inventing details the image doesn't support. If no role
+          //    reasonably fits, a plain human descriptor (කාන්තාව/
+          //    තරුණිය/කෙල්ල) is used instead - accuracy is never
+          //    sacrificed for keyword richness.
+          // 3. Read exactly like a real Sri Lankan person naturally
+          //    labeling a story photo, not a robotic scene description.
+          function buildPrompt(postTitle, category, singlishKeyword) {
             const categoryLine = category
               ? `The post's category is: "${category}". `
               : '';
             return (
-              `You are an expert Image SEO Specialist for Google Image Search, ` +
-              `targeting the primary brand query "${SITE_BRAND}" (Sinhala Wal Katha) ` +
-              'on a Sinhala creative-fiction storytelling website. ' +
-              'Analyze this image and write ONE highly descriptive, natural Sinhala ' +
-              'alt text under 120 characters. Requirements: ' +
-              `1. Naturally include "${SITE_BRAND}" or "Sinhala Wal Katha" near the ` +
-              'beginning of the text, EXACTLY ONCE. ' +
-              `2. If natural, also weave in this secondary search term ONCE: ` +
-              `"${secondaryKeyword}". ` +
-              categoryLine +
-              `3. Include context from the post title ("${postTitle}") without ` +
-              'quoting it verbatim. ' +
-              '4. Describe visible colors, mood, setting, and objects clearly and ' +
-              'tastefully - never explicit/adult details. ' +
-              '5. Never repeat any keyword more than once, never write a ' +
-              'comma-separated keyword list, never use quotes or markdown. ' +
-              'Return ONLY the raw Sinhala alt text string, nothing else.'
+              'You are an expert Sri Lankan SEO content strategist optimizing ' +
+              'photos for Google Image Search on a Sinhala creative-fiction ' +
+              'storytelling website. Analyze this image and generate ONE alt ' +
+              'text string under 120 characters, following this EXACT structure:\n\n' +
+              `"${singlishKeyword} - [Natural Human-Written Sinhala Context] | ${SINHALA_TAG}"\n\n` +
+              'STRICT RULES: ' +
+              `1. Start EXACTLY with "${singlishKeyword}" followed by a single ` +
+              'space, a hyphen, and a single space (" - "). ' +
+              '2. For the middle Sinhala part: NEVER use filler words like ' +
+              '"ඡායාරූපය" or "පින්තූරය" - they add no SEO value. ' +
+              `3. From the story title ("${postTitle}") ${categoryLine}try to ` +
+              'infer a natural character role (e.g. නැන්දා, දුව, කොල්ලා, බාප්පා, සියා, මස්සිනා, ටීචර්, ' +
+              'නංගී, බිරිඳ, මිනිහා, අයියා, මල්ලි, තාත්තා, මාමා, අංකල්, ලොකු තාත්තා, කෙල්ල) ONLY if it genuinely and plausibly matches ' +
+              'both the title and what is visibly shown in the image. If no ' +
+              'role clearly fits, use a plain natural descriptor instead ' +
+              '(කාන්තාව, තරුණිය) - never guess or invent a role the image ' +
+              "doesn't support. " +
+              '4. Blend that role naturally with real visible details ' +
+              '(clothing, color, posture, setting) exactly as a real Sri ' +
+              'Lankan person would casually caption a story photo - e.g. ' +
+              '"රෝස සාරියෙන් සැරසුණු නැන්දා" or "සාලයේ ඉන්න අක්කා". ' +
+              '5. Pure Sinhala phrasing only in the middle section - no ' +
+              'English/Singlish words mixed in, no robotic layout ' +
+              'descriptions, no explicit/adult details. ' +
+              `6. End with " | ${SINHALA_TAG}" exactly once. Never repeat ` +
+              'any keyword anywhere in the string, no comma-separated ' +
+              'keyword lists, no quotes, no markdown. ' +
+              'Return ONLY the final raw alt text string, nothing else.'
             );
           }
           async function callGeminiModel(modelName, base64Data, mimeType, prompt) {
@@ -197,11 +229,11 @@ jobs:
             if (!text) throw new Error('Empty response from Gemini API');
             return text.trim().replace(/^["']|["']$/g, '').slice(0, 160);
           }
-          async function generateAltText(imgPath, postTitle, category, secondaryKeyword) {
+          async function generateAltText(imgPath, postTitle, category, singlishKeyword) {
             const imgBuffer = readFileSync(imgPath);
             const base64Data = imgBuffer.toString('base64');
             const mimeType = mimeFromExt(imgPath);
-            const prompt = buildPrompt(postTitle, category, secondaryKeyword);
+            const prompt = buildPrompt(postTitle, category, singlishKeyword);
             const modelsToTry = [GEMINI_MODEL_PRIMARY, ...GEMINI_MODEL_FALLBACKS];
             let lastError = null;
             for (const modelName of modelsToTry) {
@@ -240,7 +272,7 @@ jobs:
           const touched = [];
           for (const item of selected) {
             try {
-              const altText = await generateAltText(item.imgAbsPath, item.title, item.category, item.secondaryKeyword);
+              const altText = await generateAltText(item.imgAbsPath, item.title, item.category, item.singlishKeyword);
               const original = readFileSync(item.file, 'utf-8');
               const updatedRaw = upsertImageAltField(original, altText);
               if (!updatedRaw) {
@@ -302,7 +334,7 @@ jobs:
             const body = [
               '## 🤖 AI-Generated SEO Image Alt Text (Gemini Vision)',
               '',
-              '"Wal Katha" brand keyword + LSI secondary keyword cluster එකකින් keyword එකක් + category natural ලෙස embed කරගත් SEO alt text PR එකකි.',
+              'Structure: "[Singlish Keyword] - [Human-Written Sinhala Context with Story Role] | සිංහල වැල් කතා" — filler words (ඡායාරූපය/පින්තූරය) ඉවත් කර, character-role blending සමඟ Google Image Search co-occurrence signal එක ශක්තිමත් කිරීමකි.',
               '',
               '### ✅ Merge කරන්න කලින් check කරන්න:',
               '- [x] `yarn build` සාර්ථකව සම්පූර්ණ විය.',
