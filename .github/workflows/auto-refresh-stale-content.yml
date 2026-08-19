@@ -208,7 +208,10 @@ jobs:
         id: commit
         if: steps.refresh.outputs.has_changes == 'true'
         run: |
-          git add src/content/posts/*.md src/content/posts/*.mdx || true
+          git add src/content/posts/*.md || true
+          if [ -n "$(find src/content/posts -maxdepth 1 -name '*.mdx' 2>/dev/null)" ]; then
+            git add src/content/posts/*.mdx || true
+          fi
           if git diff --staged --quiet; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
