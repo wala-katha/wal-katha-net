@@ -49,13 +49,19 @@ jobs:
           const POSTS_DIR = 'src/content/posts';
           const PUBLIC_DIR = 'public';
           const MAX_PER_RUN = 5;
-          const GEMINI_MODEL = 'gemini-2.5-flash';
+          // FIXED (2026-08): "gemini-2.5-flash" was deprecated by Google
+          // and returns a hard 404 for all new API keys ("no longer
+          // available to new users"). Google's own error message
+          // directed to switch to "gemini-3.6-flash" - confirmed via
+          // live workflow run logs. GEMINI_MODEL_FALLBACKS provides a
+          // small ordered retry chain so a future model deprecation
+          // does not silently break this workflow again - the first
+          // model that returns a non-404 response is used, and each
+          // attempt is logged for visibility.
+          const GEMINI_MODEL_PRIMARY = 'gemini-3.6-flash';
+          const GEMINI_MODEL_FALLBACKS = ['gemini-2.5-flash', 'gemini-flash-latest'];
           const SITE_BRAND = 'Wal Katha';
           const apiKey = process.env.GEMINI_API_KEY;
-          // DIAGNOSTIC (2026-08): explicit, loud confirmation of key
-          // presence so a missing GEMINI_API_KEY secret is immediately
-          // obvious in the Actions log, instead of silently producing
-          // an unexplained "No changes detected" result.
           if (!apiKey) {
             console.error('========================================');
             console.error('DIAGNOSTIC: GEMINI_API_KEY secret is NOT SET.');
@@ -128,14 +134,11 @@ jobs:
             if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
             return 'image/webp';
           }
-          async function generateAltText(imgPath, postTitle, category) {
-            const imgBuffer = readFileSync(imgPath);
-            const base64Data = imgBuffer.toString('base64');
-            const mimeType = mimeFromExt(imgPath);
+          function buildPrompt(postTitle, category) {
             const categoryLine = category
               ? `The post's category is: "${category}". `
               : '';
-            const prompt =
+            return (
               'You are an SEO specialist writing an HTML alt attribute for an image ' +
               'on a Sinhala creative-fiction storytelling website named ' +
               `"${SITE_BRAND}" (Sinhala Wal Katha). ` +
@@ -151,8 +154,11 @@ jobs:
               categoryLine +
               `The blog post title for context is: "${postTitle}". ` +
               'Return ONLY the final alt text string, nothing else - no ' +
-              'explanation, no markdown, no surrounding punctuation.';
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+              'explanation, no markdown, no surrounding punctuation.'
+            );
+          }
+          async function callGeminiModel(modelName, base64Data, mimeType, prompt) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
             const body = {
               contents: [
                 {
@@ -170,12 +176,39 @@ jobs:
             });
             if (!res.ok) {
               const errText = await res.text().catch(() => '');
-              throw new Error(`Gemini API error ${res.status}: ${errText}`);
+              const err = new Error(`Gemini API error ${res.status}: ${errText}`);
+              err.status = res.status;
+              throw err;
             }
             const data = await res.json();
             const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
             if (!text) throw new Error('Empty response from Gemini API');
             return text.trim().replace(/^["']|["']$/g, '').slice(0, 160);
+          }
+          async function generateAltText(imgPath, postTitle, category) {
+            const imgBuffer = readFileSync(imgPath);
+            const base64Data = imgBuffer.toString('base64');
+            const mimeType = mimeFromExt(imgPath);
+            const prompt = buildPrompt(postTitle, category);
+            const modelsToTry = [GEMINI_MODEL_PRIMARY, ...GEMINI_MODEL_FALLBACKS];
+            let lastError = null;
+            for (const modelName of modelsToTry) {
+              try {
+                const result = await callGeminiModel(modelName, base64Data, mimeType, prompt);
+                if (modelName !== GEMINI_MODEL_PRIMARY) {
+                  console.warn(`NOTE: primary model "${GEMINI_MODEL_PRIMARY}" failed, succeeded using fallback model "${modelName}".`);
+                }
+                return result;
+              } catch (err) {
+                lastError = err;
+                if (err.status === 404) {
+                  console.warn(`Model "${modelName}" unavailable (404) - trying next fallback if any.`);
+                  continue;
+                }
+                throw err;
+              }
+            }
+            throw lastError || new Error('All Gemini model attempts failed.');
           }
           function upsertImageAltField(raw, altText) {
             const safeAlt = altText.replace(/"/g, "'");
