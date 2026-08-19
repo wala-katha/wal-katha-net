@@ -49,18 +49,21 @@ jobs:
           const POSTS_DIR = 'src/content/posts';
           const PUBLIC_DIR = 'public';
           const MAX_PER_RUN = 5;
-          // FIXED (2026-08): "gemini-2.5-flash" was deprecated by Google
-          // and returns a hard 404 for all new API keys ("no longer
-          // available to new users"). Google's own error message
-          // directed to switch to "gemini-3.6-flash" - confirmed via
-          // live workflow run logs. GEMINI_MODEL_FALLBACKS provides a
-          // small ordered retry chain so a future model deprecation
-          // does not silently break this workflow again - the first
-          // model that returns a non-404 response is used, and each
-          // attempt is logged for visibility.
           const GEMINI_MODEL_PRIMARY = 'gemini-3.6-flash';
           const GEMINI_MODEL_FALLBACKS = ['gemini-2.5-flash', 'gemini-flash-latest'];
           const SITE_BRAND = 'Wal Katha';
+          // Google Image Search LSI/secondary keyword cluster - one is
+          // picked deterministically per post (based on filename hash,
+          // not random per-run) so the same post always gets the same
+          // secondary keyword assigned across retries, avoiding
+          // inconsistent SEO signals if a run is re-triggered.
+          const SEO_KEYWORD_CLUSTER = [
+            'sinhala wal katha',
+            'aluth wal katha',
+            'wal katha 2026',
+            'wal katha story',
+            'wala katha collection',
+          ];
           const apiKey = process.env.GEMINI_API_KEY;
           if (!apiKey) {
             console.error('========================================');
@@ -80,6 +83,13 @@ jobs:
               .trim()
               .replace(/\s+/g, ' ')
               .replace(/^[a-z]/, (m) => m.toUpperCase());
+          }
+          function pickSecondaryKeyword(seedString) {
+            let hash = 0;
+            for (let i = 0; i < seedString.length; i++) {
+              hash = (hash * 31 + seedString.charCodeAt(i)) >>> 0;
+            }
+            return SEO_KEYWORD_CLUSTER[hash % SEO_KEYWORD_CLUSTER.length];
           }
           const files = readdirSync(POSTS_DIR).filter((f) => /\.(md|mdx)$/i.test(f) && !f.startsWith('-'));
           console.log(`DIAGNOSTIC: Scanned ${files.length} post file(s) in ${POSTS_DIR}.`);
@@ -101,7 +111,7 @@ jobs:
             const imgRelPath = String(fm.image).replace(/^\/+/, '');
             const imgAbsPath = join(PUBLIC_DIR, imgRelPath);
             if (!existsSync(imgAbsPath)) {
-              skippedReasons.push(`${file}: SKIPPED - image file NOT FOUND at "${imgAbsPath}". Check that this file was actually committed to the repo (case-sensitive path, correct extension).`);
+              skippedReasons.push(`${file}: SKIPPED - image file NOT FOUND at "${imgAbsPath}".`);
               continue;
             }
             const category = Array.isArray(fm.categories) && fm.categories.length > 0
@@ -112,6 +122,7 @@ jobs:
               title: fm.title || file,
               category,
               imgAbsPath,
+              secondaryKeyword: pickSecondaryKeyword(file),
             });
           }
           console.log('DIAGNOSTIC: --- Skip reasons for every non-candidate post ---');
@@ -134,27 +145,28 @@ jobs:
             if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
             return 'image/webp';
           }
-          function buildPrompt(postTitle, category) {
+          function buildPrompt(postTitle, category, secondaryKeyword) {
             const categoryLine = category
               ? `The post's category is: "${category}". `
               : '';
             return (
-              'You are an SEO specialist writing an HTML alt attribute for an image ' +
-              'on a Sinhala creative-fiction storytelling website named ' +
-              `"${SITE_BRAND}" (Sinhala Wal Katha). ` +
-              'Look at this image and write ONE natural, descriptive, ' +
-              'keyword-relevant alt text in the Sinhala language, under 125 ' +
-              'characters. Naturally weave in the site brand name ' +
-              `"${SITE_BRAND}" or "Wal Katha" EXACTLY ONCE, and the post's ` +
-              'category (if given) at most once - never repeat any keyword ' +
-              'more than once, and never write a comma-separated keyword list. ' +
-              'Do not use quotes in the output. Do not mention explicit/adult ' +
-              'content details - describe the general scene, setting, mood, ' +
-              'and visible elements only, safely and tastefully. ' +
+              `You are an expert Image SEO Specialist for Google Image Search, ` +
+              `targeting the primary brand query "${SITE_BRAND}" (Sinhala Wal Katha) ` +
+              'on a Sinhala creative-fiction storytelling website. ' +
+              'Analyze this image and write ONE highly descriptive, natural Sinhala ' +
+              'alt text under 120 characters. Requirements: ' +
+              `1. Naturally include "${SITE_BRAND}" or "Sinhala Wal Katha" near the ` +
+              'beginning of the text, EXACTLY ONCE. ' +
+              `2. If natural, also weave in this secondary search term ONCE: ` +
+              `"${secondaryKeyword}". ` +
               categoryLine +
-              `The blog post title for context is: "${postTitle}". ` +
-              'Return ONLY the final alt text string, nothing else - no ' +
-              'explanation, no markdown, no surrounding punctuation.'
+              `3. Include context from the post title ("${postTitle}") without ` +
+              'quoting it verbatim. ' +
+              '4. Describe visible colors, mood, setting, and objects clearly and ' +
+              'tastefully - never explicit/adult details. ' +
+              '5. Never repeat any keyword more than once, never write a ' +
+              'comma-separated keyword list, never use quotes or markdown. ' +
+              'Return ONLY the raw Sinhala alt text string, nothing else.'
             );
           }
           async function callGeminiModel(modelName, base64Data, mimeType, prompt) {
@@ -185,11 +197,11 @@ jobs:
             if (!text) throw new Error('Empty response from Gemini API');
             return text.trim().replace(/^["']|["']$/g, '').slice(0, 160);
           }
-          async function generateAltText(imgPath, postTitle, category) {
+          async function generateAltText(imgPath, postTitle, category, secondaryKeyword) {
             const imgBuffer = readFileSync(imgPath);
             const base64Data = imgBuffer.toString('base64');
             const mimeType = mimeFromExt(imgPath);
-            const prompt = buildPrompt(postTitle, category);
+            const prompt = buildPrompt(postTitle, category, secondaryKeyword);
             const modelsToTry = [GEMINI_MODEL_PRIMARY, ...GEMINI_MODEL_FALLBACKS];
             let lastError = null;
             for (const modelName of modelsToTry) {
@@ -201,8 +213,8 @@ jobs:
                 return result;
               } catch (err) {
                 lastError = err;
-                if (err.status === 404) {
-                  console.warn(`Model "${modelName}" unavailable (404) - trying next fallback if any.`);
+                if (err.status === 404 || err.status === 503) {
+                  console.warn(`Model "${modelName}" unavailable (${err.status}) - trying next fallback if any.`);
                   continue;
                 }
                 throw err;
@@ -228,7 +240,7 @@ jobs:
           const touched = [];
           for (const item of selected) {
             try {
-              const altText = await generateAltText(item.imgAbsPath, item.title, item.category);
+              const altText = await generateAltText(item.imgAbsPath, item.title, item.category, item.secondaryKeyword);
               const original = readFileSync(item.file, 'utf-8');
               const updatedRaw = upsertImageAltField(original, altText);
               if (!updatedRaw) {
@@ -260,7 +272,10 @@ jobs:
         id: commit
         if: steps.generate.outputs.has_changes == 'true'
         run: |
-          git add src/content/posts/*.md src/content/posts/*.mdx || true
+          git add src/content/posts/*.md || true
+          if [ -n "$(find src/content/posts -maxdepth 1 -name '*.mdx' 2>/dev/null)" ]; then
+            git add src/content/posts/*.mdx || true
+          fi
           if git diff --staged --quiet; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
@@ -287,11 +302,11 @@ jobs:
             const body = [
               '## 🤖 AI-Generated SEO Image Alt Text (Gemini Vision)',
               '',
-              'Gemini Vision API එකෙන් generate කරපු, "Wal Katha" brand keyword එකත් category keyword එකත් natural ලෙස ඇතුළත් කරගත් SEO alt text pull request එකකි.',
+              '"Wal Katha" brand keyword + LSI secondary keyword cluster එකකින් keyword එකක් + category natural ලෙස embed කරගත් SEO alt text PR එකකි.',
               '',
               '### ✅ Merge කරන්න කලින් check කරන්න:',
               '- [x] `yarn build` සාර්ථකව සම්පූර්ණ විය.',
-              '- [ ] Alt text descriptions නිවැරදිද, keyword stuffing නැති natural sentences ද කියලා manually review කරන්න.',
+              '- [ ] Alt text descriptions manually review කරන්න.',
               '',
               '### 📝 Generated Alt Text:',
               rows || '(none)',
