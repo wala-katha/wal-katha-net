@@ -36,7 +36,7 @@ jobs:
           cd /tmp/alttext-tool
           npm init -y
           npm install gray-matter@4
-      - name: Generate alt text via live Google Search grounding (Gemini)
+      - name: Generate alt text via Gemini Vision API
         id: generate
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -50,29 +50,23 @@ jobs:
           const POSTS_DIR = 'src/content/posts';
           const PUBLIC_DIR = 'public';
           const MAX_PER_RUN = 5;
-          // 2026-08 ROOT-CAUSE REWRITE: this workflow previously sent the
-          // actual image BYTES to Gemini Vision and asked it to describe
-          // what it visually saw ("analyze this image..."). That produced
-          // generic, camera-caption-style Sinhala text (e.g. "සුදු ඇඳුමින්
-          // සැරසුණු කාන්තාව") with near-zero Google Image Search ranking
-          // value, because Google Image SEO ranks primarily on TEXTUAL
-          // RELEVANCE SIGNALS (title/content/page context/real search
-          // query overlap) - not on whether the alt text visually matches
-          // the picture's pixels.
-          //
-          // PERMANENT FIX: image analysis is REMOVED ENTIRELY from this
-          // workflow. The model is now given ONLY the post's title,
-          // description, and category (real, verified metadata already in
-          // the post's own frontmatter - never guessed), and is required
-          // to use Gemini's Google Search grounding tool to look up REAL,
-          // CURRENT top-ranking search queries/keywords Sri Lankan readers
-          // actually type when searching for this kind of story on
-          // Google. The alt text is then built from those live,
-          // verified search-intent keywords - never from a visual guess
-          // at what the photo shows.
           const GEMINI_MODEL_PRIMARY = 'gemini-3.6-flash';
           const GEMINI_MODEL_FALLBACKS = ['gemini-2.5-flash', 'gemini-flash-latest'];
           const SINHALA_TAG = 'සිංහල වැල් කතා';
+          // Singlish (Latin-script) search-intent keyword cluster. One is
+          // picked deterministically per post (based on filename hash, not
+          // random per-run) so the same post always gets the same
+          // Singlish opener across retries. Placed at the START of the
+          // alt text because Google Image Crawler weighs the first 3-4
+          // words most heavily, and most Sri Lankan search traffic for
+          // this content types Singlish terms rather than Unicode Sinhala.
+          const SINGLISH_KEYWORD_CLUSTER = [
+            'sinhala wal katha',
+            'aluth wal katha',
+            'wal katha 2026',
+            'wal katha story',
+            'wala katha collection',
+          ];
           const apiKey = process.env.GEMINI_API_KEY;
           if (!apiKey) {
             console.error('========================================');
@@ -92,6 +86,13 @@ jobs:
               .trim()
               .replace(/\s+/g, ' ')
               .replace(/^[a-z]/, (m) => m.toUpperCase());
+          }
+          function pickSingaishKeyword(seedString) {
+            let hash = 0;
+            for (let i = 0; i < seedString.length; i++) {
+              hash = (hash * 31 + seedString.charCodeAt(i)) >>> 0;
+            }
+            return SINGLISH_KEYWORD_CLUSTER[hash % SINGLISH_KEYWORD_CLUSTER.length];
           }
           const files = readdirSync(POSTS_DIR).filter((f) => /\.(md|mdx)$/i.test(f) && !f.startsWith('-'));
           console.log(`DIAGNOSTIC: Scanned ${files.length} post file(s) in ${POSTS_DIR}.`);
@@ -116,19 +117,15 @@ jobs:
               skippedReasons.push(`${file}: SKIPPED - image file NOT FOUND at "${imgAbsPath}".`);
               continue;
             }
-            if (!fm.title) {
-              skippedReasons.push(`${file}: SKIPPED - no "title" field in frontmatter (required to identify the story).`);
-              continue;
-            }
             const category = Array.isArray(fm.categories) && fm.categories.length > 0
               ? humanizeSlug(fm.categories[0])
               : '';
             candidates.push({
               file: filePath,
-              title: fm.title,
-              description: fm.description || '',
+              title: fm.title || file,
               category,
-              tags: Array.isArray(fm.tags) ? fm.tags.map(humanizeSlug).filter(Boolean) : [],
+              imgAbsPath,
+              singlishKeyword: pickSingaishKeyword(file),
             });
           }
           console.log('DIAGNOSTIC: --- Skip reasons for every non-candidate post ---');
@@ -144,70 +141,78 @@ jobs:
             appendFileSync(process.env.GITHUB_OUTPUT, 'has_changes=false\n');
             process.exit(0);
           }
-          // STAGE 1 PROMPT: identify the story's real-world search topic
-          // purely from its own verified metadata (title/description/
-          // category/tags) - no invention, no guessing beyond what the
-          // post's own frontmatter states.
-          function buildIdentifyPrompt(post) {
-            return (
-              'You are analyzing a Sinhala creative-fiction story post on a ' +
-              'storytelling website, using ONLY the metadata provided below ' +
-              '(do not invent details not present here):\n\n' +
-              `Title: "${post.title}"\n` +
-              (post.description ? `Description: "${post.description}"\n` : '') +
-              (post.category ? `Category: "${post.category}"\n` : '') +
-              (post.tags.length ? `Tags: ${post.tags.join(', ')}\n` : '') +
-              '\nIn 1-2 short sentences, state what real-world relationship, ' +
-              'setting, or story theme this post is about (e.g. "අම්මා-පුතා ' +
-              'සම්බන්ධතාවක් පිළිබඳ කතාවක්", "බස් ගමනක් පදනම් කරගත් කතාවක්", ' +
-              '"ඔෆිස් පසුබිමක කතාවක්"), based strictly on the metadata above. ' +
-              'Do not describe any image. Return ONLY the 1-2 sentences.'
-            );
+          function mimeFromExt(p) {
+            const ext = p.split('.').pop().toLowerCase();
+            if (ext === 'webp') return 'image/webp';
+            if (ext === 'png') return 'image/png';
+            if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+            return 'image/webp';
           }
-          // STAGE 2 PROMPT: use Google Search grounding to find REAL,
-          // current top-ranking Google Search queries/keywords Sri Lankan
-          // readers use to search for this exact kind of story, then
-          // build the final alt text from those live-verified keywords.
-          function buildSeoPrompt(post, storyTopic) {
+          // STRICT SEO STRUCTURE PATTERN:
+          // "[Singlish Keyword] - [Human-Written Sinhala Context] | [සිංහල වැල් කතා]"
+          //
+          // Middle-segment design goals (2026-08 refinement):
+          // 1. NEVER use generic AI-filler nouns like "ඡායාරූපය"/"පින්තූරය" -
+          //    these carry zero Google Image SEO value and read as
+          //    machine-generated rather than human-written.
+          // 2. Blend a story-character role (නැන්දා, අක්කා, ටීචර්, නංගී,
+          //    බිරිඳ, etc.) with the visible details ONLY when that role
+          //    is a reasonable, natural fit for both the post title AND
+          //    what is actually visible in the image - this raises the
+          //    title+image co-occurrence relevance signal without
+          //    inventing details the image doesn't support. If no role
+          //    reasonably fits, a plain human descriptor (කාන්තාව/
+          //    තරුණිය/කෙල්ල) is used instead - accuracy is never
+          //    sacrificed for keyword richness.
+          // 3. Read exactly like a real Sri Lankan person naturally
+          //    labeling a story photo, not a robotic scene description.
+          function buildPrompt(postTitle, category, singlishKeyword) {
+            const categoryLine = category
+              ? `The post's category is: "${category}". `
+              : '';
             return (
-              'You are an expert Sri Lankan SEO strategist. Use Google Search ' +
-              'to research REAL, CURRENT top-ranking search queries and ' +
-              'keywords that Sri Lankan readers actually type into Google ' +
-              'when searching for Sinhala "wal katha" (වල් කතා) stories ' +
-              'matching this theme:\n\n' +
-              `Story theme: ${storyTopic}\n` +
-              `Post title: "${post.title}"\n` +
-              (post.category ? `Category: "${post.category}"\n` : '') +
-              '\nSearch Google for how real top-ranking pages and real user ' +
-              'queries phrase this type of story (both Singlish/Latin-script ' +
-              'terms like "aluth wal katha" and Sinhala-script terms). Then ' +
-              'generate ONE alt text string under 120 characters using this ' +
-              'EXACT structure:\n\n' +
-              `"[Live-verified Singlish search keyword] - [Natural Sinhala phrase describing the story theme, built from real search-query phrasing] | ${SINHALA_TAG}"\n\n` +
+              'You are an expert Sri Lankan SEO content strategist optimizing ' +
+              'photos for Google Image Search on a Sinhala creative-fiction ' +
+              'storytelling website. Analyze this image and generate ONE alt ' +
+              'text string under 120 characters, following this EXACT structure:\n\n' +
+              `"${singlishKeyword} - [Natural Human-Written Sinhala Context] | ${SINHALA_TAG}"\n\n` +
               'STRICT RULES: ' +
-              '1. The opening Singlish keyword MUST be a real, currently-used ' +
-              'search term you found via Google Search for this story type - ' +
-              'never invent one. ' +
-              '2. The middle Sinhala phrase must reflect real search-query ' +
-              'phrasing/topic relevance for this story theme, not a visual ' +
-              'description of any photo - never mention clothing, colors, ' +
-              'posture, or appearance, since no image was analyzed. ' +
-              '3. Never use filler words like "ඡායාරූපය" or "පින්තූරය". ' +
-              '4. Pure natural Sinhala in the middle section, no mixed ' +
-              'English/Singlish words there, no explicit/adult details. ' +
-              `5. End with " | ${SINHALA_TAG}" exactly once. Never repeat any ` +
-              'keyword, no comma-separated lists, no quotes, no markdown. ' +
+              `1. Start EXACTLY with "${singlishKeyword}" followed by a single ` +
+              'space, a hyphen, and a single space (" - "). ' +
+              '2. For the middle Sinhala part: NEVER use filler words like ' +
+              '"ඡායාරූපය" or "පින්තූරය" - they add no SEO value. ' +
+              `3. From the story title ("${postTitle}") ${categoryLine}try to ` +
+              'infer a natural character role (e.g. නැන්දා, දුව, කොල්ලා, බාප්පා, සියා, මස්සිනා, ටීචර්, ' +
+              'නංගී, බිරිඳ, මිනිහා, අයියා, මල්ලි, තාත්තා, මාමා, අංකල්, ලොකු තාත්තා, කෙල්ල) ONLY if it genuinely and plausibly matches ' +
+              'both the title and what is visibly shown in the image. If no ' +
+              'role clearly fits, use a plain natural descriptor instead ' +
+              '(කාන්තාව, තරුණිය) - never guess or invent a role the image ' +
+              "doesn't support. " +
+              '4. Blend that role naturally with real visible details ' +
+              '(clothing, color, posture, setting) exactly as a real Sri ' +
+              'Lankan person would casually caption a story photo - e.g. ' +
+              '"රෝස සාරියෙන් සැරසුණු නැන්දා" or "සාලයේ ඉන්න අක්කා". ' +
+              '5. Pure Sinhala phrasing only in the middle section - no ' +
+              'English/Singlish words mixed in, no robotic layout ' +
+              'descriptions, no explicit/adult details. ' +
+              `6. End with " | ${SINHALA_TAG}" exactly once. Never repeat ` +
+              'any keyword anywhere in the string, no comma-separated ' +
+              'keyword lists, no quotes, no markdown. ' +
               'Return ONLY the final raw alt text string, nothing else.'
             );
           }
-          async function callGeminiModel(modelName, prompt, useSearchGrounding) {
+          async function callGeminiModel(modelName, base64Data, mimeType, prompt) {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
             const body = {
-              contents: [{ parts: [{ text: prompt }] }],
+              contents: [
+                {
+                  parts: [
+                    { text: prompt },
+                    { inline_data: { mime_type: mimeType, data: base64Data } },
+                  ],
+                },
+              ],
             };
-            if (useSearchGrounding) {
-              body.tools = [{ google_search: {} }];
-            }
             const res = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -220,16 +225,20 @@ jobs:
               throw err;
             }
             const data = await res.json();
-            const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
-            if (!text.trim()) throw new Error('Empty response from Gemini API');
-            return text.trim();
+            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!text) throw new Error('Empty response from Gemini API');
+            return text.trim().replace(/^["']|["']$/g, '').slice(0, 160);
           }
-          async function callWithFallback(prompt, useSearchGrounding) {
+          async function generateAltText(imgPath, postTitle, category, singlishKeyword) {
+            const imgBuffer = readFileSync(imgPath);
+            const base64Data = imgBuffer.toString('base64');
+            const mimeType = mimeFromExt(imgPath);
+            const prompt = buildPrompt(postTitle, category, singlishKeyword);
             const modelsToTry = [GEMINI_MODEL_PRIMARY, ...GEMINI_MODEL_FALLBACKS];
             let lastError = null;
             for (const modelName of modelsToTry) {
               try {
-                const result = await callGeminiModel(modelName, prompt, useSearchGrounding);
+                const result = await callGeminiModel(modelName, base64Data, mimeType, prompt);
                 if (modelName !== GEMINI_MODEL_PRIMARY) {
                   console.warn(`NOTE: primary model "${GEMINI_MODEL_PRIMARY}" failed, succeeded using fallback model "${modelName}".`);
                 }
@@ -244,15 +253,6 @@ jobs:
               }
             }
             throw lastError || new Error('All Gemini model attempts failed.');
-          }
-          async function generateSeoAltText(post) {
-            const storyTopic = await callWithFallback(buildIdentifyPrompt(post), false);
-            const rawAlt = await callWithFallback(buildSeoPrompt(post, storyTopic), true);
-            return rawAlt
-              .replace(/^["']|["']$/g, '')
-              .replace(/\n/g, ' ')
-              .trim()
-              .slice(0, 160);
           }
           function upsertImageAltField(raw, altText) {
             const safeAlt = altText.replace(/"/g, "'");
@@ -272,7 +272,7 @@ jobs:
           const touched = [];
           for (const item of selected) {
             try {
-              const altText = await generateSeoAltText(item);
+              const altText = await generateAltText(item.imgAbsPath, item.title, item.category, item.singlishKeyword);
               const original = readFileSync(item.file, 'utf-8');
               const updatedRaw = upsertImageAltField(original, altText);
               if (!updatedRaw) {
@@ -286,7 +286,7 @@ jobs:
               }
               writeFileSync(item.file, updatedRaw, 'utf-8');
               touched.push({ file: item.file, title: item.title, alt: altText });
-              console.log(`Generated SEO alt text for ${item.file}: "${altText}"`);
+              console.log(`Generated alt text for ${item.file}: "${altText}"`);
             } catch (err) {
               console.warn(`Skipped ${item.file}: ${err.message}`);
             }
@@ -311,7 +311,7 @@ jobs:
           if git diff --staged --quiet; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
-            git commit -m "Auto: live-search-grounded SEO image alt text for posts (Gemini + Google Search)"
+            git commit -m "Auto: AI-generated SEO image alt text for posts (Gemini Vision)"
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Push branch
@@ -332,9 +332,9 @@ jobs:
               .map((s) => `- **${s.title}** (\`${s.file}\`)\n  Alt: _${s.alt}_`)
               .join('\n');
             const body = [
-              '## 🤖 Live-Search-Grounded SEO Image Alt Text',
+              '## 🤖 AI-Generated SEO Image Alt Text (Gemini Vision)',
               '',
-              'Image pixels කිසිවක් analyze කර නැත. Post title/description/category metadata එකෙන් කතාවේ topic එක තහවුරු කරගෙන, Gemini ගේ **Google Search grounding tool** හරහා real-time search results බලා, එම කතා වර්ගය සොයන පරිශීලකයන් ඇත්තටම භාවිත කරන search keywords වලින් alt text සකස් කර ඇත.',
+              'Structure: "[Singlish Keyword] - [Human-Written Sinhala Context with Story Role] | සිංහල වැල් කතා" — filler words (ඡායාරූපය/පින්තූරය) ඉවත් කර, character-role blending සමඟ Google Image Search co-occurrence signal එක ශක්තිමත් කිරීමකි.',
               '',
               '### ✅ Merge කරන්න කලින් check කරන්න:',
               '- [x] `yarn build` සාර්ථකව සම්පූර්ණ විය.',
@@ -348,7 +348,7 @@ jobs:
             await github.rest.pulls.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: '🤖 Auto: live-search-grounded SEO image alt text',
+              title: '🤖 Auto: AI-generated SEO image alt text',
               head: process.env.BRANCH_NAME,
               base: 'main',
               body,
