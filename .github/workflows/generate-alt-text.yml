@@ -39,16 +39,6 @@ jobs:
       - name: Generate alt text via live Google Search grounding (Gemini)
         id: generate
         env:
-          GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
-          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
-          GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
-          GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
-          GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
-          GEMINI_API_KEY_6: ${{ secrets.GEMINI_API_KEY_6 }}
-          GEMINI_API_KEY_7: ${{ secrets.GEMINI_API_KEY_7 }}
-          GEMINI_API_KEY_8: ${{ secrets.GEMINI_API_KEY_8 }}
-          GEMINI_API_KEY_9: ${{ secrets.GEMINI_API_KEY_9 }}
-          GEMINI_API_KEY_10: ${{ secrets.GEMINI_API_KEY_10 }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           node --input-type=module << 'EOF'
@@ -63,80 +53,38 @@ jobs:
           // 2026-08 ROOT-CAUSE REWRITE: this workflow previously sent the
           // actual image BYTES to Gemini Vision and asked it to describe
           // what it visually saw ("analyze this image..."). That produced
-          // generic, camera-caption-style Sinhala text with near-zero
-          // Google Image Search ranking value, because Google Image SEO
-          // ranks primarily on TEXTUAL RELEVANCE SIGNALS (title/content/
-          // page context/real search query overlap) - not on whether the
-          // alt text visually matches the picture's pixels.
+          // generic, camera-caption-style Sinhala text (e.g. "සුදු ඇඳුමින්
+          // සැරසුණු කාන්තාව") with near-zero Google Image Search ranking
+          // value, because Google Image SEO ranks primarily on TEXTUAL
+          // RELEVANCE SIGNALS (title/content/page context/real search
+          // query overlap) - not on whether the alt text visually matches
+          // the picture's pixels.
           //
           // PERMANENT FIX: image analysis is REMOVED ENTIRELY from this
           // workflow. The model is now given ONLY the post's title,
           // description, and category (real, verified metadata already in
-          // the post's own frontmatter), and is required to use Gemini's
-          // Google Search grounding tool to look up REAL, CURRENT
-          // top-ranking search queries/keywords Sri Lankan readers
+          // the post's own frontmatter - never guessed), and is required
+          // to use Gemini's Google Search grounding tool to look up REAL,
+          // CURRENT top-ranking search queries/keywords Sri Lankan readers
           // actually type when searching for this kind of story on
-          // Google.
-          //
-          // 2026-08-19 MULTI-KEY ROTATION FIX (429 RESOURCE_EXHAUSTED
-          // root cause): a single free-tier Gemini API key's quota was
-          // being fully consumed within one run (2 API calls per post -
-          // identify + search-grounded SEO - across 5 posts), causing
-          // every post that run to fail with HTTP 429 and leaving
-          // "touched" empty, which meant "has_changes=false" and the
-          // downstream commit/push/PR steps never ran (this is exactly
-          // why no PR was opened). The permanent fix: collect every
-          // available "GEMINI_API_KEY_N" secret (N=1..10) plus the
-          // legacy single "GEMINI_API_KEY" as a fallback into a rotation
-          // pool. Every Gemini API call now goes through a wrapper that,
-          // on a 429 or 403 (quota/permission exhaustion) response,
-          // automatically advances to the next key in the pool and
-          // retries the SAME request - completely transparent to the two
-          // prompt stages below. A short exponential backoff is also
-          // applied between attempts on the same call to absorb
-          // per-minute (not just per-day) rate limits without needing a
-          // key switch. This guarantees the run keeps making forward
-          // progress as long as ANY key in the pool still has quota left.
+          // Google. The alt text is then built from those live,
+          // verified search-intent keywords - never from a visual guess
+          // at what the photo shows.
           const GEMINI_MODEL_PRIMARY = 'gemini-3.6-flash';
           const GEMINI_MODEL_FALLBACKS = ['gemini-2.5-flash', 'gemini-flash-latest'];
           const SINHALA_TAG = 'සිංහල වැල් කතා';
-          const RATE_LIMIT_STATUSES = new Set([429, 403]);
-          const MODEL_UNAVAILABLE_STATUSES = new Set([404, 503]);
-          const apiKeyPool = [];
-          for (let i = 1; i <= 10; i++) {
-            const val = process.env[`GEMINI_API_KEY_${i}`];
-            if (val && val.trim()) apiKeyPool.push({ label: `GEMINI_API_KEY_${i}`, key: val.trim() });
-          }
-          if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
-            apiKeyPool.push({ label: 'GEMINI_API_KEY (legacy)', key: process.env.GEMINI_API_KEY.trim() });
-          }
-          if (apiKeyPool.length === 0) {
+          const apiKey = process.env.GEMINI_API_KEY;
+          if (!apiKey) {
             console.error('========================================');
-            console.error('DIAGNOSTIC: No Gemini API keys found.');
+            console.error('DIAGNOSTIC: GEMINI_API_KEY secret is NOT SET.');
             console.error('Go to: Settings > Secrets and variables > Actions');
-            console.error('and add repository secrets named GEMINI_API_KEY_1 .. GEMINI_API_KEY_10');
-            console.error('(or a single GEMINI_API_KEY as a fallback).');
+            console.error('and add a repository secret named GEMINI_API_KEY.');
             console.error('Skipping alt-text generation for this run.');
             console.error('========================================');
             appendFileSync(process.env.GITHUB_OUTPUT, 'has_changes=false\n');
             process.exit(0);
           }
-          console.log(`DIAGNOSTIC: Loaded ${apiKeyPool.length} Gemini API key(s) into rotation pool: ${apiKeyPool.map((k) => k.label).join(', ')}`);
-          let activeKeyIndex = 0;
-          function currentKey() {
-            return apiKeyPool[activeKeyIndex];
-          }
-          function rotateToNextKey() {
-            if (activeKeyIndex < apiKeyPool.length - 1) {
-              activeKeyIndex += 1;
-              console.warn(`KEY ROTATION: switching to "${currentKey().label}" (key ${activeKeyIndex + 1}/${apiKeyPool.length}).`);
-              return true;
-            }
-            return false;
-          }
-          function sleep(ms) {
-            return new Promise((resolve) => setTimeout(resolve, ms));
-          }
+          console.log('DIAGNOSTIC: GEMINI_API_KEY secret detected (length: ' + apiKey.length + ' chars).');
           function humanizeSlug(value) {
             if (!value) return '';
             return String(value)
@@ -252,7 +200,7 @@ jobs:
               'Return ONLY the final raw alt text string, nothing else.'
             );
           }
-          async function callGeminiModelWithKey(apiKey, modelName, prompt, useSearchGrounding) {
+          async function callGeminiModel(modelName, prompt, useSearchGrounding) {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
             const body = {
               contents: [{ parts: [{ text: prompt }] }],
@@ -276,51 +224,26 @@ jobs:
             if (!text.trim()) throw new Error('Empty response from Gemini API');
             return text.trim();
           }
-          // Rotation-aware wrapper: tries the CURRENT active key for the
-          // given model; on a 429/403 (quota/permission exhaustion),
-          // rotates to the next key in the pool and retries the same
-          // model+prompt combination before giving up on that model.
-          async function callWithKeyRotation(modelName, prompt, useSearchGrounding) {
-            let attemptsOnCurrentKey = 0;
-            while (true) {
-              const keyEntry = currentKey();
-              try {
-                return await callGeminiModelWithKey(keyEntry.key, modelName, prompt, useSearchGrounding);
-              } catch (err) {
-                if (RATE_LIMIT_STATUSES.has(err.status)) {
-                  attemptsOnCurrentKey += 1;
-                  console.warn(`Key "${keyEntry.label}" hit status ${err.status} on model "${modelName}" (attempt ${attemptsOnCurrentKey}).`);
-                  const rotated = rotateToNextKey();
-                  if (rotated) {
-                    await sleep(500);
-                    continue;
-                  }
-                  throw err;
-                }
-                throw err;
-              }
-            }
-          }
           async function callWithFallback(prompt, useSearchGrounding) {
             const modelsToTry = [GEMINI_MODEL_PRIMARY, ...GEMINI_MODEL_FALLBACKS];
             let lastError = null;
             for (const modelName of modelsToTry) {
               try {
-                const result = await callWithKeyRotation(modelName, prompt, useSearchGrounding);
+                const result = await callGeminiModel(modelName, prompt, useSearchGrounding);
                 if (modelName !== GEMINI_MODEL_PRIMARY) {
                   console.warn(`NOTE: primary model "${GEMINI_MODEL_PRIMARY}" failed, succeeded using fallback model "${modelName}".`);
                 }
                 return result;
               } catch (err) {
                 lastError = err;
-                if (MODEL_UNAVAILABLE_STATUSES.has(err.status)) {
+                if (err.status === 404 || err.status === 503) {
                   console.warn(`Model "${modelName}" unavailable (${err.status}) - trying next fallback if any.`);
                   continue;
                 }
                 throw err;
               }
             }
-            throw lastError || new Error('All Gemini model attempts failed across every model and every API key in the pool.');
+            throw lastError || new Error('All Gemini model attempts failed.');
           }
           async function generateSeoAltText(post) {
             const storyTopic = await callWithFallback(buildIdentifyPrompt(post), false);
@@ -368,7 +291,6 @@ jobs:
               console.warn(`Skipped ${item.file}: ${err.message}`);
             }
           }
-          console.log(`DIAGNOSTIC: Run finished using key "${currentKey().label}" (final active key, index ${activeKeyIndex + 1}/${apiKeyPool.length}).`);
           writeFileSync('/tmp/alttext-summary.json', JSON.stringify(touched, null, 2));
           appendFileSync(process.env.GITHUB_OUTPUT, `has_changes=${touched.length > 0 ? 'true' : 'false'}\n`);
           EOF
@@ -389,7 +311,7 @@ jobs:
           if git diff --staged --quiet; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
-            git commit -m "Auto: live-search-grounded SEO image alt text for posts (Gemini + Google Search, multi-key rotation)"
+            git commit -m "Auto: live-search-grounded SEO image alt text for posts (Gemini + Google Search)"
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Push branch
@@ -413,8 +335,6 @@ jobs:
               '## 🤖 Live-Search-Grounded SEO Image Alt Text',
               '',
               'Image pixels කිසිවක් analyze කර නැත. Post title/description/category metadata එකෙන් කතාවේ topic එක තහවුරු කරගෙන, Gemini ගේ **Google Search grounding tool** හරහා real-time search results බලා, එම කතා වර්ගය සොයන පරිශීලකයන් ඇත්තටම භාවිත කරන search keywords වලින් alt text සකස් කර ඇත.',
-              '',
-              'මෙම run එකේදී **API key rotation pool** එකක් (GEMINI_API_KEY_1 සිට GEMINI_API_KEY_10 දක්වා) භාවිත කර ඇත — එක key එකක් quota exhausted (429/403) වූ විට ස්වයංක්‍රීයව ඊළඟ key එකට මාරු වී continue වේ.',
               '',
               '### ✅ Merge කරන්න කලින් check කරන්න:',
               '- [x] `yarn build` සාර්ථකව සම්පූර්ණ විය.',
