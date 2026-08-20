@@ -4,6 +4,7 @@ meta_title: "Nandage Duwa wala katha | Sinhala Wal Katha"
 description: "මේක අහම්බෙන් සිදුවන සිද්ධියක්.. මේක උනේ මායි මගෙ cousin නංගී අතරෙ. මේක සත්‍ය සිද්ධියක් නිසා නම් සහ ගම වෙනස් කර ඉදිරිපත් කරන කතාවකි."
 date: 2026-06-18
 image: "/images/posts/Nandage-duwa-wal-katha.webp"
+image_alt: "aluth wal katha - කළු මල් ගවුමෙන් සැරසුණු නැන්දගේ දුව | සිංහල වැල් කතා"
 draft: false
 authors: ["WalKatha"]
 tags: ["akka-katha", "aluth-katha", "family-katha"]
