@@ -67,36 +67,48 @@ jobs:
           const SINHALA_TAG = 'සිංහල වැල් කතා';
           const RATE_LIMIT_STATUSES = new Set([429, 403]);
           const MODEL_UNAVAILABLE_STATUSES = new Set([404, 503]);
-          // 2026-08-20 ROOT-CAUSE FIX ROUND 3 (permanent, self-healing):
+          // 2026-08-20 ROOT-CAUSE FIX ROUND 4 (permanent, self-healing):
           //
-          // WHY ROUNDS 1 AND 2 STILL FAILED: both prior fixes hardcoded
-          // specific model ID strings (gemini-2.5-flash, gemini-2.0-flash,
-          // gemini-flash-latest, gemini-2.5-flash-lite,
-          // gemini-3-flash-preview). Google renames/retires Gemini model
-          // IDs frequently (confirmed via official docs: Gemini 2.0 Flash
-          // retired, Gemini 2.5 Flash renamed, Gemini 3 series already on
-          // its second preview generation with 3.5 shipped by June 2026).
-          // Any hardcoded model name list is guaranteed to go stale again.
+          // ROUND 3 STILL FAILED FOR TWO REASONS:
           //
-          // THE PERMANENT FIX: query the Gemini API's own official
-          // ListModels endpoint (GET /v1beta/models) at the START of the
-          // run, using the first working key. This returns the REAL,
-          // CURRENT list of models this API key actually has access to,
-          // each annotated with which methods (generateContent etc.) they
-          // support. The script then automatically builds its model
-          // fallback chain from models that are alive, self-reported by
-          // Google as generateContent-capable, and prefers Flash-tier
-          // models (fast + cheap + free-tier friendly) over Pro-tier
-          // ones. This makes the workflow immune to all future model
-          // renames with zero manual maintenance ever required again -
-          // if Google ships "gemini-4-flash" tomorrow, this script picks
-          // it up automatically on the next run without any code change.
+          // BUG 1 - WRONG MODEL TYPE IN CHAIN: rankModels() scored any
+          // name containing "flash" as tier-1/tier-2 without excluding
+          // non-text-generation variants. This let a model literally
+          // named "gemini-3.1-flash-lite-image" (an IMAGE generation
+          // model, confirmed via the API's own error response:
+          // "limit: 0" on every text-generation quota metric for that
+          // model on the free tier) into the fallback chain. Every
+          // attempt against it was guaranteed to fail with 429/quota=0
+          // regardless of key rotation, since the free tier grants ZERO
+          // request quota for that model - it is not a rate-limit that
+          // rotation or backoff can work around.
           //
-          // FALLBACK SAFETY: if ListModels itself fails for every key
-          // (e.g. total outage), the script falls back to a small
-          // hardcoded list of well-known model names as an absolute last
-          // resort, so the workflow never hard-crashes even in a total
-          // API outage - it just may not find a working model that run.
+          // THE FIX: excludeNonTextModels() filters out any model whose
+          // name matches known non-text-generation suffixes/keywords
+          // (image, vision, tts, audio, embedding, embed, aqa,
+          // live, realtime) BEFORE ranking, so the fallback chain can
+          // only ever contain genuine text-generation models.
+          //
+          // BUG 2 - ROTATION WINDOW TOO NARROW + BACKOFF TOO SHORT:
+          // MAX_KEYS_PER_MODEL_ATTEMPT was capped at 3, so with a
+          // 15-key pool, keys 4 through 15 were NEVER tried for any
+          // single model - the loop moved to the next fallback model
+          // after only 3 keys, even though 12 more untested keys
+          // remained in the pool. Backoff between key attempts was also
+          // only 400-1200ms, far short of the 18-47s Google's own
+          // RetryInfo told us to wait.
+          //
+          // THE FIX: MAX_KEYS_PER_MODEL_ATTEMPT raised to try every key
+          // in the pool for a given model (bounded by pool size, so this
+          // scales automatically with however many GEMINI_API_KEY_N
+          // secrets are configured - no hardcoded ceiling). Backoff is
+          // also widened to a capped exponential schedule (1s, 2s, 4s,
+          // 8s, capped at 10s) so consecutive attempts have a realistic
+          // chance of landing after a per-minute quota window resets,
+          // without making a single run run unreasonably long.
+          const NON_TEXT_MODEL_PATTERNS = [
+            'image', 'vision', 'tts', 'audio', 'embed', 'aqa', 'live', 'realtime',
+          ];
           const HARDCODED_FALLBACK_MODELS = [
             'gemini-flash-latest',
             'gemini-2.5-flash',
@@ -127,10 +139,7 @@ jobs:
           }
           // Live discovery: ask the Gemini API which models this key can
           // actually use right now for generateContent. Tries each key
-          // in turn until one successfully returns a model list (a key
-          // that is fully quota-exhausted may still succeed here, since
-          // ListModels is typically a much lighter/cheaper call than
-          // generateContent and often has a separate, higher quota).
+          // in turn until one successfully returns a model list.
           async function discoverAvailableModels() {
             for (const keyEntry of apiKeyPool) {
               try {
@@ -157,17 +166,25 @@ jobs:
             }
             return null;
           }
-          // Ranks discovered models so fast, cheap, stable Flash-tier
-          // models are tried first (best fit for a short alt-text task
-          // on a free-tier key pool), then Pro-tier, then anything else.
-          // Preview/experimental models are de-prioritized below stable
-          // ones since they tend to have tighter quotas or shorter
-          // lifespans, but are still included as later fallbacks rather
-          // than excluded outright.
+          // Excludes models whose name indicates a non-text-generation
+          // capability (image/vision/tts/audio/embedding/etc). Free-tier
+          // quota for these is frequently 0 for a text-only workload,
+          // and even when available they are the wrong tool for this
+          // task - generating plain alt-text strings, not images/audio.
+          function excludeNonTextModels(modelNames) {
+            return modelNames.filter((name) => {
+              const n = name.toLowerCase();
+              return !NON_TEXT_MODEL_PATTERNS.some((pattern) => n.includes(pattern));
+            });
+          }
+          // Ranks discovered (already text-only-filtered) models so
+          // fast, cheap, stable Flash-tier models are tried first, then
+          // Pro-tier, then anything else. Preview/experimental models
+          // are de-prioritized below stable ones.
           function rankModels(modelNames) {
             function score(name) {
               const n = name.toLowerCase();
-              if (n.includes('flash-lite')) return 0;
+              if (n.includes('flash-lite') && !n.includes('preview')) return 0;
               if (n.includes('flash') && !n.includes('preview') && !n.includes('exp')) return 1;
               if (n.includes('flash')) return 2;
               if (n.includes('pro') && !n.includes('preview') && !n.includes('exp')) return 3;
@@ -181,18 +198,25 @@ jobs:
             console.warn('DIAGNOSTIC: Live model discovery failed for every key - falling back to hardcoded model name list.');
             modelChain = HARDCODED_FALLBACK_MODELS;
           } else {
-            modelChain = rankModels(modelChain).slice(0, 5);
+            const textOnlyModels = excludeNonTextModels(modelChain);
+            if (textOnlyModels.length === 0) {
+              console.warn('DIAGNOSTIC: Every discovered model was filtered out as non-text-capable - falling back to hardcoded model name list.');
+              modelChain = HARDCODED_FALLBACK_MODELS;
+            } else {
+              modelChain = rankModels(textOnlyModels).slice(0, 6);
+            }
           }
           const GEMINI_MODEL_PRIMARY = modelChain[0];
-          const GEMINI_MODEL_FALLBACKS = modelChain.slice(1);
-          console.log(`DIAGNOSTIC: Model chain: ${modelChain.join(' -> ')}`);
-          // Bounded per-model key retry count. Real quota exhaustion
-          // (429) affecting the whole pool is common under heavy CI
-          // usage; retrying every key with backoff before giving up on
-          // a single model wastes time per post. Capping this means:
-          // try up to MAX_KEYS_PER_MODEL_ATTEMPT keys per model, then
-          // move to the next fallback model quickly.
-          const MAX_KEYS_PER_MODEL_ATTEMPT = 3;
+          console.log(`DIAGNOSTIC: Model chain (text-only, ranked): ${modelChain.join(' -> ')}`);
+          // Rotation now tries EVERY key in the pool for a given model
+          // (bounded only by pool size, so it scales automatically with
+          // however many GEMINI_API_KEY_N secrets are configured) before
+          // giving up on that model and moving to the next fallback.
+          // Backoff between attempts follows a capped exponential
+          // schedule so consecutive attempts have a realistic chance of
+          // landing after a per-minute quota window resets.
+          const MAX_KEYS_PER_MODEL_ATTEMPT = apiKeyPool.length;
+          const BACKOFF_SCHEDULE_MS = [1000, 2000, 4000, 8000, 10000];
           function humanizeSlug(value) {
             if (!value) return '';
             return String(value)
@@ -252,10 +276,6 @@ jobs:
             appendFileSync(process.env.GITHUB_OUTPUT, 'has_changes=false\n');
             process.exit(0);
           }
-          // STAGE 1 PROMPT: identify the story's real-world search topic
-          // purely from its own verified metadata (title/description/
-          // category/tags) - no invention, no guessing beyond what the
-          // post's own frontmatter states.
           function buildIdentifyPrompt(post) {
             return (
               'You are analyzing a Sinhala creative-fiction story post on a ' +
@@ -272,10 +292,6 @@ jobs:
               'Do not describe any image. Return ONLY the 1-2 sentences.'
             );
           }
-          // STAGE 2 PROMPT: use Google Search grounding to find REAL,
-          // current top-ranking Google Search queries/keywords Sri Lankan
-          // readers use to search for this exact kind of story, then
-          // build the final alt text from those live-verified keywords.
           function buildSeoPrompt(post, storyTopic) {
             return (
               'You are an expert Sri Lankan SEO strategist. Use Google Search ' +
@@ -332,13 +348,12 @@ jobs:
             if (!text.trim()) throw new Error('Empty response from Gemini API');
             return text.trim();
           }
-          // Rotation-aware wrapper: for the given model, tries keys
-          // starting fresh from index 0 each time this is called, up to
-          // MAX_KEYS_PER_MODEL_ATTEMPT keys, with a short capped backoff
+          // Rotation-aware wrapper: tries EVERY key in the pool for the
+          // given model (bounded by MAX_KEYS_PER_MODEL_ATTEMPT, which now
+          // equals the full pool size), with a capped exponential backoff
           // between rotations. On a 429/403 it rotates to the next key;
-          // on exhausting the bounded attempt window it throws so the
-          // caller can try the next model in the fallback chain quickly
-          // instead of hammering an already-exhausted pool.
+          // on exhausting the full pool it throws so the caller can try
+          // the next model in the fallback chain.
           async function callWithKeyRotation(modelName, prompt, useSearchGrounding) {
             let lastErr = null;
             const attemptCount = Math.min(apiKeyPool.length, MAX_KEYS_PER_MODEL_ATTEMPT);
@@ -355,7 +370,7 @@ jobs:
                 if (RATE_LIMIT_STATUSES.has(err.status)) {
                   console.warn(`Key "${keyEntry.label}" hit status ${err.status} on model "${modelName}".`);
                   if (i < attemptCount - 1) {
-                    const backoffMs = Math.min(400 * (i + 1), 1200);
+                    const backoffMs = BACKOFF_SCHEDULE_MS[Math.min(i, BACKOFF_SCHEDULE_MS.length - 1)];
                     await sleep(backoffMs);
                     continue;
                   }
@@ -481,7 +496,7 @@ jobs:
               '',
               'Image pixels කිසිවක් analyze කර නැත. Post title/description/category metadata එකෙන් කතාවේ topic එක තහවුරු කරගෙන, Gemini ගේ **Google Search grounding tool** හරහා real-time search results බලා, එම කතා වර්ගය සොයන පරිශීලකයන් ඇත්තටම භාවිත කරන search keywords වලින් alt text සකස් කර ඇත.',
               '',
-              `Model chain (live-discovered via ListModels API this run): \`${modelChain.join('\` → \`')}\`. API key rotation pool: **key 15ක්** — key එකක් quota exhausted (429/403) වූ විට ස්වයංක්‍රීයව ඊළඟ key එකට මාරු වේ.`,
+              `Model chain (live-discovered via ListModels API, text-generation models only, this run): \`${modelChain.join('\` → \`')}\`. API key rotation pool: **key 15ක්** — key එකක් quota exhausted (429/403) වූ විට ස්වයංක්‍රීයව ඊළඟ key එකට මාරු වේ, key 15ම try කරයි.`,
               '',
               '### ✅ Merge කරන්න කලින් check කරන්න:',
               '- [x] `yarn build` සාර්ථකව සම්පූර්ණ විය.',
