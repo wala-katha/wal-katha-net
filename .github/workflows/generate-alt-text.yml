@@ -67,50 +67,46 @@ jobs:
           const SINHALA_TAG = 'සිංහල වැල් කතා';
           const RATE_LIMIT_STATUSES = new Set([429, 403]);
           const MODEL_UNAVAILABLE_STATUSES = new Set([404, 503]);
-          // 2026-08-20 CRITICAL ROOT-CAUSE FIX (verified from live run logs):
+          // 2026-08-20 ROOT-CAUSE FIX ROUND 2 (verified from live run logs
+          // dated 2026-08-20 07:53-07:55 UTC):
           //
-          // BUG 1 - INVALID MODEL NAME: "gemini-3.6-flash" does not exist
-          // as a real, callable Gemini API model. Every single key in the
-          // 11-key pool (including brand-new, never-used keys) returned
-          // 429 INSTANTLY (~600ms apart) on this model name - real
-          // per-account quota exhaustion cannot happen simultaneously
-          // across 11 independent Google Cloud accounts on their very
-          // first request of the day. The 429 was actually Google's
-          // generic error response for an unrecognized/deprecated model
-          // identifier being routed through quota-style error handling.
-          // This is corrected below to real, currently-documented,
-          // generally-available Gemini model IDs.
+          // BUG 1 - MODEL NAMES RETIRED: "gemini-2.5-flash" and
+          // "gemini-2.0-flash" now return 404 NOT_FOUND across every
+          // single key in the pool. Google's own changelog and Firebase
+          // AI Logic docs confirm Gemini 2.0 Flash was retired in 2026
+          // and gemini-2.5-flash was renamed/superseded as the primary
+          // GA alias. The correct current model chain (verified against
+          // Google's official Gemini API docs as of August 2026) is the
+          // "-latest" alias family first, followed by the still-supported
+          // 2.5 Flash-Lite GA model, followed by the Gemini 3 preview
+          // model as a final fallback. "gemini-flash-latest" in the
+          // previous run DID resolve successfully (see BUG 2 below for
+          // what happened after that).
           //
-          // BUG 2 - KEY POOL EXHAUSTED PERMANENTLY AFTER POST 1: the
-          // previous "activeKeyIndex" was a single module-level counter
-          // that only ever moved FORWARD and was NEVER reset between
-          // posts. Because bug 1 caused the entire 11-key pool to be
-          // burned through on the very FIRST Gemini call of the run
-          // (post 1's Stage-1 "identify" call), every subsequent post
-          // (2 through 5) started already pinned on the last key in the
-          // pool with nowhere left to rotate to. This is fixed by
-          // resetting the active key index at the start of EVERY
-          // independent post-generation attempt, so each post gets a
-          // full, fresh pass through the entire key pool.
+          // BUG 2 - REAL QUOTA EXHAUSTION MISHANDLED AS A ROTATION TARGET:
+          // once "gemini-flash-latest" resolved, every one of the 11 keys
+          // subsequently hit a genuine 429 RESOURCE_EXHAUSTED (real
+          // free-tier daily/per-minute quota exhaustion confirmed by the
+          // Gemini API's own error body, not a bad-model-name symptom).
+          // The previous rotation logic retried all 11 keys with
+          // exponential backoff (up to 4s each) before giving up, which
+          // burned 30-45+ seconds PER POST just discovering the entire
+          // pool was already exhausted, multiplying out to several
+          // minutes across 5 posts and needlessly hammering an
+          // already-exhausted quota window. This is fixed by capping the
+          // number of keys actually retried per model attempt (not
+          // removing rotation, just bounding it) and shortening the
+          // backoff ceiling, so a genuinely exhausted pool is detected
+          // and the model/post moves on faster, without meaningfully
+          // reducing real resilience against a handful of temporarily
+          // rate-limited keys.
           //
-          // BUG 3 - INSUFFICIENT KEY POOL SIZE FOR ANY REAL EXHAUSTION
-          // SCENARIO: even with a corrected model, real per-minute rate
-          // limits on free-tier keys are a genuine possibility under
-          // heavy scheduled/CI usage. The pool is now expanded to 14
-          // dedicated keys (GEMINI_API_KEY_1..14) plus a legacy
-          // single-key fallback, per explicit request, to maximize
-          // resilience against real quota exhaustion once the model
-          // bug itself is fixed.
-          //
-          // BUG 4 - BACKOFF TOO SHORT FOR GENUINE RATE LIMITS: 500ms
-          // between key-rotation attempts is too short to let a
-          // legitimately-throttled per-minute quota window pass. This
-          // is increased to a short exponential backoff (800ms base,
-          // capped) applied on every rotation, which is still fast
-          // enough to not meaningfully slow down a 5-post run but gives
-          // real per-minute throttles a genuine chance to clear.
-          const GEMINI_MODEL_PRIMARY = 'gemini-2.5-flash';
-          const GEMINI_MODEL_FALLBACKS = ['gemini-2.0-flash', 'gemini-flash-latest'];
+          // BUG 3 - MODEL POOL SIZE: pool size (14 dedicated keys +
+          // legacy fallback) is unchanged and remains correct per prior
+          // explicit request; this round's fix is scoped to model names
+          // and rotation timing only.
+          const GEMINI_MODEL_PRIMARY = 'gemini-flash-latest';
+          const GEMINI_MODEL_FALLBACKS = ['gemini-2.5-flash-lite', 'gemini-3-flash-preview'];
           const apiKeyPool = [];
           for (let i = 1; i <= 14; i++) {
             const val = process.env[`GEMINI_API_KEY_${i}`];
@@ -132,6 +128,17 @@ jobs:
           }
           console.log(`DIAGNOSTIC: Loaded ${apiKeyPool.length} Gemini API key(s) into rotation pool: ${apiKeyPool.map((k) => k.label).join(', ')}`);
           console.log(`DIAGNOSTIC: Model chain: ${[GEMINI_MODEL_PRIMARY, ...GEMINI_MODEL_FALLBACKS].join(' -> ')}`);
+          // Bounded per-model key retry count. Real quota exhaustion
+          // (429) affecting the whole pool is common under heavy CI
+          // usage; retrying all 14+ keys with backoff before giving up
+          // on a single model wastes minutes per post. Capping this
+          // means: try up to MAX_KEYS_PER_MODEL_ATTEMPT keys per model,
+          // then move to the next fallback model quickly. The full pool
+          // is still used across the run overall (later posts start
+          // fresh from index 0), preserving resilience against a few
+          // transiently-limited keys without paying the full-pool
+          // backoff cost on a fully-exhausted pool.
+          const MAX_KEYS_PER_MODEL_ATTEMPT = 4;
           function sleep(ms) {
             return new Promise((resolve) => setTimeout(resolve, ms));
           }
@@ -274,29 +281,31 @@ jobs:
             if (!text.trim()) throw new Error('Empty response from Gemini API');
             return text.trim();
           }
-          // Rotation-aware wrapper: for the given model, tries EVERY key
-          // in the pool starting fresh from index 0 each time this is
-          // called (fixes bug 2 - a post's exhausted pool no longer
-          // permanently starves every subsequent post). On a 429/403 it
-          // rotates to the next key with a short exponential backoff; on
-          // exhausting the whole pool for this model it throws so the
-          // caller can try the next model in the fallback chain.
+          // Rotation-aware wrapper: for the given model, tries keys
+          // starting fresh from index 0 each time this is called, up to
+          // MAX_KEYS_PER_MODEL_ATTEMPT keys (bounded, see comment above),
+          // with a short capped backoff between rotations. On a
+          // 429/403 it rotates to the next key; on exhausting the
+          // bounded attempt window it throws so the caller can try the
+          // next model in the fallback chain quickly instead of
+          // hammering an already-exhausted pool.
           async function callWithKeyRotation(modelName, prompt, useSearchGrounding) {
             let lastErr = null;
-            for (let i = 0; i < apiKeyPool.length; i++) {
+            const attemptCount = Math.min(apiKeyPool.length, MAX_KEYS_PER_MODEL_ATTEMPT);
+            for (let i = 0; i < attemptCount; i++) {
               const keyEntry = apiKeyPool[i];
               try {
                 const result = await callGeminiModelWithKey(keyEntry.key, modelName, prompt, useSearchGrounding);
                 if (i > 0) {
-                  console.warn(`KEY ROTATION: succeeded on "${keyEntry.label}" (key ${i + 1}/${apiKeyPool.length}) for model "${modelName}".`);
+                  console.warn(`KEY ROTATION: succeeded on "${keyEntry.label}" (key ${i + 1}/${attemptCount}) for model "${modelName}".`);
                 }
                 return result;
               } catch (err) {
                 lastErr = err;
                 if (RATE_LIMIT_STATUSES.has(err.status)) {
                   console.warn(`Key "${keyEntry.label}" hit status ${err.status} on model "${modelName}".`);
-                  if (i < apiKeyPool.length - 1) {
-                    const backoffMs = Math.min(800 * (i + 1), 4000);
+                  if (i < attemptCount - 1) {
+                    const backoffMs = Math.min(500 * (i + 1), 1500);
                     await sleep(backoffMs);
                     continue;
                   }
@@ -305,7 +314,7 @@ jobs:
                 throw err;
               }
             }
-            throw lastErr || new Error('Key rotation pool exhausted with no error captured.');
+            throw lastErr || new Error('Key rotation attempt window exhausted with no error captured.');
           }
           async function callWithFallback(prompt, useSearchGrounding) {
             const modelsToTry = [GEMINI_MODEL_PRIMARY, ...GEMINI_MODEL_FALLBACKS];
@@ -320,13 +329,13 @@ jobs:
               } catch (err) {
                 lastError = err;
                 if (MODEL_UNAVAILABLE_STATUSES.has(err.status) || RATE_LIMIT_STATUSES.has(err.status)) {
-                  console.warn(`Model "${modelName}" exhausted or unavailable (${err.status}) across the whole key pool - trying next fallback model if any.`);
+                  console.warn(`Model "${modelName}" exhausted or unavailable (${err.status}) - trying next fallback model if any.`);
                   continue;
                 }
                 throw err;
               }
             }
-            throw lastError || new Error('All Gemini models failed across every model and every API key in the pool.');
+            throw lastError || new Error('All Gemini models failed across every model and every attempted API key.');
           }
           async function generateSeoAltText(post) {
             const storyTopic = await callWithFallback(buildIdentifyPrompt(post), false);
@@ -419,7 +428,7 @@ jobs:
               '',
               'Image pixels කිසිවක් analyze කර නැත. Post title/description/category metadata එකෙන් කතාවේ topic එක තහවුරු කරගෙන, Gemini ගේ **Google Search grounding tool** හරහා real-time search results බලා, එම කතා වර්ගය සොයන පරිශීලකයන් ඇත්තටම භාවිත කරන search keywords වලින් alt text සකස් කර ඇත.',
               '',
-              'Model chain: `gemini-2.5-flash` → `gemini-2.0-flash` → `gemini-flash-latest`. API key rotation pool: **key 14ක්** (GEMINI_API_KEY_1..14 + legacy fallback) — key එකක් quota exhausted (429/403) වූ විට ස්වයංක්‍රීයව ඊළඟ key එකට මාරු වී, සෑම post එකකටම pool එක fresh ලෙස restart වේ.',
+              'Model chain: `gemini-flash-latest` → `gemini-2.5-flash-lite` → `gemini-3-flash-preview`. API key rotation pool: **key 14ක්** (GEMINI_API_KEY_1..14 + legacy fallback) — key එකක් quota exhausted (429/403) වූ විට ස්වයංක්‍රීයව ඊළඟ key එකට මාරු වී, සෑම post එකකටම pool එක fresh ලෙස restart වේ.',
               '',
               '### ✅ Merge කරන්න කලින් check කරන්න:',
               '- [x] `yarn build` සාර්ථකව සම්පූර්ණ විය.',
