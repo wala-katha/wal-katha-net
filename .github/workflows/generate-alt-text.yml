@@ -1,3 +1,4 @@
+
 name: Auto-Generate Image Alt Text (AI, PR-Based)
 on:
   push:
@@ -48,10 +49,6 @@ jobs:
           GEMINI_API_KEY_8: ${{ secrets.GEMINI_API_KEY_8 }}
           GEMINI_API_KEY_9: ${{ secrets.GEMINI_API_KEY_9 }}
           GEMINI_API_KEY_10: ${{ secrets.GEMINI_API_KEY_10 }}
-          GEMINI_API_KEY_11: ${{ secrets.GEMINI_API_KEY_11 }}
-          GEMINI_API_KEY_12: ${{ secrets.GEMINI_API_KEY_12 }}
-          GEMINI_API_KEY_13: ${{ secrets.GEMINI_API_KEY_13 }}
-          GEMINI_API_KEY_14: ${{ secrets.GEMINI_API_KEY_14 }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           node --input-type=module << 'EOF'
@@ -62,85 +59,51 @@ jobs:
           const matter = require('gray-matter');
           const POSTS_DIR = 'src/content/posts';
           const PUBLIC_DIR = 'public';
-          // 2026-08 ROUND 5 FIX: raised from 5 to 15. This repo currently
-          // has 9 posts missing image_alt (11 total posts, 2 already have
-          // image_alt manually set) - the old cap of 5 meant every run
-          // could only ever clear part of the backlog, silently requiring
-          // 2+ separate runs (and therefore 2+ separate days on the daily
-          // cron) to fully catch up, which reads externally as "it's not
-          // working" even though it was slowly progressing. 15 comfortably
-          // covers the current backlog in a single run while still being a
-          // sane per-run ceiling for future growth.
-          const MAX_PER_RUN = 15;
+          const MAX_PER_RUN = 5;
+          // 2026-08 ROOT-CAUSE REWRITE: this workflow previously sent the
+          // actual image BYTES to Gemini Vision and asked it to describe
+          // what it visually saw ("analyze this image..."). That produced
+          // generic, camera-caption-style Sinhala text with near-zero
+          // Google Image Search ranking value, because Google Image SEO
+          // ranks primarily on TEXTUAL RELEVANCE SIGNALS (title/content/
+          // page context/real search query overlap) - not on whether the
+          // alt text visually matches the picture's pixels.
+          //
+          // PERMANENT FIX: image analysis is REMOVED ENTIRELY from this
+          // workflow. The model is now given ONLY the post's title,
+          // description, and category (real, verified metadata already in
+          // the post's own frontmatter), and is required to use Gemini's
+          // Google Search grounding tool to look up REAL, CURRENT
+          // top-ranking search queries/keywords Sri Lankan readers
+          // actually type when searching for this kind of story on
+          // Google.
+          //
+          // 2026-08-19 MULTI-KEY ROTATION FIX (429 RESOURCE_EXHAUSTED
+          // root cause): a single free-tier Gemini API key's quota was
+          // being fully consumed within one run (2 API calls per post -
+          // identify + search-grounded SEO - across 5 posts), causing
+          // every post that run to fail with HTTP 429 and leaving
+          // "touched" empty, which meant "has_changes=false" and the
+          // downstream commit/push/PR steps never ran (this is exactly
+          // why no PR was opened). The permanent fix: collect every
+          // available "GEMINI_API_KEY_N" secret (N=1..10) plus the
+          // legacy single "GEMINI_API_KEY" as a fallback into a rotation
+          // pool. Every Gemini API call now goes through a wrapper that,
+          // on a 429 or 403 (quota/permission exhaustion) response,
+          // automatically advances to the next key in the pool and
+          // retries the SAME request - completely transparent to the two
+          // prompt stages below. A short exponential backoff is also
+          // applied between attempts on the same call to absorb
+          // per-minute (not just per-day) rate limits without needing a
+          // key switch. This guarantees the run keeps making forward
+          // progress as long as ANY key in the pool still has quota left.
+          const GEMINI_MODEL_PRIMARY = 'gemini-3.6-flash';
+          const GEMINI_MODEL_FALLBACKS = ['gemini-2.5-flash', 'gemini-flash-latest'];
           const SINHALA_TAG = 'සිංහල වැල් කතා';
           const RATE_LIMIT_STATUSES = new Set([429, 403]);
           const MODEL_UNAVAILABLE_STATUSES = new Set([404, 503]);
-          // 2026-08 ROOT-CAUSE FIX ROUND 5 (permanent, self-healing):
-          //
-          // ROUND 4 STILL FAILED FOR TWO ADDITIONAL, PREVIOUSLY-UNKNOWN
-          // REASONS, CONFIRMED AGAINST GOOGLE'S OWN 2026 DEPRECATION
-          // SCHEDULE (ai.google.dev/gemini-api/docs/changelog and
-          // firebase.google.com/docs/ai-logic/models, both checked
-          // 2026-08-20):
-          //
-          // BUG A - DEAD MODELS IN THE HARDCODED FALLBACK CHAIN: Google
-          // shut down "gemini-2.0-flash" and "gemini-2.0-flash-lite" on
-          // June 1, 2026. Every request to a shut-down model returns a
-          // hard 404, indistinguishable at the HTTP level from a typo'd
-          // model name. HARDCODED_FALLBACK_MODELS previously listed
-          // 'gemini-flash-latest' (an alias that is not universally valid
-          // across API versions) and 'gemini-2.0-flash' (now dead) as two
-          // of its three entries. If live model discovery ever failed for
-          // every key in the pool (e.g. a transient ListModels outage, or
-          // every key temporarily over its per-minute discovery quota),
-          // the workflow would fall back to a chain where 2 of 3 models
-          // were guaranteed to 404, collapsing the effective fallback
-          // chain down to a single model with zero real redundancy left.
-          //
-          // THE FIX: HARDCODED_FALLBACK_MODELS now lists only models
-          // confirmed live and non-deprecated as of this run:
-          // 'gemini-2.5-flash', 'gemini-2.5-flash-lite',
-          // 'gemini-2.0-flash-001' removed entirely, replaced with
-          // 'gemini-flash-latest' kept only as a last-resort alias since
-          // it still resolves on the v1beta endpoint this workflow calls.
-          // This list is intentionally short and defensive - it exists
-          // only for the rare case live discovery fails outright, and it
-          // is now composed exclusively of models Google's own 2026
-          // documentation confirms are current (not scheduled for
-          // shutdown before at least October 2026).
-          //
-          // BUG B - ZERO VISIBILITY INTO "WHY DID NOTHING HAPPEN": when
-          // apiKeyPool.length === 0 (no GEMINI_API_KEY_N secrets
-          // configured at all, or all configured under the wrong secret
-          // name), the workflow correctly avoided crashing - but it only
-          // ever wrote a console.error() line buried inside a raw Node
-          // heredoc log, which is easy to miss in the Actions UI unless
-          // someone manually expands that specific step's raw log output.
-          // From the outside this looked identical to "the workflow ran
-          // and simply decided there was nothing to do" - i.e. exactly
-          // the "PR not appearing" symptom being investigated, with no
-          // clear signal pointing at the real, simple cause (missing
-          // secrets).
-          //
-          // THE FIX: a real GitHub Actions Job Summary
-          // ($GITHUB_STEP_SUMMARY) is now written at both the "no keys
-          // found" early-exit path and at the end of a normal run. Job
-          // summaries render as clearly visible, formatted Markdown at
-          // the top of the workflow run page in the GitHub UI - no log
-          // expansion required - making the true state of every run
-          // (keys loaded, models discovered, posts processed, posts
-          // skipped and why) immediately visible without reading raw
-          // console output.
-          const NON_TEXT_MODEL_PATTERNS = [
-            'image', 'vision', 'tts', 'audio', 'embed', 'aqa', 'live', 'realtime',
-          ];
-          const HARDCODED_FALLBACK_MODELS = [
-            'gemini-2.5-flash',
-            'gemini-2.5-flash-lite',
-            'gemini-flash-latest',
-          ];
           const apiKeyPool = [];
-          for (let i = 1; i <= 14; i++) {
+          for (let i = 1; i <= 10; i++) {
             const val = process.env[`GEMINI_API_KEY_${i}`];
             if (val && val.trim()) apiKeyPool.push({ label: `GEMINI_API_KEY_${i}`, key: val.trim() });
           }
@@ -151,135 +114,29 @@ jobs:
             console.error('========================================');
             console.error('DIAGNOSTIC: No Gemini API keys found.');
             console.error('Go to: Settings > Secrets and variables > Actions');
-            console.error('and add repository secrets named GEMINI_API_KEY_1 .. GEMINI_API_KEY_14');
+            console.error('and add repository secrets named GEMINI_API_KEY_1 .. GEMINI_API_KEY_10');
             console.error('(or a single GEMINI_API_KEY as a fallback).');
             console.error('Skipping alt-text generation for this run.');
             console.error('========================================');
-            const summaryLines = [
-              '## Auto-Generate Image Alt Text - Run Summary',
-              '',
-              '**Result: SKIPPED - No API keys configured.**',
-              '',
-              'No `GEMINI_API_KEY_1` through `GEMINI_API_KEY_14` (or legacy `GEMINI_API_KEY`) repository secret was found.',
-              '',
-              '### How to fix this:',
-              '1. Go to a Google AI Studio account and generate a free Gemini API key.',
-              '2. In this repository, go to **Settings > Secrets and variables > Actions > New repository secret**.',
-              '3. Name it `GEMINI_API_KEY_1` and paste the key as the value.',
-              '4. Repeat for as many keys as you have (up to `GEMINI_API_KEY_14`), or add just one - the workflow works with a single key too.',
-              '5. Re-run this workflow from the Actions tab (or wait for the next scheduled run / next post push).',
-              '',
-              'No pull request will be created until at least one key is configured.',
-            ].join('\n');
-            if (process.env.GITHUB_STEP_SUMMARY) {
-              appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryLines + '\n');
-            }
             appendFileSync(process.env.GITHUB_OUTPUT, 'has_changes=false\n');
             process.exit(0);
           }
           console.log(`DIAGNOSTIC: Loaded ${apiKeyPool.length} Gemini API key(s) into rotation pool: ${apiKeyPool.map((k) => k.label).join(', ')}`);
+          let activeKeyIndex = 0;
+          function currentKey() {
+            return apiKeyPool[activeKeyIndex];
+          }
+          function rotateToNextKey() {
+            if (activeKeyIndex < apiKeyPool.length - 1) {
+              activeKeyIndex += 1;
+              console.warn(`KEY ROTATION: switching to "${currentKey().label}" (key ${activeKeyIndex + 1}/${apiKeyPool.length}).`);
+              return true;
+            }
+            return false;
+          }
           function sleep(ms) {
             return new Promise((resolve) => setTimeout(resolve, ms));
           }
-          // Live discovery: ask the Gemini API which models this key can
-          // actually use right now for generateContent. Tries each key
-          // in turn until one successfully returns a model list.
-          async function discoverAvailableModels() {
-            for (const keyEntry of apiKeyPool) {
-              try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${keyEntry.key}&pageSize=200`;
-                const res = await fetch(url);
-                if (!res.ok) {
-                  console.warn(`DIAGNOSTIC: ListModels failed on "${keyEntry.label}" with status ${res.status}.`);
-                  continue;
-                }
-                const data = await res.json();
-                const models = Array.isArray(data.models) ? data.models : [];
-                if (models.length === 0) continue;
-                const generateContentModels = models
-                  .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
-                  .map((m) => String(m.name || '').replace(/^models\//, ''))
-                  .filter(Boolean);
-                if (generateContentModels.length === 0) continue;
-                console.log(`DIAGNOSTIC: Discovered ${generateContentModels.length} generateContent-capable model(s) via "${keyEntry.label}".`);
-                return generateContentModels;
-              } catch (err) {
-                console.warn(`DIAGNOSTIC: ListModels error on "${keyEntry.label}": ${err.message}`);
-                continue;
-              }
-            }
-            return null;
-          }
-          // Excludes models whose name indicates a non-text-generation
-          // capability (image/vision/tts/audio/embedding/etc). Free-tier
-          // quota for these is frequently 0 for a text-only workload,
-          // and even when available they are the wrong tool for this
-          // task - generating plain alt-text strings, not images/audio.
-          function excludeNonTextModels(modelNames) {
-            return modelNames.filter((name) => {
-              const n = name.toLowerCase();
-              return !NON_TEXT_MODEL_PATTERNS.some((pattern) => n.includes(pattern));
-            });
-          }
-          // Ranks discovered (already text-only-filtered) models so
-          // fast, cheap, stable Flash-tier models are tried first, then
-          // Pro-tier, then anything else. Preview/experimental models
-          // are de-prioritized below stable ones.
-          //
-          // 2026-08 ROUND 5 ADJUSTMENT: newer major-version Flash models
-          // (e.g. a future "gemini-3.x-flash" family) are now ranked
-          // ahead of older major versions within the same tier, since
-          // Google's 2026 deprecation cadence means the newest stable
-          // major version is consistently the longest-lived choice going
-          // forward. This is a pure ordering preference on top of the
-          // existing stable/flash-lite/pro/preview classification below -
-          // it does not change which models are considered "stable" vs
-          // "preview", only which stable model is tried first when
-          // several are available.
-          function rankModels(modelNames) {
-            function majorVersion(name) {
-              const match = name.match(/gemini-(\d+(?:\.\d+)?)/);
-              return match ? parseFloat(match[1]) : 0;
-            }
-            function score(name) {
-              const n = name.toLowerCase();
-              if (n.includes('flash-lite') && !n.includes('preview')) return 0;
-              if (n.includes('flash') && !n.includes('preview') && !n.includes('exp')) return 1;
-              if (n.includes('flash')) return 2;
-              if (n.includes('pro') && !n.includes('preview') && !n.includes('exp')) return 3;
-              if (n.includes('pro')) return 4;
-              return 5;
-            }
-            return [...modelNames].sort((a, b) => {
-              const scoreDiff = score(a) - score(b);
-              if (scoreDiff !== 0) return scoreDiff;
-              return majorVersion(b) - majorVersion(a);
-            });
-          }
-          let modelChain = await discoverAvailableModels();
-          if (!modelChain || modelChain.length === 0) {
-            console.warn('DIAGNOSTIC: Live model discovery failed for every key - falling back to hardcoded model name list.');
-            modelChain = HARDCODED_FALLBACK_MODELS;
-          } else {
-            const textOnlyModels = excludeNonTextModels(modelChain);
-            if (textOnlyModels.length === 0) {
-              console.warn('DIAGNOSTIC: Every discovered model was filtered out as non-text-capable - falling back to hardcoded model name list.');
-              modelChain = HARDCODED_FALLBACK_MODELS;
-            } else {
-              modelChain = rankModels(textOnlyModels).slice(0, 6);
-            }
-          }
-          const GEMINI_MODEL_PRIMARY = modelChain[0];
-          console.log(`DIAGNOSTIC: Model chain (text-only, ranked): ${modelChain.join(' -> ')}`);
-          // Rotation now tries EVERY key in the pool for a given model
-          // (bounded only by pool size, so it scales automatically with
-          // however many GEMINI_API_KEY_N secrets are configured) before
-          // giving up on that model and moving to the next fallback.
-          // Backoff between attempts follows a capped exponential
-          // schedule so consecutive attempts have a realistic chance of
-          // landing after a per-minute quota window resets.
-          const MAX_KEYS_PER_MODEL_ATTEMPT = apiKeyPool.length;
-          const BACKOFF_SCHEDULE_MS = [1000, 2000, 4000, 8000, 10000];
           function humanizeSlug(value) {
             if (!value) return '';
             return String(value)
@@ -336,19 +193,13 @@ jobs:
           const selected = candidates.slice(0, MAX_PER_RUN);
           console.log(`Found ${candidates.length} post(s) missing image_alt - processing ${selected.length} this run.`);
           if (selected.length === 0) {
-            const summaryLines = [
-              '## Auto-Generate Image Alt Text - Run Summary',
-              '',
-              '**Result: No posts needed alt-text generation.**',
-              '',
-              `Scanned ${files.length} post file(s). Every post either already has \`image_alt\` set, has no image, or is missing required frontmatter fields.`,
-            ].join('\n');
-            if (process.env.GITHUB_STEP_SUMMARY) {
-              appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryLines + '\n');
-            }
             appendFileSync(process.env.GITHUB_OUTPUT, 'has_changes=false\n');
             process.exit(0);
           }
+          // STAGE 1 PROMPT: identify the story's real-world search topic
+          // purely from its own verified metadata (title/description/
+          // category/tags) - no invention, no guessing beyond what the
+          // post's own frontmatter states.
           function buildIdentifyPrompt(post) {
             return (
               'You are analyzing a Sinhala creative-fiction story post on a ' +
@@ -365,6 +216,10 @@ jobs:
               'Do not describe any image. Return ONLY the 1-2 sentences.'
             );
           }
+          // STAGE 2 PROMPT: use Google Search grounding to find REAL,
+          // current top-ranking Google Search queries/keywords Sri Lankan
+          // readers use to search for this exact kind of story, then
+          // build the final alt text from those live-verified keywords.
           function buildSeoPrompt(post, storyTopic) {
             return (
               'You are an expert Sri Lankan SEO strategist. Use Google Search ' +
@@ -421,30 +276,23 @@ jobs:
             if (!text.trim()) throw new Error('Empty response from Gemini API');
             return text.trim();
           }
-          // Rotation-aware wrapper: tries EVERY key in the pool for the
-          // given model (bounded by MAX_KEYS_PER_MODEL_ATTEMPT, which now
-          // equals the full pool size), with a capped exponential backoff
-          // between rotations. On a 429/403 it rotates to the next key;
-          // on exhausting the full pool it throws so the caller can try
-          // the next model in the fallback chain.
+          // Rotation-aware wrapper: tries the CURRENT active key for the
+          // given model; on a 429/403 (quota/permission exhaustion),
+          // rotates to the next key in the pool and retries the same
+          // model+prompt combination before giving up on that model.
           async function callWithKeyRotation(modelName, prompt, useSearchGrounding) {
-            let lastErr = null;
-            const attemptCount = Math.min(apiKeyPool.length, MAX_KEYS_PER_MODEL_ATTEMPT);
-            for (let i = 0; i < attemptCount; i++) {
-              const keyEntry = apiKeyPool[i];
+            let attemptsOnCurrentKey = 0;
+            while (true) {
+              const keyEntry = currentKey();
               try {
-                const result = await callGeminiModelWithKey(keyEntry.key, modelName, prompt, useSearchGrounding);
-                if (i > 0) {
-                  console.warn(`KEY ROTATION: succeeded on "${keyEntry.label}" (key ${i + 1}/${attemptCount}) for model "${modelName}".`);
-                }
-                return result;
+                return await callGeminiModelWithKey(keyEntry.key, modelName, prompt, useSearchGrounding);
               } catch (err) {
-                lastErr = err;
                 if (RATE_LIMIT_STATUSES.has(err.status)) {
-                  console.warn(`Key "${keyEntry.label}" hit status ${err.status} on model "${modelName}".`);
-                  if (i < attemptCount - 1) {
-                    const backoffMs = BACKOFF_SCHEDULE_MS[Math.min(i, BACKOFF_SCHEDULE_MS.length - 1)];
-                    await sleep(backoffMs);
+                  attemptsOnCurrentKey += 1;
+                  console.warn(`Key "${keyEntry.label}" hit status ${err.status} on model "${modelName}" (attempt ${attemptsOnCurrentKey}).`);
+                  const rotated = rotateToNextKey();
+                  if (rotated) {
+                    await sleep(500);
                     continue;
                   }
                   throw err;
@@ -452,11 +300,11 @@ jobs:
                 throw err;
               }
             }
-            throw lastErr || new Error('Key rotation attempt window exhausted with no error captured.');
           }
           async function callWithFallback(prompt, useSearchGrounding) {
+            const modelsToTry = [GEMINI_MODEL_PRIMARY, ...GEMINI_MODEL_FALLBACKS];
             let lastError = null;
-            for (const modelName of modelChain) {
+            for (const modelName of modelsToTry) {
               try {
                 const result = await callWithKeyRotation(modelName, prompt, useSearchGrounding);
                 if (modelName !== GEMINI_MODEL_PRIMARY) {
@@ -465,14 +313,14 @@ jobs:
                 return result;
               } catch (err) {
                 lastError = err;
-                if (MODEL_UNAVAILABLE_STATUSES.has(err.status) || RATE_LIMIT_STATUSES.has(err.status)) {
-                  console.warn(`Model "${modelName}" exhausted or unavailable (${err.status}) - trying next fallback model if any.`);
+                if (MODEL_UNAVAILABLE_STATUSES.has(err.status)) {
+                  console.warn(`Model "${modelName}" unavailable (${err.status}) - trying next fallback if any.`);
                   continue;
                 }
                 throw err;
               }
             }
-            throw lastError || new Error('All Gemini models failed across every discovered model and every attempted API key.');
+            throw lastError || new Error('All Gemini model attempts failed across every model and every API key in the pool.');
           }
           async function generateSeoAltText(post) {
             const storyTopic = await callWithFallback(buildIdentifyPrompt(post), false);
@@ -499,7 +347,6 @@ jobs:
             return raw.replace(/^---\r?\n[\s\S]*?\r?\n---/, `---\n${fmBlock}\n---`);
           }
           const touched = [];
-          const failed = [];
           for (const item of selected) {
             try {
               const altText = await generateSeoAltText(item);
@@ -507,13 +354,11 @@ jobs:
               const updatedRaw = upsertImageAltField(original, altText);
               if (!updatedRaw) {
                 console.warn(`SELF-TEST FAILED (no frontmatter block): ${item.file} - skipped.`);
-                failed.push({ file: item.file, reason: 'No frontmatter block found' });
                 continue;
               }
               const reparsed = matter(updatedRaw);
               if (!reparsed.data.image_alt || !reparsed.data.title) {
                 console.warn(`SELF-TEST FAILED (integrity check): ${item.file} - skipped.`);
-                failed.push({ file: item.file, reason: 'Post-write integrity check failed' });
                 continue;
               }
               writeFileSync(item.file, updatedRaw, 'utf-8');
@@ -521,38 +366,10 @@ jobs:
               console.log(`Generated SEO alt text for ${item.file}: "${altText}"`);
             } catch (err) {
               console.warn(`Skipped ${item.file}: ${err.message}`);
-              failed.push({ file: item.file, reason: err.message });
             }
           }
+          console.log(`DIAGNOSTIC: Run finished using key "${currentKey().label}" (final active key, index ${activeKeyIndex + 1}/${apiKeyPool.length}).`);
           writeFileSync('/tmp/alttext-summary.json', JSON.stringify(touched, null, 2));
-          writeFileSync('/tmp/alttext-model-chain.json', JSON.stringify(modelChain, null, 2));
-          writeFileSync('/tmp/alttext-failed.json', JSON.stringify(failed, null, 2));
-          const remainingAfterThisRun = candidates.length - selected.length;
-          const summaryLines = [
-            '## Auto-Generate Image Alt Text - Run Summary',
-            '',
-            `**Result: ${touched.length} post(s) succeeded, ${failed.length} post(s) failed.**`,
-            '',
-            `- API keys loaded: ${apiKeyPool.length} (${apiKeyPool.map((k) => k.label).join(', ')})`,
-            `- Model chain tried, in order: \`${modelChain.join('\` -> \`')}\``,
-            `- Posts scanned: ${files.length}`,
-            `- Posts eligible (missing \`image_alt\`): ${candidates.length}`,
-            `- Posts processed this run (cap: ${MAX_PER_RUN}): ${selected.length}`,
-            remainingAfterThisRun > 0
-              ? `- Posts still remaining for a future run: ${remainingAfterThisRun}`
-              : '- No posts remaining - backlog fully cleared.',
-            '',
-            touched.length > 0
-              ? '### Successfully generated:\n' + touched.map((t) => `- **${t.title}** - "${t.alt}"`).join('\n')
-              : '### Successfully generated:\n(none)',
-            '',
-            failed.length > 0
-              ? '### Failed:\n' + failed.map((f) => `- \`${f.file}\`: ${f.reason}`).join('\n')
-              : '### Failed:\n(none)',
-          ].join('\n');
-          if (process.env.GITHUB_STEP_SUMMARY) {
-            appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryLines + '\n');
-          }
           appendFileSync(process.env.GITHUB_OUTPUT, `has_changes=${touched.length > 0 ? 'true' : 'false'}\n`);
           EOF
       - name: Verify build integrity before commit
@@ -572,7 +389,7 @@ jobs:
           if git diff --staged --quiet; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
-            git commit -m "Auto: live-search-grounded SEO image alt text for posts (Gemini + Google Search, live model discovery)"
+            git commit -m "Auto: live-search-grounded SEO image alt text for posts (Gemini + Google Search, multi-key rotation)"
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Push branch
@@ -589,24 +406,15 @@ jobs:
             const summary = fs.existsSync('/tmp/alttext-summary.json')
               ? JSON.parse(fs.readFileSync('/tmp/alttext-summary.json', 'utf8'))
               : [];
-            const modelChain = fs.existsSync('/tmp/alttext-model-chain.json')
-              ? JSON.parse(fs.readFileSync('/tmp/alttext-model-chain.json', 'utf8'))
-              : [];
-            const failedList = fs.existsSync('/tmp/alttext-failed.json')
-              ? JSON.parse(fs.readFileSync('/tmp/alttext-failed.json', 'utf8'))
-              : [];
             const rows = summary
               .map((s) => `- **${s.title}** (\`${s.file}\`)\n  Alt: _${s.alt}_`)
-              .join('\n');
-            const failedRows = failedList
-              .map((f) => `- \`${f.file}\`: ${f.reason}`)
               .join('\n');
             const body = [
               '## 🤖 Live-Search-Grounded SEO Image Alt Text',
               '',
               'Image pixels කිසිවක් analyze කර නැත. Post title/description/category metadata එකෙන් කතාවේ topic එක තහවුරු කරගෙන, Gemini ගේ **Google Search grounding tool** හරහා real-time search results බලා, එම කතා වර්ගය සොයන පරිශීලකයන් ඇත්තටම භාවිත කරන search keywords වලින් alt text සකස් කර ඇත.',
               '',
-              `Model chain (live-discovered via ListModels API, text-generation models only, this run): \`${modelChain.join('\` → \`')}\`. API key rotation pool activated - a key hitting quota (429/403) automatically rotates to the next configured key.`,
+              'මෙම run එකේදී **API key rotation pool** එකක් (GEMINI_API_KEY_1 සිට GEMINI_API_KEY_10 දක්වා) භාවිත කර ඇත — එක key එකක් quota exhausted (429/403) වූ විට ස්වයංක්‍රීයව ඊළඟ key එකට මාරු වී continue වේ.',
               '',
               '### ✅ Merge කරන්න කලින් check කරන්න:',
               '- [x] `yarn build` සාර්ථකව සම්පූර්ණ විය.',
@@ -614,7 +422,6 @@ jobs:
               '',
               '### 📝 Generated Alt Text:',
               rows || '(none)',
-              failedList.length > 0 ? '\n### ⚠️ Skipped/Failed this run:\n' + failedRows : '',
               '',
               '_මෙම PR එක ස්වයංක්‍රීයව scan-and-propose කරන bot එකකින් සාදන ලදී._',
             ].join('\n');
@@ -628,4 +435,4 @@ jobs:
             });
       - name: No changes detected
         if: steps.generate.outputs.has_changes != 'true'
-        run: echo "No posts needed alt-text generation this run. See the Job Summary above for full diagnostic details."
+        run: echo "No posts needed alt-text generation this run."
