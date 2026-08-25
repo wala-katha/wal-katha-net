@@ -15,10 +15,7 @@ import { withTrailingSlash } from "@/lib/utils/urlHelper";
 // to src/styles/index-overrides.css and is now imported here as a
 // static asset import instead. Astro's Vite pipeline (cssCodeSplit:
 // true, already set in astro.config.mjs) extracts this into its own
-// hashed, cacheable .css file at build time - public/_headers already
-// has a site-wide "/*.css -> Cache-Control: public, max-age=31536000,
-// immutable" rule, so this file is automatically cached for a year
-// with zero additional config.
+// hashed, cacheable .css file at build time.
 import "@/styles/index-overrides.css";
 
 // AI VISIBILITY UPGRADE (2026-07): social.json imported so the
@@ -65,27 +62,6 @@ function buildNavItems(base: string) {
 const navigationSchema = buildNavItems(base_url);
 
 // AI VISIBILITY UPGRADE (2026-07): Organization "sameAs" array.
-//
-// WHY: schema.org's "sameAs" property is a core AI/entity-graph
-// authority signal - it lets Google's Knowledge Graph AND generative
-// AI systems (AI Overviews, ChatGPT, Perplexity, Claude) confirm that
-// this Organization entity is the SAME real-world entity referenced
-// on other platforms, increasing confidence when citing or summarizing
-// this site.
-//
-// SAFETY FILTER (why this isn't a blind Object.values() dump):
-// config/social.json currently contains PLACEHOLDER links (e.g.
-// "https://www.facebook.com/" - the generic Facebook homepage, not a
-// page-specific profile URL). Injecting a generic base-domain URL as
-// "sameAs" would be inaccurate structured data (it doesn't actually
-// identify THIS entity) and could reduce trust in the entire schema
-// block rather than help it. This filter only accepts links whose
-// URL path is more than just "/" (i.e., a real page/profile path).
-//
-// SELF-HEALING: once real, page-specific social profile URLs are
-// added to config/social.json in the future, they automatically pass
-// this filter and appear in "sameAs" with zero code changes required
-// - no other file needs to be touched.
 const organizationSameAs = (social?.main || [])
   .map((s: any) => s?.link)
   .filter((link: any): link is string => {
@@ -98,40 +74,33 @@ const organizationSameAs = (social?.main || [])
     }
   });
 
-// SEO FIX #1 - "Increase length of Title Tag" (SEOptimizer Medium
-// Priority): The previous title "Wala Katha - Sinhala Wal Katha &
-// Wela Katha" was only 44 characters - below the ~50-60 character
-// range SEO auditing tools (SEOptimizer, Ahrefs, Google) recommend
-// for a fully-utilized, keyword-rich <title> tag. This constant is
-// now the SINGLE SOURCE OF TRUTH for the homepage title, reused
-// identically across <title>/meta_title (via Base.astro props),
-// og:title, and twitter:title below - guaranteeing all three can
-// never drift out of sync with each other while extending length to
-// 58 characters (within the safe non-truncating SERP range).
-const homeTitle = "Wal Katha - Sinhala Wal Katha & Wela Katha";
-
-// SEO FIX #2 - "Use your main keywords across the important HTML
-// Tags" (SEOptimizer Medium Priority): the homepage's H1 heading
-// previously repeated the same two keyword phrases already present in
-// the <title> tag verbatim. Search engines value keyword variation/
-// coverage across heading levels rather than exact duplication of the
-// title tag. This constant introduces two ADDITIONAL keyword variants
-// ("Wela Katha", "Aluth Wal Katha") that were not previously present
-// in the title, broadening topical coverage without keyword-stuffing
-// (still a single, natural-reading sentence).
+// 2026-08 SEO ALIGNMENT PASS - homepage title/H1/description sync.
 //
-// SEO FIX #3 (2026-07 - Hidden-Text Risk Removal): this text was
-// PREVIOUSLY rendered inside a visually-collapsed (.seo-h1-wrap,
-// height:0/font-size:1px/color:transparent) <h1>, while a SEPARATE,
-// visible <h2 id="speakable-home-heading"> carried different text
-// just below it. Per Google Search Essentials, CSS-hiding text purely
-// to stuff keywords search engines can read but users can't is
-// classified as a hidden-text technique - a real ranking/manual-action
-// risk regardless of original intent. The fix (see the single visible
-// <h1> below, in the template) merges these into ONE real, fully
-// visible H1 that carries this exact keyword-rich text, styled
-// identically to the old H2 so the on-page appearance is unchanged.
-const homeH1 = "සිංහල වල් කතා";
+// ROOT CAUSE (audit finding): the previous homeTitle mixed English
+// keywords ("Wal Katha - Sinhala Wal Katha & Wela Katha") while
+// homeH1 was Sinhala-only ("සිංහල වල් කතා"), and meta_description
+// separately claimed a "PDF එකතුව" that this codebase does not
+// actually provide (no PDF download feature exists anywhere in the
+// content collections or components). This created three separate,
+// non-reinforcing keyword signals instead of one consistent core
+// phrase cluster, and a search-snippet promise ("PDF") that the
+// landing page itself never fulfills.
+//
+// FIX: title, H1, and description now share the SAME core raw-search
+// phrase cluster already proven in production by the AI alt-text
+// workflow's SINGLISH_KEYWORD_CLUSTER
+// (.github/workflows/generate-alt-text.yml: "sinhala wal katha",
+// "aluth wal katha", "wal katha 2026", "wal katha story",
+// "wala katha collection") - these are the literal raw terms real
+// visitors type, not paraphrased/AI-sounding copy. Both Sinhala
+// script and Singlish (Latin script) forms are present in the H1
+// since search demand for this content type is split across both
+// scripts. The unfulfilled "PDF" claim has been dropped from the
+// description to remove the snippet/content mismatch.
+const homeTitle = "Sinhala Wal Katha - Aluth Wala Katha & Wela Katha (2026)";
+const homeDescription =
+  "අලුත්ම Sinhala Wal Katha, Wala Katha සහ Wela Katha කතා 2026 වර්ෂයේ මෙතැනින් නොමිලේ කියවන්න. දිනපතා අලුත් Aluth Wal Katha කතා එකතු වේ.";
+const homeH1 = "Sinhala Wal Katha - සිංහල අලුත්ම වල් කතා";
 
 const homePageSchema = {
   "@context": "https://schema.org",
@@ -140,9 +109,9 @@ const homePageSchema = {
       "@type": "WebSite",
       "@id": `${base_url}/#website`,
       "url": base_url,
-      "name": "Wal Katha - Sinhala Wal Katha & Wela Katha",
-      "alternateName": ["Wal Katha","Sinhala Wal Katha","Aluth Wal Katha","Wal Katha PDF","Wala Katha","Wela Katha","New Sinhala Wal Katha","Sinhala Wela Katha","Wal Katha New","Aluth Sinhala Wal Katha","සිංහල වල් කතා"],
-      "description": "2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න.",
+      "name": homeTitle,
+      "alternateName": ["Wal Katha","Sinhala Wal Katha","Aluth Wal Katha","Wala Katha","Wela Katha","New Sinhala Wal Katha","Sinhala Wela Katha","Wal Katha New","Aluth Sinhala Wal Katha","සිංහල වල් කතා"],
+      "description": homeDescription,
       "publisher": { "@id": `${base_url}/#organization` },
       "potentialAction": {
         "@type": "SearchAction",
@@ -156,7 +125,7 @@ const homePageSchema = {
     {
       "@type": "Organization",
       "@id": `${base_url}/#organization`,
-      "name": "Wal Katha - Sinhala Wal Katha & Wela Katha",
+      "name": homeTitle,
       "url": base_url,
       "logo": {
         "@type": "ImageObject",
@@ -170,8 +139,8 @@ const homePageSchema = {
       "@type": "CollectionPage",
       "@id": `${canonicalUrl}/#collection`,
       "url": canonicalUrl,
-      "name": "Wal Katha - Sinhala Wal Katha & Wela Katha",
-      "description": "2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න.",
+      "name": homeTitle,
+      "description": homeDescription,
       "isPartOf": { "@id": `${base_url}/#website` },
       "about": { "@type": "Thing", "name": "Sinhala Wal Katha Literature" },
       "speakable": {
@@ -187,7 +156,7 @@ const homePageSchema = {
 <Base 
   title={homeTitle}
   meta_title={homeTitle}
-  description="2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න."
+  description={homeDescription}
   canonical={canonicalUrl}
   image={siteLogo}
 >
@@ -196,63 +165,35 @@ const homePageSchema = {
   <Fragment slot="head">
     <meta property="og:type" content="website" />
     <meta property="og:title" content={homeTitle} />
-    <meta property="og:description" content="2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න." />
+    <meta property="og:description" content={homeDescription} />
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:image" content={siteLogo} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={homeTitle} />
-    <meta name="twitter:description" content="2026 අලුත්ම Sinhala Wal Katha PDF එකතුව. අලුත් සහ පැරණි Wala Katha සහ Wela Katha Online කියවීමට, Download කිරීමට පිවිසෙන්න." />
+    <meta name="twitter:description" content={homeDescription} />
     <meta name="twitter:image" content={siteLogo} />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
   </Fragment>
 
   <!--
     FIXED (CRITICAL - Rich Results Test "No items detected"):
-    මෙය කලින් <main class="section pt-4 pb-12..."> ලෙස ආරම්භ වී, Base.astro
-    layout එකේ දැනටමත් තිබූ <main id="main-content">...<slot /></main>
-    ඇතුළත NESTED <main> tag එකක් ලෙස render විය (main > main). HTML spec
-    එකට අනුව document එකකට <main> landmark එකක් පමණක් තිබිය යුතු අතර,
-    මෙම duplicate/nested <main> එක Google Rich Results Test / Search
-    Console හි parser එකට document structure එක malformed ලෙස පෙනී,
-    homepage එකේ valid JSON-LD schema තිබුණත් "No items detected" ලෙස
-    වාර්තා වීමට හේතු විය. Inner <main> එක සෙමැන්ටික් වශයෙන් නිවැරදි
-    <div> එකකට මාරු කර ඇත - CSS classes සියල්ල එලෙසම රඳවා ඇති නිසා
-    visual design එකට කිසිදු බලපෑමක් නැත.
+    Inner <main> tag removed to avoid nested main > main structure
+    (Base.astro layout already renders <main id="main-content">).
+    Replaced with a semantically correct <div>; CSS classes retained
+    byte-for-byte so visual design is unaffected.
   -->
   <div class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
     <div class="container">
 
       <!--
-        NEW (2026-08 - Auto-Collapsing Homepage H1, SEO-Safe Pattern):
-
-        WHY THIS EXISTS: the visible H1 below used to stay on screen
-        permanently. This wrapper makes it show fully to the visitor
-        for a few seconds, then smoothly collapse out of view - purely
-        a UX/visual behavior, NOT a hidden-text technique.
-
-        SEO SAFETY (same reasoning already established and documented
-        for the breadcrumb pattern in PostSingle.astro): the H1 text
-        node, its id="speakable-home-heading" (used by the
-        CollectionPage "speakable" schema above), and all of its
-        content remain fully present in the DOM at all times -
-        display:none is never used. Only max-height/opacity/margin are
-        animated via a CSS transition, and only a JS-added class
-        triggers the collapse after a delay. Crawlers reading the raw
-        HTML/CSS see this content exactly as before; this is
-        functionally identical to a "read more" or "auto-dismissing
-        banner" UI pattern, not cloaking, since the text is genuinely
-        shown to real visitors first and is never hidden from crawlers
-        at the source level.
-
-        BEHAVIOR: on every page load (including client-side View
-        Transition navigations back to "/"), the heading is visible
-        for 5 seconds (matching the same 5-second convention already
-        used by the breadcrumb auto-collapse in PostSingle.astro),
-        then fades/collapses smoothly. No manual re-open control is
-        provided here since the heading is decorative/supplementary
-        text sitting above the slider, not primary navigation the
-        visitor needs to get back to (unlike the breadcrumb, which
-        does get a toggle button).
+        Auto-Collapsing Homepage H1 (SEO-safe pattern, unchanged from
+        prior implementation): the H1 text node and its
+        id="speakable-home-heading" (referenced by the CollectionPage
+        "speakable" schema above) remain fully present in the DOM at
+        all times - display:none is never used. Only max-height/
+        opacity/margin animate via CSS transition after a JS-added
+        class, so crawlers reading the raw HTML/CSS see this content
+        exactly as a real visitor does first.
       -->
       <div id="home-heading-shell" class="home-heading-collapsible">
         <h1 id="speakable-home-heading" class="text-center text-sm sm:text-base font-bold text-emerald-400/90 tracking-wide uppercase">
@@ -270,30 +211,6 @@ const homePageSchema = {
   </div>
 
   <style>
-    /*
-      Auto-collapsing homepage H1 - see the template comment above for
-      full rationale. max-height starts generous (200px) so the heading
-      never clips while visible across any viewport width/line-wrap
-      count; it only matters as a ceiling during the collapse animation
-      itself, since the div's real height while visible is driven by its
-      actual content, not this ceiling value.
-
-      FIXED (Nu Html Checker "Stray start tag script" / Fatal Error):
-      this <style> block, and the <script> block right below it, used
-      to be placed OUTSIDE the <Base>...</Base> tags (as siblings after
-      the closing </Base>). Base.astro's own template renders the
-      COMPLETE <html>...</html> document, so anything written as a
-      sibling after </Base> in this file was landing AFTER the closing
-      </html> tag in the final rendered output - Astro hoists <style>
-      blocks to <head> automatically regardless of position, but does
-      NOT relocate <script> tags the same way, so the script rendered
-      exactly where authored: right after </html>. Moving both blocks
-      here, inside <Base>'s default slot, guarantees they are nested
-      correctly inside <body> in the final HTML - zero behavioral
-      change (style scoping and the astro:page-load/astro:before-swap
-      listeners below are position-independent), purely a structural
-      fix.
-    */
     .home-heading-collapsible {
       max-height: 200px;
       opacity: 1;
@@ -313,20 +230,12 @@ const homePageSchema = {
   </style>
 
   <script>
-    // Auto-collapsing homepage H1 timer logic. Follows the same
-    // astro:page-load / astro:before-swap convention already used by
-    // PostSingle.astro's breadcrumb auto-collapse, Header.astro, and
-    // FeaturedSlider.astro, so this works correctly across Astro View
-    // Transitions (ClientRouter) client-side navigations, not just a
-    // hard page load.
     let homeHeadingCollapseTimer: ReturnType<typeof setTimeout> | null = null;
 
     function initHomeHeadingAutoCollapse() {
       const shell = document.getElementById("home-heading-shell");
       if (!shell) return;
 
-      // Reset to visible state on every load (handles back/forward nav
-      // and repeated client-side visits to "/").
       shell.classList.remove("is-collapsed");
 
       if (homeHeadingCollapseTimer) {
@@ -340,8 +249,6 @@ const homePageSchema = {
 
     document.addEventListener("astro:page-load", initHomeHeadingAutoCollapse);
 
-    // Cleanup on page swap so a stale timer from a previous visit to "/"
-    // can never fire after the user has navigated elsewhere.
     document.addEventListener("astro:before-swap", () => {
       if (homeHeadingCollapseTimer) {
         clearTimeout(homeHeadingCollapseTimer);
