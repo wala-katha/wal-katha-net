@@ -76,31 +76,30 @@ const organizationSameAs = (social?.main || [])
 
 // 2026-08 SEO ALIGNMENT PASS - homepage title/H1/description sync.
 //
-// ROOT CAUSE (audit finding): the previous homeTitle mixed English
-// keywords ("Wal Katha - Sinhala Wal Katha & Wela Katha") while
-// homeH1 was Sinhala-only ("සිංහල වල් කතා"), and meta_description
-// separately claimed a "PDF එකතුව" that this codebase does not
-// actually provide (no PDF download feature exists anywhere in the
-// content collections or components). This created three separate,
-// non-reinforcing keyword signals instead of one consistent core
-// phrase cluster, and a search-snippet promise ("PDF") that the
-// landing page itself never fulfills.
+// USER-MANDATED CONSTRAINT: "Wal Katha" is the primary keyword this
+// site must rank for, and the exact site title string below must
+// never change. homeTitle is therefore fixed verbatim to that exact
+// string.
 //
-// FIX: title, H1, and description now share the SAME core raw-search
-// phrase cluster already proven in production by the AI alt-text
-// workflow's SINGLISH_KEYWORD_CLUSTER
-// (.github/workflows/generate-alt-text.yml: "sinhala wal katha",
-// "aluth wal katha", "wal katha 2026", "wal katha story",
-// "wala katha collection") - these are the literal raw terms real
-// visitors type, not paraphrased/AI-sounding copy. Both Sinhala
-// script and Singlish (Latin script) forms are present in the H1
-// since search demand for this content type is split across both
-// scripts. The unfulfilled "PDF" claim has been dropped from the
-// description to remove the snippet/content mismatch.
-const homeTitle = "Sinhala Wal Katha - Aluth Wala Katha & Wela Katha (2026)";
+// ROOT CAUSE (audit finding, still applies): homeH1 was previously
+// Sinhala-only ("සිංහල වල් කතා"), not reinforcing the "Wal Katha"
+// lead-term the title/rank target requires, and meta_description
+// separately claimed a "PDF එකතුව... Download කිරීමට" promise that
+// this codebase does not actually provide anywhere (no PDF
+// generation/download feature exists in any content collection,
+// page, or workflow) - this same false claim also lives in
+// config.json's metadata.meta_description, Base.astro's fallback
+// title template, and public/manifest.json (fixed separately).
+//
+// FIX: homeTitle stays exactly as mandated. homeH1 now LEADS with
+// "Wal Katha" (matching the title's lead term) before the Sinhala
+// reinforcement, so title and H1 share the same primary keyword
+// signal instead of two different ones. The unfulfilled "PDF"/
+// "Download" claim has been dropped from the description.
+const homeTitle = "Wal Katha - Sinhala Wal Katha & Wela Katha";
 const homeDescription =
-  "අලුත්ම Sinhala Wal Katha, Wala Katha සහ Wela Katha කතා 2026 වර්ෂයේ මෙතැනින් නොමිලේ කියවන්න. දිනපතා අලුත් Aluth Wal Katha කතා එකතු වේ.";
-const homeH1 = "Sinhala Wal Katha - සිංහල අලුත්ම වල් කතා";
+  "Wal Katha වෙබ් අඩවියේ අලුත්ම Sinhala Wal Katha, Wala Katha සහ Wela Katha කතා 2026 වර්ෂයේ මෙතැනින් නොමිලේ Online කියවන්න. දිනපතා අලුත් Wal Katha කතා එකතු වේ.";
+const homeH1 = "Wal Katha - සිංහල වල් කතා සහ වැල කතා";
 
 const homePageSchema = {
   "@context": "https://schema.org",
