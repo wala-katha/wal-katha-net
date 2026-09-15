@@ -5,7 +5,7 @@ description: "මම ගම්පහ ප්‍රසිද්ධ ජාත්‍
 date: 2026-08-08
 image: "/images/posts/nethuge-wal-katha.webp"
 image_alt: "wal katha story - රතු පාට ඇඳුමෙන් සැරසුණු කෙල්ල | සිංහල වැල් කතා"
-draft: false
+draft: true
 authors: ["WalKatha"]
 tags: ["wal-katha-school", "sri-lankan-school-stories", "sinhala-school-katha"]
 categories: ["school-wal-katha"]
