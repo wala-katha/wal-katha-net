@@ -20,9 +20,65 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { slug as githubSlug } from "github-slugger";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONTENT_DIR = path.join(__dirname, "src/content");
-const gitLastModCache = new Map();
+
+// SITEMAP LASTMOD STRATEGY (2026 rewrite)
+// Previously lastmod came from `git log`, which is non-deterministic:
+// Cloudflare Pages builds have no usable git history, so every lookup
+// failed and fell back to new Date() - stamping every URL with the
+// build time. Google then sees the whole site change on every deploy,
+// treats lastmod as untrustworthy, and ignores it (crawl budget loss).
+//
+// Order of truth is now:
+//   1. frontmatter `updated` (only when it differs from `date`)
+//   2. frontmatter `date`
+//   3. git commit time (local dev convenience only)
+//   4. omit lastmod entirely - never a build timestamp
+// An absent lastmod is strictly better for SEO than a wrong one.
+
+const frontmatterCache = new Map();
+
+function readFrontmatter(absFilePath) {
+  if (frontmatterCache.has(absFilePath)) return frontmatterCache.get(absFilePath);
+  let result = null;
+  try {
+    if (existsSync(absFilePath)) {
+      const raw = readFileSync(absFilePath, "utf-8");
+      const match = raw.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/);
+      if (match) result = match[1];
+    }
+  } catch {
+    result = null;
+  }
+  frontmatterCache.set(absFilePath, result);
+  return result;
+}
+
+function normalizeDateValue(value) {
+  if (!value) return null;
+  const cleaned = String(value)
+    .trim()
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
+  if (!cleaned) return null;
+  const parsed = new Date(cleaned);
+  if (Number.isNaN(parsed.getTime())) return null;
+  // Guard against absurd dates from malformed frontmatter.
+  const year = parsed.getUTCFullYear();
+  if (year < 1990 || year > 2100) return null;
+  return parsed.toISOString();
+}
+
+function extractScalarField(frontmatter, fieldName) {
+  if (!frontmatter) return null;
+  const re = new RegExp(`^[ \\t]*${fieldName}[ \\t]*:[ \\t]*(.+)$`, "m");
+  const m = frontmatter.match(re);
+  return m ? m[1] : null;
+}
+
 function getGitLastMod(absFilePath) {
   if (gitLastModCache.has(absFilePath)) return gitLastModCache.get(absFilePath);
   let result = null;
@@ -41,6 +97,31 @@ function getGitLastMod(absFilePath) {
   gitLastModCache.set(absFilePath, result);
   return result;
 }
+const gitLastModCache = new Map();
+
+// Content date first, git only as a local-dev fallback. Never now().
+const contentLastModCache = new Map();
+function getContentLastMod(absFilePath) {
+  if (!absFilePath) return null;
+  if (contentLastModCache.has(absFilePath)) return contentLastModCache.get(absFilePath);
+
+  const fm = readFrontmatter(absFilePath);
+  const published = normalizeDateValue(extractScalarField(fm, "date"));
+  const updated = normalizeDateValue(extractScalarField(fm, "updated"));
+
+  let result = null;
+  if (published && updated) {
+    result = new Date(updated) > new Date(published) ? updated : published;
+  } else {
+    result = updated || published || null;
+  }
+
+  if (!result) result = getGitLastMod(absFilePath);
+
+  contentLastModCache.set(absFilePath, result);
+  return result;
+}
+
 function findContentFile(dir, slugValue) {
   for (const ext of [".md", ".mdx"]) {
     const p = path.join(dir, `${slugValue}${ext}`);
@@ -48,22 +129,38 @@ function findContentFile(dir, slugValue) {
   }
   return null;
 }
-let siteWideLastModCache = null;
-function getSiteWideLastMod() {
-  if (siteWideLastModCache) return siteWideLastModCache;
+
+let postsFileListCache = null;
+function getAllPostFiles() {
+  if (postsFileListCache) return postsFileListCache;
+  const dir = path.join(CONTENT_DIR, "posts");
+  postsFileListCache = [];
   try {
-    const postsDir = path.join(CONTENT_DIR, "posts");
-    const out = execSync(`git log -1 --format=%cI -- "${postsDir}"`, {
-      cwd: __dirname,
-      encoding: "utf-8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    siteWideLastModCache = out || new Date().toISOString();
+    for (const file of readdirSync(dir)) {
+      if (!/\.(md|mdx)$/i.test(file)) continue;
+      if (file.startsWith("-")) continue;
+      postsFileListCache.push(path.join(dir, file));
+    }
   } catch {
-    siteWideLastModCache = new Date().toISOString();
+    postsFileListCache = [];
   }
+  return postsFileListCache;
+}
+
+// Newest real content date across all posts. Deterministic: identical
+// output for identical content, regardless of build machine or time.
+let siteWideLastModCache;
+function getSiteWideLastMod() {
+  if (siteWideLastModCache !== undefined) return siteWideLastModCache;
+  let latest = null;
+  for (const filePath of getAllPostFiles()) {
+    const d = getContentLastMod(filePath);
+    if (d && (!latest || new Date(d) > new Date(latest))) latest = d;
+  }
+  siteWideLastModCache = latest;
   return siteWideLastModCache;
 }
+
 function extractArrayField(content, fieldName) {
   const inlineMatch = content.match(new RegExp(fieldName + "\\s*:\\s*\\[([^\\]]*)\\]"));
   if (inlineMatch) {
@@ -84,22 +181,7 @@ function extractArrayField(content, fieldName) {
   }
   return [];
 }
-let postsFileListCache = null;
-function getAllPostFiles() {
-  if (postsFileListCache) return postsFileListCache;
-  const dir = path.join(CONTENT_DIR, "posts");
-  postsFileListCache = [];
-  try {
-    for (const file of readdirSync(dir)) {
-      if (!/\.(md|mdx)$/i.test(file)) continue;
-      if (file.startsWith("-")) continue;
-      postsFileListCache.push(path.join(dir, file));
-    }
-  } catch {
-    postsFileListCache = [];
-  }
-  return postsFileListCache;
-}
+
 const taxonomyLastModCache = new Map();
 function getTaxonomyLastMod(fieldName, slugValue) {
   const cacheKey = `${fieldName}:${slugValue}`;
@@ -111,7 +193,7 @@ function getTaxonomyLastMod(fieldName, slugValue) {
       const values = extractArrayField(content, fieldName);
       const isMatch = values.some((v) => githubSlug(v) === slugValue);
       if (isMatch) {
-        const d = getGitLastMod(filePath);
+        const d = getContentLastMod(filePath);
         if (d && (!latest || new Date(d) > new Date(latest))) {
           latest = d;
         }
@@ -124,14 +206,16 @@ function getTaxonomyLastMod(fieldName, slugValue) {
   taxonomyLastModCache.set(cacheKey, result);
   return result;
 }
+
 function resolveLastModForUrl(pathname) {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) return getSiteWideLastMod();
   const EXCLUDED_FIRST_SEGMENTS = ["categories", "tags", "page", "search", "blog", "authors", "about", "contact"];
+
   if (segments[0] === "blog" && segments[1]) {
     const f = findContentFile(path.join(CONTENT_DIR, "posts"), segments[1]);
     if (f) {
-      const d = getGitLastMod(f);
+      const d = getContentLastMod(f);
       if (d) return d;
     }
     return getSiteWideLastMod();
@@ -139,17 +223,17 @@ function resolveLastModForUrl(pathname) {
   if (segments[0] === "authors" && segments[1] && segments[1] !== "page") {
     const f = findContentFile(path.join(CONTENT_DIR, "authors"), segments[1]);
     if (f) {
-      const d = getGitLastMod(f);
+      const d = getContentLastMod(f);
       if (d) return d;
     }
     return getSiteWideLastMod();
   }
   if (segments[0] === "about") {
-    const d = getGitLastMod(path.join(CONTENT_DIR, "about", "-index.md"));
+    const d = getContentLastMod(path.join(CONTENT_DIR, "about", "-index.md"));
     return d || getSiteWideLastMod();
   }
   if (segments[0] === "contact") {
-    const d = getGitLastMod(path.join(CONTENT_DIR, "contact", "-index.md"));
+    const d = getContentLastMod(path.join(CONTENT_DIR, "contact", "-index.md"));
     return d || getSiteWideLastMod();
   }
   if (segments[0] === "categories" && segments[1] && segments[1] !== "page") {
@@ -161,12 +245,38 @@ function resolveLastModForUrl(pathname) {
   if (segments.length === 1 && !EXCLUDED_FIRST_SEGMENTS.includes(segments[0])) {
     const f = findContentFile(path.join(CONTENT_DIR, "pages"), segments[0]);
     if (f) {
-      const d = getGitLastMod(f);
+      const d = getContentLastMod(f);
       if (d) return d;
     }
   }
   return getSiteWideLastMod();
 }
+
+// Differentiated crawl signals. A uniform 0.7 / weekly across every
+// URL tells Google nothing; relative weighting does.
+const LEGAL_PATHS = new Set([
+  "privacy-policy",
+  "terms-and-conditions",
+  "copyright-credit-policy",
+  "parental-control",
+  "contact",
+  "about",
+]);
+
+function resolveSitemapSignals(pathname) {
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments.length === 0) return { priority: 1.0, changefreq: "daily" };
+  if (segments[0] === "blog" && segments[1]) return { priority: 0.8, changefreq: "monthly" };
+  if (segments[0] === "categories") return { priority: 0.6, changefreq: "weekly" };
+  if (segments[0] === "tags") return { priority: 0.5, changefreq: "weekly" };
+  if (segments[0] === "authors") return { priority: 0.5, changefreq: "monthly" };
+  if (segments[0] === "page") return { priority: 0.4, changefreq: "weekly" };
+  if (segments.length === 1 && LEGAL_PATHS.has(segments[0])) {
+    return { priority: 0.3, changefreq: "yearly" };
+  }
+  return { priority: 0.6, changefreq: "monthly" };
+}
+
 function parseFontString(fontStr) {
   const [name, weightPart] = fontStr.split(":");
   let weights = [400];
@@ -179,6 +289,7 @@ function parseFontString(fontStr) {
   const cleanName = name.replace(/\+/g, " ");
   return { name: cleanName, weights };
 }
+
 const fontsConfig = Object.entries(theme.fonts.font_family)
   .filter(([key]) => !key.includes("_type"))
   .map(([key, fontStr]) => {
@@ -194,17 +305,27 @@ const fontsConfig = Object.entries(theme.fonts.font_family)
       fallbacks: [fallback],
     };
   });
+
 function ensureSitemapTrailingSlash(url) {
   if (url.endsWith("/")) return url;
   const lastSegment = url.split("/").pop() || "";
   if (lastSegment.includes(".")) return url;
   return `${url}/`;
 }
-const EXCLUDED_SITEMAP_PATHS = ["/elements", "/page/1"];
+
+// /page/1 duplicates the homepage; the standalone xml endpoints are
+// declared directly in robots.txt and must not be listed as pages.
+const EXCLUDED_SITEMAP_PATHS = [
+  "/elements",
+  "/page/1",
+  "/news-sitemap.xml",
+  "/image-sitemap.xml",
+];
 function isExcludedFromSitemap(url) {
   const path = url.replace(/^https?:\/\/[^/]+/, "").replace(/\/$/, "");
   return EXCLUDED_SITEMAP_PATHS.includes(path);
 }
+
 export default defineConfig({
   site: config.site.base_url ? config.site.base_url : "https://www.walakatha.net",
   base: config.site.base_path ? config.site.base_path : "/",
@@ -243,10 +364,19 @@ export default defineConfig({
         item.url = ensureSitemapTrailingSlash(item.url);
         try {
           const urlObj = new URL(item.url);
+          const signals = resolveSitemapSignals(urlObj.pathname);
+          item.priority = signals.priority;
+          item.changefreq = signals.changefreq;
+
           const lastmod = resolveLastModForUrl(urlObj.pathname);
-          if (lastmod) item.lastmod = lastmod;
+          if (lastmod) {
+            item.lastmod = lastmod;
+          } else {
+            // Better to omit than to emit a build timestamp.
+            delete item.lastmod;
+          }
         } catch {
-          // leave lastmod unset for this URL only
+          delete item.lastmod;
         }
         return item;
       },
