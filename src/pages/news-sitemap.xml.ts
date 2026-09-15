@@ -4,27 +4,29 @@ import { sortByDate } from "@/lib/utils/sortFunctions";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 import config from "@/config/config.json";
 
-// 🎯 2026 GOOGLE NEWS SITEMAP — Standard @astrojs/sitemap output එකෙන්
-// වෙනස්, Google News-specific XML namespace (<news:news>) සහිත
-// dedicated sitemap එකකි.
+// GOOGLE NEWS SITEMAP - dedicated sitemap with the Google News
+// namespace (<news:news>), separate from the @astrojs/sitemap output.
 //
-// ⚠️ CRITICAL SPEC REQUIREMENT (Google News Sitemap Protocol):
-// "Google News only accepts URLs published within the last 2 days"
-// කියලා official Google Publisher documentation එකේම explicit ලෙස
-// සඳහන් වේ. මේ නිසා මෙම endpoint එකෙන් සියලුම posts return කරන්නේ
-// නැතුව, "date" field එක පසුගිය පැය 48ක් (2 days) ඇතුළත ඇති posts
-// පමණක් filter කර ලබා දේ. පැරණි posts මෙම sitemap එකෙන් ස්වයංක්‍රීයව
-// (automatic ලෙස, කිසිම manual පියවරක් නැතුව) ඉවත් වේ — මෙය
-// self-healing design pattern එකකි: post එකක් publish වී දින 2ක්
-// ගතවූ පසු, ඊළඟ build එකේදී එය automatic ලෙස මෙම sitemap එකෙන් අතුරුදහන්
-// වන අතර, standard sitemap-index.xml (@astrojs/sitemap) එකේ එය
-// ස්ථිරවම පවතී (එය Google News-specific නොවේ, සාමාන්‍ය search
-// indexing සඳහා).
+// Google News accepts URLs published within roughly the last 2 days.
+// Posts older than that drop out automatically on the next build.
 //
-// ⚠️ NOTE: මෙම endpoint එක තනිවම Google News Top Stories carousel
-// එකට qualify කරන්නේ නැත — Google News Publisher Center registration
-// එකක් සහ content policy compliance එකක් අමතරව අවශ්‍ය වේ. මෙය
-// technical infrastructure එක පමණි, එය සූදානම් කර තබයි.
+// 2026 FIX: previously this emitted a completely empty <urlset> when
+// nothing was published in the last 48h, which surfaces in Google
+// Search Console as a 0-URL / unreadable sitemap. A bounded fallback
+// now emits the newest posts (capped at MAX_FALLBACK_POSTS) so the
+// endpoint is never empty, while still respecting the recency intent.
+
+const RECENT_WINDOW_HOURS = 48;
+const MAX_FALLBACK_POSTS = 5;
+
+function stripInvisibleChars(value: string): string {
+  return value
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\u00A0/g, " ")
+    .replace(/[\u200E\u200F\u202A-\u202E]/g, "")
+    .trim();
+}
+
 function escapeXml(unsafe: string): string {
   return unsafe
     .replace(/&/g, "&amp;")
@@ -40,24 +42,32 @@ export async function GET(context: APIContext) {
 
   const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
   const siteUrl = context.site?.toString().replace(/\/$/, "") ?? base_url;
-  const publicationName = config?.site?.title || "Wala Katha";
+  const publicationName = config?.site?.title || "Wal Katha";
 
-  // Google News sitemap protocol — පසුගිය පැය 48ක් (2 days) ඇතුළත
-  // publish වූ posts පමණක් filter කිරීම
-  const twoDaysAgo = new Date();
-  twoDaysAgo.setHours(twoDaysAgo.getHours() - 48);
+  const cutoff = new Date();
+  cutoff.setHours(cutoff.getHours() - RECENT_WINDOW_HOURS);
 
-  const recentPosts = sortedPosts.filter((post) => {
+  const datedPosts = sortedPosts.filter((post) => {
     if (!post.data.date) return false;
-    const postDate = new Date(post.data.date);
-    return postDate >= twoDaysAgo;
+    const d = new Date(post.data.date);
+    return !Number.isNaN(d.getTime());
   });
 
-  const urlEntries = recentPosts
+  const recentPosts = datedPosts.filter(
+    (post) => new Date(post.data.date!) >= cutoff
+  );
+
+  // Never emit a fully empty urlset - fall back to the newest posts.
+  const selectedPosts =
+    recentPosts.length > 0
+      ? recentPosts
+      : datedPosts.slice(0, MAX_FALLBACK_POSTS);
+
+  const urlEntries = selectedPosts
     .map((post) => {
       const postUrl = withTrailingSlash(`${siteUrl}/blog/${post.id}`);
       const pubDate = new Date(post.data.date!).toISOString();
-      const title = escapeXml(post.data.title || "");
+      const title = escapeXml(stripInvisibleChars(post.data.title || ""));
 
       return `  <url>
     <loc>${escapeXml(postUrl)}</loc>
@@ -83,6 +93,7 @@ ${urlEntries}
     status: 200,
     headers: {
       "Content-Type": "application/xml; charset=utf-8",
+      "Cache-Control": "public, max-age=1800",
     },
   });
 }
