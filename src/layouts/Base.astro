@@ -121,6 +121,53 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
       })();
     </script>
 
+    <script is:inline>
+      // Age-gate swap guard. ClientRouter's swapRootAttributes() re-applies
+      // the static "age-gate-pending" class from every incoming document,
+      // while the blocking head guard above does not re-run on swap. That
+      // race repaints the overlay for one frame on verified sessions.
+      // Mutating the incoming document in astro:before-swap runs BEFORE
+      // paint, so the flash never reaches the screen.
+      (function () {
+        if (window.__wkAgeGateSwapGuard) return;
+        window.__wkAgeGateSwapGuard = true;
+
+        var STORAGE_KEY = "wk_age_verified";
+        var PENDING_CLASS = "age-gate-pending";
+
+        function isVerified() {
+          try {
+            return localStorage.getItem(STORAGE_KEY) === "true";
+          } catch (e) {
+            return false;
+          }
+        }
+
+        document.addEventListener("astro:before-swap", function (event) {
+          if (!isVerified()) return;
+          try {
+            var incoming = event.newDocument;
+            if (!incoming) return;
+            if (incoming.documentElement) {
+              incoming.documentElement.classList.remove(PENDING_CLASS);
+            }
+            var overlay = incoming.getElementById("age-gate-overlay");
+            if (overlay) overlay.style.display = "none";
+          } catch (e) {}
+        });
+
+        // Safety net: still executes before the next paint.
+        document.addEventListener("astro:after-swap", function () {
+          if (!isVerified()) return;
+          try {
+            document.documentElement.classList.remove(PENDING_CLASS);
+            var overlay = document.getElementById("age-gate-overlay");
+            if (overlay) overlay.style.display = "none";
+          } catch (e) {}
+        });
+      })();
+    </script>
+
     <style is:inline>
       html {
         background-color: #050505;
@@ -751,3 +798,4 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     <Footer />
   </body>
 </html>
+
