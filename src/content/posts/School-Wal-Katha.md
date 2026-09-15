@@ -5,7 +5,7 @@ description: "රශ්මි ගැන කිව්වොත් නෝර්ම
 date: 2026-08-06
 image: "/images/posts/School-Wal-Katha.webp"
 image_alt: "Sinhala Wal Katha පාසල් ප්‍රේමය වෙනුවෙන් සුදු කමිසය සහ නිල් ටයි පටිය පැළඳ සිටින සිසුවිය wal katha 2026"
-draft: false
+draft: true
 authors: ["WalKatha"]
 tags: ["wala-katha", "wal katha school", "sri lankan school stories", "sinhala school katha"]
 categories: ["school-wal-katha"]
