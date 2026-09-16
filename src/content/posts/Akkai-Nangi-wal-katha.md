@@ -6,7 +6,7 @@ date: 2026-08-06
 image: "/images/posts/Akkai-Nangi-Wal-Katha.webp"
 image_alt: "Sinhala Wal Katha හි අලුත් wal katha ලෙස කළු හා රෝස ඇඳුමින් සැරසුණු සොහොයුරියන් දෙදෙනාගේ පවුලේ රූපය."
 draft: false
-authors: ["WalaKatha"]
+authors: ["Wala Katha"]
 tags: ["wala-katha", "akka-katha", "family-katha", "nangi-katha"]
 categories: ["family-wal-katha"]
 ---
