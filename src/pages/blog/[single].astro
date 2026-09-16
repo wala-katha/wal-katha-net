@@ -4,7 +4,7 @@ import { getSinglePage } from "@/lib/contentParser.astro";
 import PostSingle from "@/partials/PostSingle.astro";
 import config from "@/config/config.json";
 import { isValid } from "date-fns";
-import { slugify as globalSlugify } from "@/lib/utils/textConverter";
+import { humanize, slugify as globalSlugify } from "@/lib/utils/textConverter";
 import { buildMetaKeywords } from "@/lib/utils/keywordExtractor";
 
 export async function getStaticPaths() {
@@ -24,7 +24,18 @@ if (!post || !post.data) {
   return Astro.redirect("/404");
 }
 
-const { title, meta_title, image, description, date, updated, authors, tags } = post.data;
+const { title, meta_title, image, image_alt, description, date, updated, authors, categories, tags } = post.data;
+
+// Null-safe copies: a post without categories/tags must not break the build.
+const safeCategories: string[] = Array.isArray(categories) ? categories : [];
+const safeTags: string[] = Array.isArray(tags) ? tags : [];
+
+// Frontmatter strings routinely carry a trailing newline from editors, which
+// leaked straight into <title> and <meta name="description">.
+const titleClean = typeof title === "string" ? title.trim() : title;
+const metaTitleClean = typeof meta_title === "string" ? meta_title.trim() : meta_title;
+const descriptionClean = typeof description === "string" ? description.trim() : description;
+const imageAltClean = (image_alt || title || "").toString().trim();
 
 const parsedDate = date ? new Date(date) : null;
 const safeDateISO = parsedDate && isValid(parsedDate) ? parsedDate.toISOString() : new Date().toISOString();
@@ -42,12 +53,13 @@ const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 // Cloudflare Pages trailing-slash consistency: canonical tag and schema URL must match exactly.
 const canonicalUrl = `${base_url}/blog/${post.id}/`;
 
+// Brand name from config so og:site_name cannot drift from the site title.
+const siteName = config?.site?.title || "Wal Katha";
+
 // NEW: dynamic, auto-generated OG image path for this post
 // (/og/{slug}.png, generated at build time by src/pages/og/[slug].png.ts).
-// Passed into <Base image={...}> below so Base.astro's own generic
-// og:image/twitter:image meta block stays in sync with the
-// article-specific og:image/twitter:image tags PostSingle.astro
-// renders separately.
+// Passed into <Base image={...}> below so Base.astro emits the
+// og:image/og:image:width/og:image:type/twitter:image set in <head>.
 const ogImagePath = `/og/${post.id}.png`;
 
 const authorName = Array.isArray(authors) && authors.length > 0 ? authors[0] : config?.metadata?.meta_author || "Admin";
@@ -56,8 +68,7 @@ const authorSlug = globalSlugify(authorName || "");
 // NEW: author image lookup for the Person schema below (E-E-A-T
 // enhancement). Reuses the same slugify-match pattern PostSingle.astro
 // already uses to resolve an author frontmatter name against the
-// authors content collection - a pattern already proven safe/working
-// on this codebase, so no new matching logic is introduced here.
+// authors content collection.
 const allAuthors = await getSinglePage("authors");
 const matchedAuthorEntry = allAuthors.find(
   (a) => globalSlugify(a.data.title || "") === authorSlug
@@ -71,10 +82,7 @@ const authorImageUrl = matchedAuthorEntry?.data.image
 const wordCount = post.body ? post.body.trim().split(/\s+/).filter(Boolean).length : undefined;
 
 // ImageObject (recommended over a plain string URL per Google's
-// Article/NewsArticle structured-data docs). Now points at the
-// dynamically-generated /og/{slug}.png instead of the frontmatter
-// thumbnail, so every post (even ones without a manual "image" field)
-// gets a proper social-share image.
+// Article/NewsArticle structured-data docs).
 const imageObject = {
   "@type": "ImageObject",
   "url": `${base_url}${ogImagePath}`,
@@ -82,32 +90,30 @@ const imageObject = {
   "height": 630
 };
 
-// keywords: previously sourced purely from post.data.tags. Now merged
-// with auto-extracted body keywords via keywordExtractor.ts's
-// buildMetaKeywords() - same helper PostSingle.astro's meta keywords
-// tag uses, so the schema keywords field and the meta tag stay
-// conceptually consistent (both derived from tags + body content +
-// global force keywords) without needing to be byte-identical strings.
-const mergedKeywords = buildMetaKeywords(tags || [], post.body);
+// keywords: frontmatter tags merged with auto-extracted body keywords
+// via keywordExtractor.ts's buildMetaKeywords().
+const mergedKeywords = buildMetaKeywords(safeTags, post.body);
 const keywordsString = mergedKeywords.length > 0 ? mergedKeywords.join(", ") : undefined;
 
+// Extra entity/topic signals for AI Overviews, beyond the curated tags.
+const extractedOnlyKeywords = mergedKeywords.filter(
+  (k) => !safeTags.some((t: string) => t.toLowerCase() === k.toLowerCase())
+);
+
 // speakable: points at the two real, crawlable DOM nodes
-// PostSingle.astro already renders for this purpose
-// (#speakable-headline on the article H1, #speakable-summary on the
-// sr-only description paragraph).
+// PostSingle.astro already renders for this purpose.
 const speakableSpecification = {
   "@type": "SpeakableSpecification",
   "cssSelector": ["#speakable-headline", "#speakable-summary"]
 };
 
 // publisher references the single, authoritative Organization entity
-// defined once (with logo.webp + sameAs) on index.astro via @id - no
-// duplicate/conflicting inline Organization object here.
+// defined once on index.astro via @id.
 const articleSchema = {
   "@context": "https://schema.org",
   "@type": "NewsArticle",
-  "headline": title || "",
-  "description": description || "",
+  "headline": titleClean || "",
+  "description": descriptionClean || "",
   "image": imageObject,
   "datePublished": safeDateISO,
   "dateModified": safeUpdatedISO,
@@ -136,21 +142,45 @@ const articleSchema = {
 ---
 
 <Base
-  title={title}
-  meta_title={meta_title}
-  description={description}
+  title={titleClean}
+  meta_title={metaTitleClean}
+  description={descriptionClean}
   image={ogImagePath}
   canonical={canonicalUrl}
   isArticle={true}
 >
-  {/* isArticle={true} - Base.astro duplicate OG/Twitter/robots tags render නොකරයි */}
-  {/* 🎯 CORE WEB VITALS - Early Hints: hero image එකට browser-level
-      preload signal එකක් <head> එකට කෙලින්ම දෙයි. Cloudflare Early
-      Hints (103) enable කර ඇති විට, mjs integration එකෙන් dist/_headers
-      එකට එකතු කරන Link header එකත් මේ URL එකටම match වේ (post.data.image
-      literal string path එකක් නිසා). */}
   <Fragment slot="head">
     {image && <link rel="preload" as="image" href={image} fetchpriority="high" />}
+
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content={titleClean} />
+    <meta property="og:description" content={descriptionClean} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image:alt" content={imageAltClean} />
+    <meta property="og:locale" content="si_LK" />
+    <meta property="og:site_name" content={siteName} />
+
+    <meta property="article:published_time" content={safeDateISO} />
+    <meta property="article:modified_time" content={safeUpdatedISO} />
+    <meta property="article:author" content={authorName} />
+    {safeCategories.map((category: string) => (
+      <meta property="article:section" content={humanize(category)} />
+    ))}
+    {safeTags.map((tag: string) => (
+      <meta property="article:tag" content={humanize(tag)} />
+    ))}
+    {extractedOnlyKeywords.map((keyword: string) => (
+      <meta property="article:tag" content={keyword} />
+    ))}
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={titleClean} />
+    <meta name="twitter:description" content={descriptionClean} />
+    <meta name="twitter:image:alt" content={imageAltClean} />
+    <meta name="twitter:site" content="@WalaKatha" />
+
+    {keywordsString && <meta name="keywords" content={keywordsString} />}
+    <meta name="author" content={authorName} />
   </Fragment>
   <script type="application/ld+json" set:html={JSON.stringify(articleSchema)} />
   <PostSingle post={post} />
