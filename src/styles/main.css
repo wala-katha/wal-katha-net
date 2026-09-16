@@ -6,6 +6,14 @@
 @import "./safe.css";
 @import "./utilities.css";
 @import "./small-screen-fixes.css";
+
+/* Dark-theme colour fix for the typography plugin's light-theme
+   defaults (blacked-out <strong>, headings, code, blockquotes).
+   Imported UNLAYERED on purpose: unlayered declarations outrank
+   every @layer, so the fix applies without any !important.
+   See the header comment inside prose-dark.css for full detail. */
+@import "./prose-dark.css";
+
 @layer base {
   @import "./base.css";
 }
