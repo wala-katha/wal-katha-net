@@ -602,14 +602,20 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     <link rel="canonical" href={currentCanonical} />
     <meta name="description" content={calculatedDescription} />
 
+    {/* robots must apply to EVERY page including articles. Previously it
+        sat inside the !isArticle block, so blog posts shipped no robots
+        tag at all - losing max-image-preview:large (small thumbnails in
+        SERPs) and silently ignoring the noindex prop. PostSingle.astro
+        deliberately does not emit robots, so there is no duplicate. */}
+    {noindex
+      ? <meta name="robots" content="noindex,nofollow" />
+      : <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+    }
+
     {!isArticle && (
       <>
         <meta name="keywords" content={siteKeywords} />
         <meta name="author" content={config.metadata.meta_author} />
-        {noindex
-          ? <meta name="robots" content="noindex,nofollow" />
-          : <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
-        }
         <meta property="og:title" content={calculatedTitle} />
         <meta property="og:description" content={calculatedDescription} />
         <meta property="og:type" content="website" />
@@ -798,4 +804,3 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     <Footer />
   </body>
 </html>
-
