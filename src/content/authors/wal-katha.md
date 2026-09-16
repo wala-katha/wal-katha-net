@@ -4,7 +4,7 @@ meta_title: "Wal Katha - සිංහල වල් කතා ලේඛක | Sinh
 image: "/images/authors/wal-katha.webp"
 description: "Wal Katha ලේඛක විසින් රචිත සියලුම අලුත් සිංහල වල් කතා සහ වැල් කතා එකතුව මෙතනින් කියවන්න."
 social:
-  facebook: "https://www.facebook.com/walakathasinhala"
+  facebook: "https://www.facebook.com/walkathasinhala"
 ---
 
 හායි 👋. මම **Wal Katha**. මේ වෙබ් අඩවියේ පළ වන සිංහල වල් කතා සහ වැල් කතා රචනා කරන ලේඛකයන් දෙදෙනාගෙන් එක් අයෙක් මම. නිතිපතා අලුත් කතා එකතු කරන අතර, සෑම කතාවක්ම කියවන්නාට හොඳම රසවින්දනය ලබාදෙන ආකාරයට සංස්කරණය කරනවා.
