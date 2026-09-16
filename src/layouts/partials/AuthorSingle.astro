@@ -1,66 +1,59 @@
 ---
 import Social from "@/components/Social.astro";
-import { markdownify } from "@/lib/utils/textConverter";
-import { Image } from "astro:assets";
 import { render } from "astro:content";
 
 const { author } = Astro.props;
 const { title, image, social } = author.data;
 const { Content } = await render(author);
 
-// ✅ REMOVED: Duplicate JSON-LD ProfilePage schema block.
-// මෙම component එක authors/[single].astro (page) එකෙන් call වෙනවා,
-// ඒ page එකේ දැනටමත් සම්පූර්ණ ProfilePage schema එකක් (image URL
-// handling, base_url join logic, canonical URL සමඟ) තියෙනවා. මෙතන
-// තව එකක් තිබ්බොත් එකම page එකට ProfilePage schema 2ක් duplicate
-// ලෙස render වී, Google Rich Results Test එකේ error එකක් ලෙස පෙන්වයි.
-// Single-source-of-truth එක දැන් authors/[single].astro පමණි.
+// NOTE: the duplicate JSON-LD ProfilePage schema block that used to live
+// here was removed on purpose. authors/[single].astro is the single source
+// of truth for that schema; emitting it from both places produced two
+// ProfilePage nodes and a Rich Results Test error.
 ---
 
 <section class="section py-16 select-none">
   <div class="container">
-    {/* 👑 PREMIUM PROFILE CARD: මුළු කර්තෘ කොටසම කළු පසුබිම මත පට්ටම ලස්සනට වෙන් වී පෙනීමට සියුම් බොක්ස් එකක් හැදුවා */}
     <div class="max-w-3xl mx-auto border border-white/[0.04] bg-white/[0.01] p-8 sm:p-12 rounded-3xl backdrop-blur-sm text-center shadow-2xl">
-      
-      {/* AUTHOR IMAGE WITH NEON GLOW */}
       {
         image && (
           <div class="mb-6 relative inline-block">
-            {/* 🎯 UI HIGHLIGHT: පින්තූරය වටේට සයිට් එකේ තීම් Teal (#01AD9F) වර්ණයෙන් රවුම් බෝඩරයක් සහ මෘදු Glow එකක් දුන්නා */}
             <div class="absolute inset-0 rounded-full bg-[#01AD9F]/20 blur-md transform scale-105"></div>
-            <Image
+            {/*
+              Plain <img>, not Astro's <Image />. The avatar is a
+              public/images/authors/*.webp string path; Astro's <Image />
+              requires an imported ImageMetadata object and renders a broken
+              placeholder when given a public-folder string.
+            */}
+            <img
               src={image}
               class="relative mx-auto rounded-full border-2 border-[#01AD9F] object-cover shadow-xl transition duration-300 hover:scale-105"
-              height={130}
-              width={130}
-              alt={title}
+              height="130"
+              width="130"
+              alt={`${title} - author avatar`}
               loading="eager"
+              decoding="async"
+              fetchpriority="high"
             />
           </div>
         )
       }
 
-      {/* AUTHOR NAME */}
-      {/* 👑 CONTRAST FIX: නම කළු පසුබිම මත උපරිමයෙන් කැපී පෙනෙන්න text-[#F8F8FF] (පිරිසිදු සුදු) සහ font-black කළා */}
-      <h1 
-        set:html={markdownify(title)} 
-        class="text-2xl sm:text-4xl font-black tracking-tight text-[#F8F8FF] mb-4 drop-shadow-sm" 
-      />
+      <h1 class="h3 mb-4 text-[#F8F8FF] font-black">{title}</h1>
 
-      {/* SOCIAL LINKS CONTAINER */}
-      <div class="flex justify-center mb-8">
-        <Social source={social} className="social-icons-simple scale-110" />
-      </div>
+      {
+        social && (
+          <div class="mb-6 flex justify-center">
+            <Social source={social} className="social-icons" />
+          </div>
+        )
+      }
 
-      {/* HORIZONTAL SEPARATOR */}
-      <hr class="border-white/10 max-w-xs mx-auto mb-8" />
+      <hr class="my-8 border-white/[0.06]" />
 
-      {/* AUTHOR BIOGRAPHY (CONTENT) */}
-      {/* 🎯 SEO CONTRAST & READABILITY: ඇතුළේ තියෙන පparagraphs වල අකුරු මෘදු සුදු (text-white/70) කර කියවීමේ පහසුව 100%ක් කළා */}
-      <div class="content text-[#F8F8FF]/80 text-sm sm:text-base leading-relaxed max-w-xl mx-auto prose prose-invert">
+      <div class="content text-left text-[#F8F8FF]/80 leading-relaxed">
         <Content />
       </div>
-
     </div>
   </div>
 </section>
