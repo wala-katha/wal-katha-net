@@ -79,6 +79,10 @@ function extractScalarField(frontmatter, fieldName) {
   return m ? m[1] : null;
 }
 
+// Declared before getGitLastMod so the cache is never referenced from an
+// uninitialised binding if the call order ever changes.
+const gitLastModCache = new Map();
+
 function getGitLastMod(absFilePath) {
   if (gitLastModCache.has(absFilePath)) return gitLastModCache.get(absFilePath);
   let result = null;
@@ -97,7 +101,6 @@ function getGitLastMod(absFilePath) {
   gitLastModCache.set(absFilePath, result);
   return result;
 }
-const gitLastModCache = new Map();
 
 // Content date first, git only as a local-dev fallback. Never now().
 const contentLastModCache = new Map();
@@ -306,24 +309,61 @@ const fontsConfig = Object.entries(theme.fonts.font_family)
     };
   });
 
+// Trailing-slash normaliser for emitted sitemap URLs.
+//
+// 2026-09 FIX: the old implementation tested `url.split("/").pop()` for a
+// dot to decide "is this a file?". For the bare origin
+// "https://www.walakatha.net" that pop() returns "www.walakatha.net",
+// which contains dots, so the homepage was classified as a file and left
+// without its trailing slash - producing a sitemap URL that 308-redirects
+// and disagrees with the canonical tag. Resolve the real pathname instead.
 function ensureSitemapTrailingSlash(url) {
   if (url.endsWith("/")) return url;
-  const lastSegment = url.split("/").pop() || "";
-  if (lastSegment.includes(".")) return url;
-  return `${url}/`;
+  try {
+    const urlObj = new URL(url);
+    // Bare origin (no path at all) must always become "/".
+    if (urlObj.pathname === "" || urlObj.pathname === "/") {
+      urlObj.pathname = "/";
+      return urlObj.toString();
+    }
+    const lastSegment = urlObj.pathname.split("/").filter(Boolean).pop() || "";
+    // Only a real file extension should suppress the trailing slash.
+    if (/\.[a-z0-9]{2,5}$/i.test(lastSegment)) return url;
+    urlObj.pathname = `${urlObj.pathname}/`;
+    return urlObj.toString();
+  } catch {
+    // Not a parsable absolute URL - fall back to the conservative check.
+    const lastSegment = url.split("/").pop() || "";
+    if (/\.[a-z0-9]{2,5}$/i.test(lastSegment)) return url;
+    return `${url}/`;
+  }
 }
 
-// /page/1 duplicates the homepage; the standalone xml endpoints are
-// declared directly in robots.txt and must not be listed as pages.
+// Paths that must never appear in sitemap-0.xml.
+//
+// /page/1            - duplicates the homepage (canonical points home)
+// /search            - served with <meta name="robots" content="noindex,follow">.
+//                      Listing a noindex URL in a submitted sitemap raises
+//                      "Submitted URL marked noindex" as an ERROR in Search
+//                      Console. Google also explicitly advises keeping
+//                      internal search result pages out of the index.
+// /news-sitemap.xml  - standalone endpoints declared in robots.txt; they are
+// /image-sitemap.xml   sitemaps, not crawlable pages.
 const EXCLUDED_SITEMAP_PATHS = [
   "/elements",
   "/page/1",
+  "/search",
   "/news-sitemap.xml",
   "/image-sitemap.xml",
 ];
+
 function isExcludedFromSitemap(url) {
-  const path = url.replace(/^https?:\/\/[^/]+/, "").replace(/\/$/, "");
-  return EXCLUDED_SITEMAP_PATHS.includes(path);
+  // NOTE: do not name this local variable `path` - that shadows the
+  // "node:path" module import used elsewhere in this file.
+  const pathname = url.replace(/^https?:\/\/[^/]+/, "").replace(/\/$/, "");
+  return EXCLUDED_SITEMAP_PATHS.some(
+    (excluded) => pathname === excluded || pathname.startsWith(`${excluded}/`)
+  );
 }
 
 export default defineConfig({
