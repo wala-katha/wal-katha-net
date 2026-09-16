@@ -6,7 +6,7 @@ date: 2026-08-07
 image: "/images/posts/Bus-jack-wal-katha.webp"
 image_alt: "සිංහල වැල කතා අලුත් වැල කතා එකතුවේ බස් ගමනක් පදනම් කරගත් තද රෝස සාරියක් ඇඳි යුවතිය."
 draft: false
-authors: ["WalKatha"]
+authors: ["Wal Katha"]
 tags: ["bus-wal-katha", "sinhala-bus-katha", "bus-wal-katha-sinhala", "sri-lankan-wal-katha", "latest-bus-wal-katha"]
 categories: ["bus-wal-katha"]
 ---
