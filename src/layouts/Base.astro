@@ -19,12 +19,24 @@ export interface Props {
   meta_title?: string;
   description?: string;
   image?: string;
+  imageWidth?: number;
+  imageHeight?: number;
   noindex?: boolean;
   canonical?: string;
   isArticle?: boolean;
 }
 
-const { title, meta_title, description, image, noindex, canonical, isArticle = false } = Astro.props;
+const {
+  title,
+  meta_title,
+  description,
+  image,
+  imageWidth,
+  imageHeight,
+  noindex,
+  canonical,
+  isArticle = false,
+} = Astro.props;
 
 const calculatedTitle = plainify(
   meta_title && meta_title.trim() !== ""
@@ -46,11 +58,34 @@ const cleanBaseUrl = config.site.base_url.endsWith("/")
   ? config.site.base_url.slice(0, -1)
   : config.site.base_url;
 
+// TRAILING-SLASH NORMALIZER - origin-aware.
+// The previous version tested `url.split("/").pop()` for a dot to detect
+// file-like URLs. For a bare origin ("https://www.walakatha.net") that
+// last segment is the HOSTNAME, which always contains dots, so the
+// homepage was classed as a file and returned unslashed. Result: the
+// homepage canonical, og:url and hreflang all disagreed with the sitemap
+// entry ("https://www.walakatha.net/") and Cloudflare Pages answered "/"
+// requests with a 308 redirect. Splitting the origin off first means the
+// dot test only ever runs against a real path segment.
 function ensureTrailingSlash(url: string): string {
+  if (!url) return url;
   if (url.endsWith("/")) return url;
-  const lastSegment = url.split("/").pop() || "";
+
+  // Preserve query strings / hashes if present.
+  const [pathPart, ...rest] = url.split(/([?#].*)/);
+  const suffix = rest.join("");
+
+  const originMatch = pathPart.match(/^([a-z][a-z0-9+.-]*:\/\/[^/]+)(\/.*)?$/i);
+  const origin = originMatch ? originMatch[1] : "";
+  const path = originMatch ? (originMatch[2] || "") : pathPart;
+
+  // Bare origin, or root path: always exactly one slash.
+  if (path === "" || path === "/") return `${origin}/${suffix}`;
+
+  const lastSegment = path.split("/").pop() || "";
   if (lastSegment.includes(".")) return url;
-  return `${url}/`;
+
+  return `${origin}${path}/${suffix}`;
 }
 
 const currentCanonical = ensureTrailingSlash(
@@ -62,6 +97,17 @@ const finalImageUrl = image
     ? image
     : `${cleanBaseUrl}${image.startsWith("/") ? image : "/" + image}`
   : `${cleanBaseUrl}${config.metadata.meta_image.startsWith("/") ? config.metadata.meta_image : "/" + config.metadata.meta_image}`;
+
+// OG IMAGE DIMENSIONS - declared, not assumed.
+// These used to be hardcoded 1200x630 for every page. Any page passing a
+// differently-sized image (the homepage passed logo.webp at 300x50) then
+// declared dimensions up to 24x larger than the real file, and Facebook,
+// X and WhatsApp all validate declared dimensions before rendering a
+// large summary card - on mismatch they silently fall back to no card.
+// Callers can now override; the defaults still match the purpose-built
+// 1200x630 og-image.webp referenced by config.metadata.meta_image.
+const finalImageWidth = imageWidth && imageWidth > 0 ? imageWidth : 1200;
+const finalImageHeight = imageHeight && imageHeight > 0 ? imageHeight : 630;
 
 const isHomePage = Astro.url.pathname === "/" || Astro.url.pathname === "";
 
@@ -104,6 +150,11 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
   class:list={["bg-[#050505]", !isAgeGateExcludedPage && "age-gate-pending"]}
 >
   <head>
+    {/* charset must land inside the first 1024 bytes of <head>. The HTTP
+        Content-Type header already declares utf-8, but the meta tag is
+        what keeps Sinhala text rendering correctly when a page is saved,
+        proxied or fetched by a crawler that ignores the header. */}
+    <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
     <meta name="color-scheme" content="dark" />
 
@@ -576,8 +627,21 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
       }
     </style>
 
-    <link rel="shortcut icon" href={config.site.favicon} />
+    {/* rel="shortcut icon" is a legacy alias no spec has required since
+        HTML5; rel="icon" is the current form and every browser honours it.
+        apple-touch-icon was missing entirely, so iOS "Add to Home Screen"
+        fell back to a screenshot - app-icon.jpg already ships in public/. */}
+    <link rel="icon" href={config.site.favicon} />
+    <link rel="apple-touch-icon" href="/images/app-icon.jpg" />
     <link rel="manifest" href="/manifest.json" />
+
+    {/* The comments/likes Cloudflare Worker is already allowed by the CSP
+        connect-src in public/_headers, but the DNS lookup and TLS
+        handshake only began when the first fetch fired. Warming the
+        connection here removes that round-trip from interaction latency,
+        which is what INP measures. */}
+    <link rel="preconnect" href="https://comments.wala-katha.workers.dev" crossorigin />
+    <link rel="dns-prefetch" href="https://comments.wala-katha.workers.dev" />
 
     {isHomePage && (
       <link rel="preload" as="image" href="/images/slider/slide-1.webp" fetchpriority="high" />
@@ -592,7 +656,9 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#050505" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#050505" />
     <meta name="msapplication-TileColor" content="#050505" />
-    <meta name="theme-name" content="bookworm-light-astro" />
+    {/* REMOVED: meta name="theme-name" content="bookworm-light-astro" -
+        leftover starter-template metadata. It carries no SEO or rendering
+        value and publicly discloses the theme this site was built from. */}
     <meta name="generator" content={Astro.generator} />
 
     <link rel="alternate" hreflang="si" href={currentCanonical} />
@@ -606,9 +672,13 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
         sat inside the !isArticle block, so blog posts shipped no robots
         tag at all - losing max-image-preview:large (small thumbnails in
         SERPs) and silently ignoring the noindex prop. PostSingle.astro
-        deliberately does not emit robots, so there is no duplicate. */}
+        deliberately does not emit robots, so there is no duplicate.
+        noindex now pairs with "follow" rather than "nofollow": the pages
+        that need noindex here are utility pages (internal search), and
+        nofollow would strand the link equity already pointing through
+        them instead of letting it flow on to the real articles. */}
     {noindex
-      ? <meta name="robots" content="noindex,nofollow" />
+      ? <meta name="robots" content="noindex,follow" />
       : <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
     }
 
@@ -625,15 +695,17 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={calculatedTitle} />
         <meta name="twitter:description" content={calculatedDescription} />
-        <meta name="twitter:image:width" content="1200" />
-        <meta name="twitter:image:height" content="630" />
+        {/* REMOVED: twitter:image:width / twitter:image:height - neither
+            exists in the Twitter Cards specification, so every crawler
+            discarded them. Real image dimensions travel in the og:image:*
+            tags below, which X reads as a fallback. */}
       </>
     )}
 
     <meta property="og:image" content={finalImageUrl} />
     <meta property="og:image:secure_url" content={finalImageUrl} />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta property="og:image:width" content={String(finalImageWidth)} />
+    <meta property="og:image:height" content={String(finalImageHeight)} />
     <meta property="og:image:type" content={finalImageMimeType} />
     <meta name="twitter:image" content={finalImageUrl} />
 
