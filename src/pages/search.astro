@@ -15,43 +15,33 @@ const searchList = posts.map((item) => ({
   content: item.body,
 }));
 
-// SEO 2026 — canonical URL & logo
 const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 
-// 🎯 CLOUDFLARE PAGES TRAILING-SLASH CONSISTENCY:
-// Base.astro auto-appends a trailing slash to <link rel="canonical">
-// (Cloudflare Pages serves directory-style URLs with a trailing slash
-// by default). This local canonicalUrl is also embedded directly inside
-// the JSON-LD SearchResultsPage schema below, bypassing Base.astro's
-// trailing-slash logic, so we add the slash here too to keep everything
-// in sync (canonical and structured data both resolve with 0 redirects).
+// Cloudflare Pages serves directory-style URLs with a trailing slash, and
+// this canonicalUrl is also embedded directly in the JSON-LD below, so the
+// slash is added here to keep canonical and structured data in sync with
+// zero redirects.
 const canonicalUrl = `${base_url}/search/`;
-const siteLogo  = `${base_url}/images/logo.png`;
+
+// OG IMAGE FIX. This page previously used /images/logo.png for og:image.
+// That file is 198 KB and, despite the .png extension, its bytes are JPEG
+// (SOI marker 0xFFD8), so Base.astro's extension-based MIME detection
+// declared image/png for JPEG data. On top of that, Base hardcodes
+// og:image:width=1200/height=630 while the logo is 300x50. Using the
+// purpose-built 1200x630 og-image.webp from config fixes the wrong MIME
+// type, the false dimensions and the oversized payload in one change.
+const ogImage = config.metadata.meta_image;
+const siteLogo = `${base_url}${config.site.logo}`;
 const siteTitle = config?.site?.title || "WalaKatha";
 
-// ✅ FIXED (Ahrefs "Meta description too long" — 2026-07-19): පරණ
-// description එක 164 characters වුණා (Ahrefs ~155-160 char maximum
-// threshold එක ඉක්මවා ගියා). මීට කලින් "too short" (94 chars) fix
-// කරද්දී විස්තර කිරීමේදී upper limit එකත් ඉක්මවුනා. දැන් 120-155
-// character "sweet spot" එකට සරිලන පරිදි concise කර ඇත — core
-// keywords (Wala Katha, සිංහල වල් කතා, වැල කතා) සියල්ලම රැඳවී ඇත.
+// Meta description held to the 120-155 character sweet spot while keeping
+// every core keyword (Wala Katha, සිංහල වල් කතා, වැල කතා).
 const pageDescription = "ඔබට අවශ්‍ය ඕනෑම සිංහල වල් කතාවක්, වැල කතාවක් නම භාවිත කරමින් ක්ෂණිකව සොයා ගන්න. Wala Katha හි සියලුම කතා එකම තැනකින් සොයාගන්න.";
+const pageTitle = `වල් කතා සෙවීම | Search Sinhala Wal Katha & Wela Stories - ${siteTitle}`;
 
-// 🎯 FIXED (WebSite Schema Duplication — Google Entity Graph Conflict):
-// මීට කලින් මෙතන WebSite entity එකේ (@id: "${base_url}/#website")
-// සම්පූර්ණ, වෙනම object එකක් (url, name, potentialAction/SearchAction
-// සහිතව) define කර තිබුණි. index.astro එකේත් එකම @id එකට වෙනම
-// full-definition එකක් තිබූ නිසා (SearchAction urlTemplate එකේ
-// trailing-slash mismatch එකක්ම සමගින්), Google entity graph එකේ එකම
-// @id එකට conflicting field values පෙනී duplicate/inconsistent entity
-// data ලෙස ගැටලුවක් හැදිය හැක.
-//
-// නිවැරදි Schema.org pattern එක: WebSite entity එකේ එකම authoritative,
-// full definition එක index.astro (site root) එකේ පමණක් තිබිය යුතුය.
-// මෙම page ඇතුළු අනිකුත් සියලුම pages, "isPartOf" හරහා @id reference
-// එකක් පමණක් දිය යුතුය — SearchResultsPage object එකේ දැනටමත් තිබූ
-// isPartOf field එකම මෙම pattern එකයි, ඒ නිසා මෙතන කිසිදු අලුත් field
-// එකක් එකතු කරන්නේ නැත, පමණක් duplicate WebSite object එක ඉවත් කර ඇත.
+// The WebSite entity has exactly one authoritative full definition, on
+// index.astro. Every other page references it by @id through isPartOf, so
+// no duplicate WebSite object is declared here.
 const searchPageSchema = {
   "@context": "https://schema.org",
   "@graph": [
@@ -70,7 +60,7 @@ const searchPageSchema = {
             "@type": "ListItem",
             "position": 1,
             "name": "වල් කතා මුල් පිටුව",
-            "item": base_url
+            "item": `${base_url}/`
           },
           {
             "@type": "ListItem",
@@ -85,36 +75,34 @@ const searchPageSchema = {
 };
 ---
 
+{/* noindex: Google's own guidance is to keep internal search result pages
+    out of the index - they are thin, infinitely variable and duplicate the
+    listing pages, which drags on site-wide quality signals. Passing the
+    prop lets Base.astro emit the single authoritative robots tag, instead
+    of this file emitting a second, conflicting one. The page still renders
+    and still works for visitors; only indexing changes. */}
 <Base
-  title={`වල් කතා සෙවීම | Search Sinhala Wal Katha & Wela Stories - ${siteTitle}`}
-  meta_title={`වල් කතා සෙවීම | Search Sinhala Wal Katha & Wela Stories - ${siteTitle}`}
+  title={pageTitle}
+  meta_title={pageTitle}
   description={pageDescription}
   canonical={canonicalUrl}
-  image={siteLogo}
+  image={ogImage}
+  noindex={true}
 >
 
   {/* ── JSON-LD ── */}
   <script type="application/ld+json" set:html={JSON.stringify(searchPageSchema)} />
 
-  {/* ── HEAD SLOT — Extra Meta ONLY (No duplicate canonical/og/hreflang/
-       content-language tags — Base.astro now renders hreflang="si",
-       hreflang="x-default", and content-language universally for every
-       page, so the three lines that used to live here manually have
-       been removed to avoid duplicate <link>/<meta> emission on this
-       exact page) ── */}
+  {/* ── HEAD SLOT ──
+       DUPLICATE META REMOVED: robots, og:type, og:locale, og:site_name,
+       og:image:width, og:image:height and twitter:card are all emitted by
+       Base.astro already for non-article pages, so re-declaring them here
+       shipped two of each. The robots pair was the dangerous one, because
+       this page now needs a single unambiguous noindex directive. Only
+       og:image:alt / twitter:image:alt remain, since Base emits neither. */}
   <Fragment slot="head">
-    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
-
-    {/* Extra Open Graph Details */}
-    <meta property="og:type"        content="website" />
-    <meta property="og:locale"      content="si_LK" />
-    <meta property="og:site_name"   content={siteTitle} />
-    <meta property="og:image:width"  content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt"    content={`${siteTitle} Search`} />
-
-    {/* Twitter / X Extra */}
-    <meta name="twitter:card"        content="summary_large_image" />
+    <meta property="og:image:alt" content={`${siteTitle} Search`} />
+    <meta name="twitter:image:alt" content={`${siteTitle} Search`} />
   </Fragment>
 
   {/* ── STYLES ── */}
@@ -153,10 +141,8 @@ const searchPageSchema = {
       border: 0;
     }
 
-    /* 👑 SMART SEARCH RESULTS OVERRIDES (React Components CSS Injection)
-       උඹේ නිල CSS ෆයිල් වලට කිසිම හානියක් නොකර සර්ච් කාඩ් ටික මෙතනින් හැඩගස්වයි */
-    
-    /* 1. සෙවුම් ප්‍රතිඵලවල ඇති පෝස්ට් කාඩ් එක */
+    /* Search results card grid overrides, scoped so the project's own CSS
+       files stay untouched. */
     .search-hero-container + div, 
     main .container > div:last-child,
     [class*="search-result"], 
@@ -171,20 +157,20 @@ const searchPageSchema = {
       }
     }
 
-    /* 2. පින්තූරය Crop වීම සම්පූර්ණයෙන්ම වළක්වන කොටස */
+    /* Keep thumbnails uncropped inside the card frame. */
     main img {
       width: 100% !important;
       height: 100% !important;
-      object-fit: contain !important; /* FIXED: පින්තූරය බ්ලැක් බෝඩර්ස් මැද Crop නොවී ලස්සනට තැබීම */
+      object-fit: contain !important;
       background-color: #111111 !important;
       border-radius: 12px !important;
       transition: all 0.3s ease !important;
     }
 
-    /* 3. පින්තූරය වටා ඇති Anchor/Div කන්ටේනරය */
+    /* Anchor/div container around each thumbnail. */
     main .container a:has(img) {
       display: block !important;
-      aspect-ratio: 16 / 10 !important; /* Premium Landscape Ratio */
+      aspect-ratio: 16 / 10 !important;
       background-color: #111111 !important;
       overflow: hidden !important;
       border-radius: 12px !important;
@@ -222,7 +208,7 @@ const searchPageSchema = {
           කතාවේ නම, ලේඛකයා හෝ ඔබට මතක ඕනෑම වචනයක් පහත පෙට්ටියේ Type කරන්න.
         </p>
 
-        {/* ✅ SearchBar — client:load with state preservation */}
+        {/* SearchBar — client:load with state preservation */}
         <div class="text-left relative">
           <SearchBar client:load searchList={searchList} transition:persist="search-bar" />
         </div>
