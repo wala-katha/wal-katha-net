@@ -1,101 +1,137 @@
 import { slug } from "github-slugger";
 import { marked } from "marked";
 
-// 1. Slugify (ලින්ක් සෑදීම සඳහා)
+// Invisible characters that leak in from editors (zero-width space/joiner,
+// BOM, bidi marks, non-breaking space). They break URLs, slugs and meta text.
+const INVISIBLE_CHARS_RE = /[\u200B-\u200D\uFEFF\u200E\u200F\u202A-\u202E\u2060]/g;
+
+// Strip invisible chars and normalise NBSP to a real space.
+const stripInvisible = (content: string): string =>
+  content.replace(INVISIBLE_CHARS_RE, "").replace(/\u00A0/g, " ");
+
+// Collapse every whitespace run (incl. newlines/tabs) into one space, then trim.
+// This is what keeps trailing "\n" from marked out of <title> and <meta>.
+const collapseWhitespace = (content: string): string =>
+  content.replace(/\s+/g, " ").trim();
+
+// 1. Slugify
 export const slugify = (content: string) => {
   if (!content || typeof content !== "string") return "";
-  return slug(content);
+  return slug(stripInvisible(content));
 };
 
-// 1.1 ✅ NEW: sanitizeUrlPath — URL path segment එකක් (post id, slug, category
-//     name ආදිය) href/id ලෙස පාවිච්චි කරන්න කලින් "safe" කිරීම සඳහා.
-//     මෙය leading/trailing slashes, ඉරට්ටේ slashes (//), සහ අනවශ්‍ය
-//     whitespace ඉවත් කරයි. FeaturedSlider.astro වගේ තැන්වල hardcoded
-//     "id" values වලට trailing slash එකක් accidentally එකතු වුනොත්
-//     (`"some-post/"`), href={`/blog/${slide.id}/`} කරනකොට double-slash
-//     (`//`) හැදෙන එක මෙයින් සදහටම වළක්වයි — root-cause level fix එකක්.
+// 1.1 sanitizeUrlPath - make a path segment safe before use in href/id.
+// Removes leading/trailing slashes, collapses duplicate slashes, strips
+// invisible chars so a pasted zero-width space cannot 404 a URL.
 export const sanitizeUrlPath = (content: string): string => {
   if (!content || typeof content !== "string") return "";
-  return content
+  return stripInvisible(content)
     .trim()
-    .replace(/^\/+/, "")   // ආරම්භයේ ඇති slash(es) ඉවත් කිරීම
-    .replace(/\/+$/, "")   // අවසානයේ ඇති slash(es) ඉවත් කිරීම
-    .replace(/\/{2,}/g, "/"); // මැදින් ඇති ඉරට්ටේ slashes එකකට හැරවීම
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "")
+    .replace(/\/{2,}/g, "/");
 };
 
-// 1.2 ✅ NEW: buildUrl — base path එකකට segment එකක් "safe" විදිහට
-//     ඈඳගැනීම සඳහා. හැම තැනකම trailing-slash convention එකම (config.json
-//     trailing_slash: false → slash නැතුව) manual විදිහට enforce කරයි.
-//     උදා: buildUrl("/blog", "some-post/") -> "/blog/some-post"
+// 1.2 buildUrl - join a base path and a segment safely.
+// Returns the path WITHOUT a trailing slash; callers append one where the
+// site's trailing-slash convention requires it.
 export const buildUrl = (base: string, segment: string): string => {
-  const cleanBase = base.replace(/\/+$/, "");
+  const cleanBase = stripInvisible(base).replace(/\/+$/, "");
   const cleanSegment = sanitizeUrlPath(segment);
-  return `${cleanBase}/${cleanSegment}`;
+  return cleanSegment ? `${cleanBase}/${cleanSegment}` : cleanBase;
 };
 
-// 2. Markdownify (Markdown සිට HTML දක්වා ආරක්ෂිතව පරිවර්තනය)
+// 2. Markdownify - Markdown to HTML.
 export const markdownify = (content: string, div?: boolean) => {
   if (!content || typeof content !== "string") return "";
   return div ? marked.parse(content) : marked.parseInline(content);
 };
 
-// 3. Humanize (පෙළ පිරිසිදු කර කියවිය හැකි ලෙස සකස් කිරීම)
+// 3. Humanize - readable label from a slug or raw key.
 export const humanize = (content: string) => {
   if (!content || typeof content !== "string") return "";
-  return content
+  return stripInvisible(content)
     .replace(/^[\s_]+|[\s_]+$/g, "")
     .replace(/[_\s]+/g, " ")
     .replace(/[-\s]+/g, " ")
     .replace(/^[a-z]/, function (m) {
       return m.toUpperCase();
-    });
+    })
+    .trim();
 };
 
-// 4. Titleify (සෑම වචනයකම මුල් අකුර කැපිටල් කර මාතෘකා සෑදීම)
+// 4. Titleify
 export const titleify = (content: string) => {
   if (!content || typeof content !== "string") return "";
   const humanized = humanize(content);
   return humanized
     .split(" ")
+    .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 };
 
-// 5. Plainify (SEO විස්තර - Meta Description සඳහා HTML/Markdown සම්පූර්ණයෙන්ම අයින් කිරීම)
-export const plainify = (content: string) => {
-  if (!content || typeof content !== "string") return "";
-  
-  try {
-    const parseMarkdown = marked.parse(content);
-    // TypeScript දෝෂ මඟහරවා ගැනීමට string එකක් බව ස්ථිර කිරීම
-    const markdownString = typeof parseMarkdown === "string" ? parseMarkdown : String(parseMarkdown);
-    
-    const filterBrackets = markdownString.replace(/<\/?[^>]+(>|$)/gm, "");
-    const filterSpaces = filterBrackets.replace(/[\r\n]\s*[\r\n]/gm, "");
-    const stripHTML = htmlEntityDecoder(filterSpaces);
-    return stripHTML;
-  } catch (error) {
-    return content; // යම් හෙයකින් දෝෂයක් ආවොත් මුල් පෙළම ලබා දේ (Auto-Fix)
-  }
+// HTML entity decoding. Named entities first, then numeric (decimal and hex),
+// so smart quotes and dashes never reach SERP output as raw "&#8217;".
+const NAMED_ENTITIES: { [key: string]: string } = {
+  "&nbsp;": " ",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&apos;": "'",
+  "&#39;": "'",
+  "&amp;": "&",
 };
 
-// HTML Entities ආරක්ෂිතව ඉවත් කිරීමේ ශ්‍රිතය
 const htmlEntityDecoder = (htmlWithEntities: string) => {
   if (!htmlWithEntities) return "";
-  
-  const entityList: { [key: string]: string } = {
-    "&nbsp;": " ",
-    "&lt;": "<",
-    "&gt;": ">",
-    "&amp;": "&",
-    "&quot;": '"',
-    "&#39;": "'",
-  };
-  
-  return htmlWithEntities.replace(
-    /(&amp;|&lt;|&gt;|&quot;|&#39;|&nbsp;)/g,
-    (entity: string): string => {
-      return entityList[entity] || entity;
+
+  // Single pass over the named set: alternation prevents "&amp;lt;" from
+  // being double-decoded into "<".
+  const named = htmlWithEntities.replace(
+    /&(?:nbsp|lt|gt|quot|apos|amp|#39);/g,
+    (entity: string): string => NAMED_ENTITIES[entity] || entity
+  );
+
+  // Numeric entities: decimal (&#8217;) and hex (&#x2019;).
+  return named.replace(
+    /&#(x[0-9a-fA-F]+|\d+);/g,
+    (match: string, code: string): string => {
+      const point = code.toLowerCase().startsWith("x")
+        ? parseInt(code.slice(1), 16)
+        : parseInt(code, 10);
+      if (!Number.isFinite(point) || point < 1 || point > 0x10ffff) return match;
+      try {
+        return String.fromCodePoint(point);
+      } catch (error) {
+        return match;
+      }
     }
   );
+};
+
+// 5. Plainify - plain text for <title> and <meta name="description">.
+// marked.parse() wraps output in <p>...</p> plus a trailing newline. The old
+// blank-line regex could not match a single trailing "\n", so it leaked into
+// <title>. collapseWhitespace() removes it and normalises every inner
+// newline/tab/double-space into one clean space.
+export const plainify = (content: string) => {
+  if (!content || typeof content !== "string") return "";
+
+  try {
+    const parsed = marked.parse(content);
+    const markdownString = typeof parsed === "string" ? parsed : String(parsed);
+
+    // Drop script/style bodies outright, then remove remaining tags.
+    const withoutRisky = markdownString
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "");
+
+    const withoutTags = withoutRisky.replace(/<\/?[^>]+(>|$)/gm, " ");
+    const decoded = htmlEntityDecoder(withoutTags);
+
+    return collapseWhitespace(stripInvisible(decoded));
+  } catch (error) {
+    return collapseWhitespace(stripInvisible(content));
+  }
 };
