@@ -4,7 +4,7 @@ meta_title: "Wala Katha - සිංහල වල් කතා ලේඛිකා
 image: "/images/authors/wala-katha.webp"
 description: "Wala Katha ලේඛිකා විසින් රචිත සියලුම අලුත් සිංහල වල් කතා සහ වැල් කතා එකතුව මෙතනින් කියවන්න."
 social:
-  facebook: "https://www.facebook.com/walakatha"
+  facebook: "https://www.facebook.com/walkathasinhala"
 ---
 
 හායි 👋. මම **Wala Katha**. මේ වෙබ් අඩවියේ පළ වන සිංහල වල් කතා සහ වැල් කතා රචනා කරන ලේඛකයන් දෙදෙනාගෙන් එක් අයෙක් මම. කියවන්නන්ගේ ඉල්ලීම් අනුව අලුත් තේමා ඔස්සේ කතා ලියන අතර, දිගටම අප සමඟ රැඳී සිටින්න.
