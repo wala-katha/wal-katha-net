@@ -1,7 +1,6 @@
 ---
-import { markdownify } from "@/lib/utils/textConverter";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
-import { Image } from "astro:assets";
+import { plainify } from "@/lib/utils/textConverter";
 import type { CollectionEntry } from "astro:content";
 import { BsArrowRightCircle } from "react-icons/bs";
 
@@ -9,67 +8,95 @@ type Props = {
   authors: CollectionEntry<"authors">[];
 };
 const { authors } = Astro.props;
+
+// Card blurb source. Previously this used
+//   set:text={markdownify(author.body.slice(0, 100))}
+// which had three compounding bugs:
+//   1. author.body is RAW markdown, so "**Wal Katha**" became a literal
+//      <strong> tag in the output.
+//   2. set:text escapes HTML, so that tag rendered as visible text
+//      instead of bold type.
+//   3. slice(0, 100) cut mid-word / mid-syntax, so the line ended on a
+//      broken fragment.
+// frontmatter `description` is already clean single-line plain text, so
+// it is the correct source for a card excerpt.
+const CARD_EXCERPT_LIMIT = 120;
+
+function buildExcerpt(entry: CollectionEntry<"authors">): string {
+  const source = entry.data.description || "";
+  const clean = plainify(source);
+  if (clean.length <= CARD_EXCERPT_LIMIT) return clean;
+  // Trim on a word boundary so the excerpt never ends mid-word.
+  const cut = clean.slice(0, CARD_EXCERPT_LIMIT);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > 60 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
 ---
 
 <div class="row justify-center gy-4">
   {
-    authors.map((author) => (
-      <div 
-        class="col-12 sm:col-6 md:col-4 flex"
-        itemscope 
-        itemtype="https://schema.org/Person"
-      >
-        {/* 👑 PREMIUM DARK CARD CONTAINER: 
-            කළු පසුබිම මත කතුවරයාගේ කාඩ් එක වෙන් කර ඉස්මතු කිරීමට සියුම් বෝඩරයක් (`border-white/10`) 
-            සහ හොවර් එකේදී මෘදුව ඉස්මතු වන `hover:border-white/30` ඉෆෙක්ට් එක යෙදීම. */}
-        <div class="w-full bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col items-center text-center transition-all duration-300 hover:border-white/30 hover:bg-white/10 group">
-          
-          {author.data.image && (
-            <div class="mb-4 relative overflow-hidden rounded-full border-2 border-white/20 group-hover:border-[#01AD9F] transition-all duration-300 w-[120px] h-[120px]">
-              <Image
-                src={author.data.image}
-                alt={author.data.title}
-                height={120}
-                width={120}
-                itemprop="image"
-                loading="lazy"
-                decoding="async"
-                class="w-full h-full object-cover"
-              />
-            </div>
-          )}
+    authors.map((author) => {
+      const authorUrl = withTrailingSlash(`/authors/${author.id}`);
+      const excerpt = buildExcerpt(author);
 
-          {/* AUTHOR NAME: කළු පසුබිම මත උපරිමයෙන්ම පෙනීමට තද සුදු (#F8F8FF) සහ font-black (Extra Bold) කිරීම */}
-          <h3 class="h5 mt-4 mb-2">
+      return (
+        <div
+          class="col-12 sm:col-6 md:col-4 flex"
+          itemscope
+          itemtype="https://schema.org/Person"
+        >
+          <div class="w-full bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col items-center text-center transition-all duration-300 hover:border-white/30 hover:bg-white/10 group">
+            {author.data.image && (
+              <div class="mb-4 relative overflow-hidden rounded-full border-2 border-white/20 group-hover:border-[#01AD9F] transition-all duration-300 w-[120px] h-[120px]">
+                {/*
+                  Plain <img>, not Astro's <Image />. These avatars live in
+                  public/images/authors/ and are referenced by string path.
+                  Astro's <Image /> only accepts an imported ImageMetadata
+                  object; handing it a public-folder string renders a broken
+                  placeholder, which is why the avatars showed as empty rings.
+                */}
+                <img
+                  src={author.data.image}
+                  alt={`${author.data.title} - author avatar`}
+                  height="120"
+                  width="120"
+                  itemprop="image"
+                  loading="lazy"
+                  decoding="async"
+                  class="w-full h-full object-cover"
+                />
+              </div>
+            )}
+
+            <h3 class="h5 mt-4 mb-2">
+              <a
+                href={authorUrl}
+                itemprop="url"
+                class="block text-[#F8F8FF] hover:text-[#01AD9F] transition duration-200 font-black"
+              >
+                <span itemprop="name">{author.data.title}</span>
+              </a>
+            </h3>
+
+            {excerpt && (
+              <p
+                class="text-[#F8F8FF]/70 text-sm mb-6 leading-relaxed flex-grow"
+                itemprop="description"
+              >
+                {excerpt}
+              </p>
+            )}
+
             <a
-              href={withTrailingSlash(`/authors/${author.id}`)}
-              itemprop="url"
-              class="block text-[#F8F8FF] hover:text-[#01AD9F] transition duration-200 font-black"
+              href={authorUrl}
+              class="inline-flex items-center justify-center w-full px-4 py-2 text-xs font-black text-white bg-[#01AD9F] rounded-xl transition duration-300 hover:bg-opacity-90 gap-2 shadow-sm"
+              aria-label={`Read more about ${author.data.title}`}
             >
-              <span itemprop="name">{author.data.title}</span>
+              Read Profile <BsArrowRightCircle className="inline text-base" />
             </a>
-          </h3>
-
-          {/* AUTHOR DESCRIPTION: හැඳින්වීම කියවීමට පහසු ලා සුදු පැහැයකට හැරවීම */}
-          {author.body && (
-            <p 
-              class="text-[#F8F8FF]/70 text-sm mb-6 line-clamp-2 leading-relaxed flex-grow" 
-              itemprop="description" 
-              set:text={markdownify(author.body.slice(0, 100))} 
-            />
-          )}
-
-          {/* READ MORE BUTTON: සයිට් එකේ ප්‍රධාන වර්ණය වන #010203 ට වඩා කැපී පෙනෙන #01AD9F (Teal) පැහැයෙන් බොත්තම සකස් කිරීම */}
-          <a
-            href={withTrailingSlash(`/authors/${author.id}`)}
-            class="inline-flex items-center justify-center w-full px-4 py-2 text-xs font-black text-white bg-[#01AD9F] rounded-xl transition duration-300 hover:bg-opacity-90 gap-2 shadow-sm"
-            aria-label={`Read more about ${author.data.title}`}
-          >
-            Read Profile <BsArrowRightCircle className="inline text-base" />
-          </a>
-          
+          </div>
         </div>
-      </div>
-    ))
+      );
+    })
   }
 </div>
