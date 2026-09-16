@@ -8,20 +8,12 @@ import { getSinglePage } from "@/lib/contentParser.astro";
 import { sortByDate } from "@/lib/utils/sortFunctions";
 import { withTrailingSlash } from "@/lib/utils/urlHelper";
 
-// HTML PAGE SIZE FIX (SEO Site Checkup - "HTML Page Size Test" flagged
-// 37.35 KB vs 33 KB average, recommending "external style sheets"): the
-// large :global(...) CSS block that used to live inline inside this
-// file's <style is:global> tag has been moved, byte-for-byte identical,
-// to src/styles/index-overrides.css and is now imported here as a
-// static asset import instead. Astro's Vite pipeline (cssCodeSplit:
-// true, already set in astro.config.mjs) extracts this into its own
-// hashed, cacheable .css file at build time.
+// HTML PAGE SIZE FIX: the large :global(...) CSS block that used to live
+// inline here now lives in src/styles/index-overrides.css and is imported
+// as a static asset, so Vite extracts it into a hashed, cacheable file.
 import "@/styles/index-overrides.css";
 
-// AI VISIBILITY UPGRADE (2026-07): social.json imported so the
-// Organization JSON-LD entity below can safely compute a "sameAs"
-// array - see organizationSameAs comment further down for the
-// safety logic (placeholder base-domain links are filtered out).
+// social.json powers the Organization "sameAs" array below.
 import social from "@/config/social.json";
 
 const posts = await getSinglePage("posts");
@@ -30,9 +22,30 @@ const totalPages = Math.ceil(posts.length / config.settings.pagination);
 const currentPosts = sortedPosts.slice(0, config.settings.pagination);
 
 const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
-const canonicalUrl = base_url;
 
+// CANONICAL TRAILING-SLASH FIX. Base.astro's ensureTrailingSlash() checks
+// whether the last path segment contains a dot to detect file-like URLs.
+// For a bare origin ("https://www.walakatha.net") that last segment is
+// "www.walakatha.net", which DOES contain dots, so the helper treated the
+// homepage as a file and returned it unslashed. Cloudflare Pages then
+// 308-redirects "/" requests, and the canonical tag disagreed with the
+// sitemap entry (which is "https://www.walakatha.net/"). Passing an
+// already-slashed URL makes the helper a no-op and keeps canonical,
+// og:url and sitemap byte-for-byte identical.
+const canonicalUrl = `${base_url}/`;
+
+// Organization logo stays the real logo file (300x50) - correct for the
+// logo ImageObject in schema.
 const siteLogo = base_url + config.site.logo;
+
+// OG IMAGE DIMENSION FIX. Base.astro hardcodes og:image:width=1200 and
+// og:image:height=630. The homepage previously passed logo.webp, which is
+// 300x50 (see config.site.logo_width/logo_height), so every share card
+// declared dimensions 24x larger than the real file. Facebook, X and
+// WhatsApp validate declared dimensions and silently drop the large-image
+// card on mismatch. config.metadata.meta_image is the purpose-built
+// 1200x630 asset, so the homepage now uses that instead.
+const ogImage = config.metadata.meta_image;
 
 import menu from "@/config/menu.json";
 
@@ -61,7 +74,6 @@ function buildNavItems(base: string) {
 
 const navigationSchema = buildNavItems(base_url);
 
-// AI VISIBILITY UPGRADE (2026-07): Organization "sameAs" array.
 const organizationSameAs = (social?.main || [])
   .map((s: any) => s?.link)
   .filter((link: any): link is string => {
@@ -76,30 +88,33 @@ const organizationSameAs = (social?.main || [])
 
 // 2026-08 SEO ALIGNMENT PASS - homepage title/H1/description sync.
 //
-// USER-MANDATED CONSTRAINT: "Wal Katha" is the primary keyword this
-// site must rank for, and the exact site title string below must
-// never change. homeTitle is therefore fixed verbatim to that exact
-// string.
-//
-// ROOT CAUSE (audit finding, still applies): homeH1 was previously
-// Sinhala-only ("සිංහල වල් කතා"), not reinforcing the "Wal Katha"
-// lead-term the title/rank target requires, and meta_description
-// separately claimed a "PDF එකතුව... Download කිරීමට" promise that
-// this codebase does not actually provide anywhere (no PDF
-// generation/download feature exists in any content collection,
-// page, or workflow) - this same false claim also lives in
-// config.json's metadata.meta_description, Base.astro's fallback
-// title template, and public/manifest.json (fixed separately).
-//
-// FIX: homeTitle stays exactly as mandated. homeH1 now LEADS with
-// "Wal Katha" (matching the title's lead term) before the Sinhala
-// reinforcement, so title and H1 share the same primary keyword
-// signal instead of two different ones. The unfulfilled "PDF"/
-// "Download" claim has been dropped from the description.
+// USER-MANDATED CONSTRAINT: "Wal Katha" is the primary keyword this site
+// must rank for, and the exact site title string below must never change.
+// homeTitle is therefore fixed verbatim to that exact string.
 const homeTitle = "Wal Katha - Sinhala Wal Katha & Wela Katha";
 const homeDescription =
   "Wal Katha වෙබ් අඩවියේ අලුත්ම Sinhala Wal Katha, Wala Katha සහ Wela Katha කතා 2026 වර්ෂයේ මෙතැනින් නොමිලේ Online කියවන්න. දිනපතා අලුත් Wal Katha කතා එකතු වේ.";
 const homeH1 = "Wal Katha - සිංහල වල් කතා සහ වැල කතා";
+
+// BRAND ENTITY FIX. Organization "name" previously reused homeTitle, i.e.
+// a page title ("Wal Katha - Sinhala Wal Katha & Wela Katha") rather than
+// a brand name. Google's Knowledge Graph resolves a brand entity from this
+// field, so a title string there blocks clean entity consolidation. The
+// brand name now comes from config.site.title and every marketing variant
+// moves into alternateName, where Google expects synonyms to live.
+const brandName = config?.site?.title || "Sinhala Wal Katha";
+const brandAlternateNames = [
+  "Wal Katha",
+  "Sinhala Wal Katha",
+  "Aluth Wal Katha",
+  "Wala Katha",
+  "Wela Katha",
+  "New Sinhala Wal Katha",
+  "Sinhala Wela Katha",
+  "Wal Katha New",
+  "Aluth Sinhala Wal Katha",
+  "සිංහල වල් කතා",
+];
 
 const homePageSchema = {
   "@context": "https://schema.org",
@@ -107,10 +122,11 @@ const homePageSchema = {
     {
       "@type": "WebSite",
       "@id": `${base_url}/#website`,
-      "url": base_url,
+      "url": canonicalUrl,
       "name": homeTitle,
-      "alternateName": ["Wal Katha","Sinhala Wal Katha","Aluth Wal Katha","Wala Katha","Wela Katha","New Sinhala Wal Katha","Sinhala Wela Katha","Wal Katha New","Aluth Sinhala Wal Katha","සිංහල වල් කතා"],
+      "alternateName": brandAlternateNames,
       "description": homeDescription,
+      "inLanguage": "si",
       "publisher": { "@id": `${base_url}/#organization` },
       "potentialAction": {
         "@type": "SearchAction",
@@ -124,22 +140,41 @@ const homePageSchema = {
     {
       "@type": "Organization",
       "@id": `${base_url}/#organization`,
-      "name": homeTitle,
-      "url": base_url,
+      "name": brandName,
+      "alternateName": brandAlternateNames,
+      "url": canonicalUrl,
+      "description": homeDescription,
       "logo": {
         "@type": "ImageObject",
         "@id": `${base_url}/#logo`,
         "url": siteLogo,
-        "caption": "Wala Katha Logo"
+        "width": config.site.logo_width,
+        "height": config.site.logo_height,
+        "caption": brandName
       },
+      "image": { "@id": `${base_url}/#logo` },
+      // E-E-A-T: a reachable contact point is one of the trust signals
+      // Google documents for publisher entities. Values come from
+      // config.json so there is a single source of truth.
+      ...(config?.params?.contact_email
+        ? {
+            "contactPoint": {
+              "@type": "ContactPoint",
+              "contactType": "customer support",
+              "email": config.params.contact_email,
+              "availableLanguage": ["Sinhala", "English"]
+            }
+          }
+        : {}),
       ...(organizationSameAs.length > 0 ? { "sameAs": organizationSameAs } : {})
     },
     {
       "@type": "CollectionPage",
-      "@id": `${canonicalUrl}/#collection`,
+      "@id": `${canonicalUrl}#collection`,
       "url": canonicalUrl,
       "name": homeTitle,
       "description": homeDescription,
+      "inLanguage": "si",
       "isPartOf": { "@id": `${base_url}/#website` },
       "about": { "@type": "Thing", "name": "Sinhala Wal Katha Literature" },
       "speakable": {
@@ -157,42 +192,35 @@ const homePageSchema = {
   meta_title={homeTitle}
   description={homeDescription}
   canonical={canonicalUrl}
-  image={siteLogo}
+  image={ogImage}
 >
-  <script type="application/ld+json" set:html={JSON.stringify(homePageSchema)} />
-
+  {/* DUPLICATE META REMOVED. Base.astro already emits og:type, og:title,
+      og:description, og:url, og:image, twitter:card, twitter:title,
+      twitter:description, twitter:image and robots for every non-article
+      page (isArticle defaults to false). This file used to re-emit all ten
+      inside a head slot, so the homepage shipped two of each - including
+      two conflicting <meta name="robots"> tags. Only og:image:alt is kept
+      below, since Base does not emit that one. */}
   <Fragment slot="head">
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content={homeTitle} />
-    <meta property="og:description" content={homeDescription} />
-    <meta property="og:url" content={canonicalUrl} />
-    <meta property="og:image" content={siteLogo} />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content={homeTitle} />
-    <meta name="twitter:description" content={homeDescription} />
-    <meta name="twitter:image" content={siteLogo} />
-    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta property="og:image:alt" content={homeTitle} />
+    <meta name="twitter:image:alt" content={homeTitle} />
   </Fragment>
 
+  <script type="application/ld+json" set:html={JSON.stringify(homePageSchema)} />
+
   <!--
-    FIXED (CRITICAL - Rich Results Test "No items detected"):
-    Inner <main> tag removed to avoid nested main > main structure
-    (Base.astro layout already renders <main id="main-content">).
-    Replaced with a semantically correct <div>; CSS classes retained
-    byte-for-byte so visual design is unaffected.
+    Inner <main> tag intentionally absent to avoid a nested main > main
+    structure (Base.astro already renders <main id="main-content">), which
+    previously made Rich Results Test report "No items detected".
   -->
   <div class="section pt-4 pb-12 min-h-screen bg-[#050505] text-slate-200 antialiased">
     <div class="container">
 
       <!--
-        Auto-Collapsing Homepage H1 (SEO-safe pattern, unchanged from
-        prior implementation): the H1 text node and its
-        id="speakable-home-heading" (referenced by the CollectionPage
-        "speakable" schema above) remain fully present in the DOM at
-        all times - display:none is never used. Only max-height/
-        opacity/margin animate via CSS transition after a JS-added
-        class, so crawlers reading the raw HTML/CSS see this content
-        exactly as a real visitor does first.
+        Auto-collapsing homepage H1 (SEO-safe): the H1 text node and its
+        id="speakable-home-heading" stay in the DOM at all times -
+        display:none is never used. Only max-height/opacity/margin animate,
+        so crawlers see exactly what a real visitor sees first.
       -->
       <div id="home-heading-shell" class="home-heading-collapsible">
         <h1 id="speakable-home-heading" class="text-center text-sm sm:text-base font-bold text-emerald-400/90 tracking-wide uppercase">
