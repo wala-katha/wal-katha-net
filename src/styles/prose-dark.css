@@ -3,27 +3,23 @@
    =================================================================
    ROOT CAUSE: src/styles/components.css defines `.content` with
    `@apply prose ...`. The @tailwindcss/typography plugin ships
-   LIGHT-THEME defaults, i.e.:
+   LIGHT-THEME defaults. It sets --tw-prose-bold, --tw-prose-headings,
+   --tw-prose-quotes and --tw-prose-code to var(--color-gray-900),
+   which is roughly #101828, and --tw-prose-body to gray-700.
 
-       --tw-prose-bold:     var(--color-gray-900)   /* ~#101828 */
-       --tw-prose-headings: var(--color-gray-900)
-       --tw-prose-quotes:   var(--color-gray-900)
-       --tw-prose-code:     var(--color-gray-900)
-       --tw-prose-body:     var(--color-gray-700)
-
-   This site's background is #050505, so every one of those
-   elements rendered near-black-on-black (invisible / "blacked out").
+   This site background is #050505, so every one of those elements
+   rendered near-black-on-black, i.e. "blacked out".
 
    It was only visible on <strong> in practice because the
    surrounding templates pass an explicit `text-[#F8F8FF]/80`
-   utility, which overrides the PARENT's colour but NOT the child
-   `:where(strong)` rule, since that child carries its own
-   `color` declaration and therefore never inherits.
+   utility, which overrides the PARENT colour but NOT the child
+   :where(strong) rule, since that child carries its own colour
+   declaration and therefore never inherits.
 
    FIX: redeclare the --tw-prose-* custom properties with the
-   site's dark palette, plus a few direct rules with slightly
-   higher specificity (:is() instead of the plugin's :where())
-   as a belt-and-braces guarantee.
+   site dark palette, plus a few direct rules with slightly higher
+   specificity, using :is() instead of the plugin :where(), as a
+   belt-and-braces guarantee.
 
    WHY UNLAYERED: this file is imported OUTSIDE any @layer block.
    Per the CSS cascade, unlayered declarations beat every layered
@@ -31,11 +27,17 @@
    over both the plugin defaults and the @apply'd component class
    WITHOUT needing a single !important.
 
+   NOTE ON COMMENTS: CSS has no nested comments. Never put an
+   inner "slash-star ... star-slash" pair inside this block - the
+   first inner terminator closes the whole comment and the rest of
+   the prose gets parsed as CSS, which is exactly what broke the
+   previous build.
+
    PALETTE (kept identical to index-overrides.css so the whole
    site stays visually consistent):
        text        #F8F8FF
        muted text  #cbd5e1
-       links       #34d399  (hover handled by prose-a utilities)
+       links       #34d399
        headings    #ffffff
        accent      #10b981
        surface     #0d0d0d
@@ -64,7 +66,7 @@
   --tw-prose-td-borders: #1a1a1a;
 
   /* The plugin also emits an inverted set; point it at the same
-     values so `prose-invert` (if ever added) cannot regress. */
+     values so prose-invert cannot regress if ever added. */
   --tw-prose-invert-body: #f8f8ff;
   --tw-prose-invert-headings: #ffffff;
   --tw-prose-invert-lead: #cbd5e1;
@@ -86,17 +88,17 @@
 }
 
 /* ---- Bold / strong: the actual reported bug --------------------
-   The plugin's selector is `:where(strong)` (specificity 0,1,0).
-   `:is(strong, b)` is 0,1,1, so this always wins, even if a
-   future template passes a conflicting parent text utility.     */
+   The plugin selector is :where(strong), specificity 0,1,0.
+   :is(strong, b) is 0,1,1, so this always wins, even if a future
+   template passes a conflicting parent text utility. */
 .content :is(strong, b),
 .prose :is(strong, b) {
   color: #ffffff;
   font-weight: 700;
 }
 
-/* A link inside bold text (or bold text inside a link) must keep
-   the link colour, not turn white. */
+/* A link inside bold text, or bold text inside a link, must keep
+   the link colour instead of turning white. */
 .content :is(a) :is(strong, b),
 .prose :is(a) :is(strong, b) {
   color: inherit;
@@ -108,7 +110,7 @@
   color: #ffffff;
 }
 
-/* ---- Emphasis / inline marks ---------------------------------- */
+/* ---- Emphasis and inline marks -------------------------------- */
 .content :is(em, i),
 .prose :is(em, i) {
   color: inherit;
@@ -122,7 +124,7 @@
   border-radius: 3px;
 }
 
-/* ---- Inline code --------------------------------------------- */
+/* ---- Inline code ---------------------------------------------- */
 .content :not(pre) > code,
 .prose :not(pre) > code {
   color: #ffffff;
@@ -141,9 +143,9 @@
 }
 
 /* ---- Blockquote ----------------------------------------------
-   components.css applies `prose-blockquote:bg-light`, and in
-   theme.json `light` is #010203 (a dark surface), so the quote
-   text must be light or it disappears. */
+   components.css applies prose-blockquote:bg-light, and in
+   theme.json light is #010203, a dark surface, so the quote text
+   must be light or it disappears. */
 .content blockquote,
 .prose blockquote {
   color: #f8f8ff;
@@ -173,7 +175,7 @@
   color: #f8f8ff;
 }
 
-/* ---- Horizontal rules & captions ------------------------------ */
+/* ---- Horizontal rules and captions ---------------------------- */
 .content hr,
 .prose hr {
   border-color: rgba(255, 255, 255, 0.08);
