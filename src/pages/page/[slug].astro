@@ -13,7 +13,7 @@ export async function getStaticPaths() {
   const totalPages = Math.ceil(safePosts.length / paginationLimit);
   const paths = [];
 
-  // 🎯 FIXED: <= පාවිච්චි කිරීමෙන් සියලුම පිටු (Pages) නිවැරදිව ජෙනරේට් වේ
+  // <= so the final page is generated too.
   for (let i = 1; i <= totalPages; i++) {
     paths.push({
       params: {
@@ -40,16 +40,26 @@ const indexOfLastPost = currentPage * paginationLimit;
 const indexOfFirstPost = indexOfLastPost - paginationLimit;
 const currentPosts = sortedPosts && sortedPosts.length > 0 ? sortedPosts.slice(indexOfFirstPost, indexOfLastPost) : [];
 
-// 📈 2026 ADVANCED SEO FOR PAGINATION PAGES
+// Single-line strings: a trailing newline inside the template leaked
+// into <title> and <meta description> in the built HTML.
 const metaTitle = `සිංහල වල් කතා එකතුව - Wala Katha Stories (පිටුව ${currentPage})`;
 const metaDescription = `Wala Katha: නවතම සිංහල වල් කතා සහ වැල කතා එකතුවේ ${currentPage} වන පිටුව. දිනපතා අලුත් වන රසවත් walkatha කියවන්න.`;
 
-const base_url = (config?.site?.base_url || "").replace(/\/$/, ""); 
-const canonicalUrl = `${base_url}/page/${currentPage}`;
+const base_url = (config?.site?.base_url || "").replace(/\/$/, "");
 
-// Google Bot එක පිටු අතර අතරමං නොවී යාමට අවශ්‍ය Link Tags
-const prevUrl = currentPage === 2 ? `${base_url}/` : currentPage > 2 ? `${base_url}/page/${currentPage - 1}` : null;
-const nextUrl = currentPage < totalPages ? `${base_url}/page/${currentPage + 1}` : null;
+// /page/1 duplicates the homepage, so it self-canonicalises to "/".
+const isFirstPage = currentPage === 1;
+const canonicalUrl = isFirstPage ? `${base_url}/` : `${base_url}/page/${currentPage}/`;
+
+// Trailing slashes required: this site is trailingSlash "always", and a
+// slashless rel=prev/next forces Googlebot through a 301 on every hop.
+const prevUrl =
+  currentPage === 2
+    ? `${base_url}/`
+    : currentPage > 2
+      ? `${base_url}/page/${currentPage - 1}/`
+      : null;
+const nextUrl = currentPage < totalPages ? `${base_url}/page/${currentPage + 1}/` : null;
 ---
 
 <Base
@@ -58,11 +68,13 @@ const nextUrl = currentPage < totalPages ? `${base_url}/page/${currentPage + 1}`
   description={metaDescription}
   canonical={canonicalUrl}
 >
-  {/* ⚡ GOOGLE BOT DIRECT CONNECTION (Head Injection) */}
+  {/* robots is emitted once by Base.astro for every page - a second one
+      here produced conflicting directives (the weaker copy dropped
+      max-snippet:-1 and truncated SERP snippets). Only rel=prev/next
+      belong in this slot. */}
   <Fragment slot="head">
     {prevUrl && <link rel="prev" href={prevUrl} />}
     {nextUrl && <link rel="next" href={nextUrl} />}
-    <meta name="robots" content="index, follow, max-image-preview:large" />
   </Fragment>
 
   <section class="section pt-4 pb-12">
@@ -74,7 +86,7 @@ const nextUrl = currentPage < totalPages ? `${base_url}/page/${currentPage + 1}`
           <p>ලිපි කිසිවෙකු හමුනොවීය.</p>
         </div>
       )}
-      
+
       {totalPages > 1 && (
         <Pagination totalPages={totalPages} currentPage={currentPage} />
       )}
