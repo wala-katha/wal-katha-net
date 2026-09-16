@@ -1,6 +1,7 @@
 ---
 import Share from "@/components/Share.astro";
 import SimilarPosts from "@/layouts/components/SimilarPosts.astro";
+import config from "@/config/config.json";
 import { getSinglePage } from "@/lib/contentParser.astro";
 import dateFormat from "@/lib/utils/dateFormat";
 import readingTime from "@/lib/utils/readingTime";
@@ -17,8 +18,15 @@ const { post } = Astro.props;
 const { Content } = await render(post);
 const { title, description, authors, categories, image, image_alt, date, tags, updated } = post.data;
 
+// Null-safe local copies. The template previously called
+// categories.map(), tags.length and authors.map() directly, so a post
+// published without any category/tag/author crashed the whole build.
+const safeCategories: string[] = Array.isArray(categories) ? categories : [];
+const safeTags: string[] = Array.isArray(tags) ? tags : [];
+const safeAuthors: string[] = Array.isArray(authors) ? authors : [];
+
 let smartSimilarPosts = posts.filter(
-  (p) => p.id !== post.id && p.data.categories?.some((cat) => categories?.includes(cat))
+  (p) => p.id !== post.id && p.data.categories?.some((cat) => safeCategories.includes(cat))
 );
 if (!smartSimilarPosts.length) {
   smartSimilarPosts = posts.filter((p) => p.id !== post.id);
@@ -40,6 +48,12 @@ const WORKER_API = "https://comments.wala-katha.workers.dev/api/comments";
 const LIKES_API = "https://comments.wala-katha.workers.dev/api/likes";
 
 const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
+
+// Brand name comes from config so og:site_name cannot drift from the
+// site title used everywhere else (it was hardcoded "Wala Katha"
+// while config.json says "Sinhala Wal Katha" - a split brand signal).
+const siteName = config?.site?.title || "Wal Katha";
+
 // OG:URL / CANONICAL MISMATCH FIX (Ahrefs "Open graph URL not matching
 // canonical URL"): postUrl previously had NO trailing slash while
 // blog/[single].astro's canonicalUrl (passed into Base.astro) DOES have
@@ -57,7 +71,7 @@ const postUrl = withTrailingSlash(`${siteUrl}/blog/${post.id}`);
 // proper social-share card even when the post has no manual image.
 const ogImageUrl = `${siteUrl}/og/${post.id}.png`;
 const authorName = allAuthors.find((a) =>
-  authors.map((au: string) => slugify(au)).includes(slugify(a.data.title))
+  safeAuthors.map((au: string) => slugify(au)).includes(slugify(a.data.title))
 )?.data.title ?? "Wala Katha";
 
 // 2026 "LAST UPDATED" LOGIC: content.config.ts එකට එකතු කරන ලද
@@ -73,9 +87,9 @@ const hasUpdatedDate = updated && date && new Date(updated).getTime() !== new Da
 // This feeds the <meta name="keywords"> tag below and also supplies
 // extra article:tag entries (entity/topic signals for AI Overviews and
 // knowledge-graph parsing) beyond the manually curated tags list.
-const autoExtractedKeywords = buildMetaKeywords(tags || [], post.body);
+const autoExtractedKeywords = buildMetaKeywords(safeTags, post.body);
 const extractedOnlyKeywords = autoExtractedKeywords.filter(
-  (k) => !(tags || []).some((t: string) => t.toLowerCase() === k.toLowerCase())
+  (k) => !safeTags.some((t: string) => t.toLowerCase() === k.toLowerCase())
 );
 
 // NOTE: the previous per-image MIME-type detection helper
@@ -84,41 +98,51 @@ const extractedOnlyKeywords = autoExtractedKeywords.filter(
 // (see ogImageUrl above), so og:image:type is always the fixed literal
 // "image/png" below instead of needing runtime detection.
 
+// Frontmatter image paths can silently carry zero-width / bidi / nbsp
+// characters pasted from editors (confirmed live on one post's image),
+// which produce a broken URL inside the ImageObject schema below.
+function sanitizeAssetUrl(rawPath: string): string | null {
+  const cleaned = rawPath
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\u00A0/g, " ")
+    .replace(/[\u200E\u200F\u202A-\u202E]/g, "")
+    .trim();
+  if (!cleaned) return null;
+  if (/^https?:\/\//i.test(cleaned)) return cleaned;
+  return `${siteUrl}${cleaned.startsWith("/") ? cleaned : `/${cleaned}`}`;
+}
+const schemaImageUrl = image ? sanitizeAssetUrl(image as string) : null;
+
 // ==========================================================
-// 🎯 DYNAMIC BREADCRUMB TRAIL WITH INDEXING SIGNALS (2026-08)
+// DYNAMIC BREADCRUMB TRAIL WITH INDEXING SIGNALS
 //
-// STRUCTURE: Home -> Blog -> Category -> Post Title
+// STRUCTURE: Home -> Category -> Post Title
 //
-// WHY "Blog" POINTS AT THE HOMEPAGE: this site has no dedicated
-// /blog/ archive/listing route (blog/[single].astro only handles
-// individual posts, not a blog index) - the homepage (index.astro)
-// IS the site's post-listing/"blog roll" page. Pointing the "Blog"
-// breadcrumb node at siteUrl is therefore an accurate, real URL for
-// a genuine section of the site, not a placeholder/dead link. This
-// exact "Home and Blog share the same landing page" pattern is
-// common and fully valid under Google's BreadcrumbList structured
-// data guidelines.
+// The previous version also carried a "Blog" node pointing at
+// siteUrl - the exact same URL as the "Home" node. Two ListItems
+// sharing one identical "item" URL is a redundant node under
+// Google's BreadcrumbList guidelines: it surfaces as a warning in
+// the Rich Results Test and muddies the crawler's view of the
+// hierarchy. This site has no dedicated /blog/ archive route (the
+// homepage IS the post listing), so the honest trail is simply
+// Home -> Category -> Post.
 //
-// SINGLE SOURCE OF TRUTH: this same breadcrumbItems array below
-// drives BOTH the JSON-LD BreadcrumbList schema (breadcrumbSchema)
-// AND the visible <nav> breadcrumb UI further down in the template -
-// they can never desync, and adding/removing a level here
-// automatically flows through both without any other code changes
-// (the schema's itemListElement map and the UI's crumb map are both
-// fully generic over array length).
+// SINGLE SOURCE OF TRUTH: this same breadcrumbItems array drives
+// BOTH the JSON-LD BreadcrumbList schema (breadcrumbSchema) AND the
+// visible <nav> breadcrumb UI further down in the template - they
+// can never desync, and adding/removing a level here automatically
+// flows through both (the schema's itemListElement map and the UI's
+// crumb map are both fully generic over array length).
 //
-// Category URL now goes through withTrailingSlash() for consistency
-// with this site's Cloudflare Pages trailing-slash convention (every
-// other internal link/canonical URL site-wide already does this -
-// see src/lib/utils/urlHelper.ts) - this avoids an unnecessary 308
-// redirect hop on the breadcrumb's category link.
+// Category URL goes through withTrailingSlash() for consistency with
+// this site's Cloudflare Pages trailing-slash convention, avoiding an
+// unnecessary 308 redirect hop on the breadcrumb's category link.
 // ==========================================================
 const breadcrumbItems = [
-  { name: "මුල් පිටුව", item: siteUrl },
-  { name: "Blog", item: siteUrl },
+  { name: "මුල් පිටුව", item: withTrailingSlash(siteUrl) },
   {
-    name: categories?.[0] ? humanize(categories[0]) : "Posts",
-    item: withTrailingSlash(`${siteUrl}/categories/${slugify(categories?.[0] ?? "posts")}`),
+    name: safeCategories[0] ? humanize(safeCategories[0]) : "Posts",
+    item: withTrailingSlash(`${siteUrl}/categories/${slugify(safeCategories[0] ?? "posts")}`),
   },
   { name: title, item: postUrl },
 ];
@@ -142,18 +166,18 @@ const breadcrumbSchema = JSON.stringify({
 // additive and does not replace or conflict with the existing
 // og:image/twitter:image meta tags or the NewsArticle schema's own
 // "image" ImageObject field in blog/[single].astro.
-const imageObjectSchema = image
+const imageObjectSchema = schemaImageUrl
   ? JSON.stringify({
       "@context": "https://schema.org",
       "@type": "ImageObject",
-      "contentUrl": `${siteUrl}${image}`,
+      "contentUrl": schemaImageUrl,
       "license": `${siteUrl}/copyright-credit-policy/`,
       "acquireLicensePage": `${siteUrl}/copyright-credit-policy/`,
-      "creditText": "Wal Katha",
-      "copyrightNotice": "Wal Katha",
+      "creditText": siteName,
+      "copyrightNotice": siteName,
       "creator": {
         "@type": "Organization",
-        "name": "Wal Katha",
+        "name": siteName,
       },
       "caption": image_alt || title,
     })
@@ -161,6 +185,14 @@ const imageObjectSchema = image
 ---
 
 <!-- REMOVED: canonical, description, robots - Base.astro handles these (no duplicates) -->
+<!-- REMOVED: og:image / og:image:secure_url / og:image:width / og:image:height /
+     og:image:type / twitter:image - Base.astro emits all of these on EVERY page
+     (they sit outside its !isArticle block), so keeping copies here shipped each
+     article with two og:image tags, two og:image:width tags, and so on. Social
+     crawlers pick inconsistently between duplicates. blog/[single].astro passes
+     image={`/og/${post.id}.png`} into Base, so Base's copies already resolve to
+     the exact same generated OG image this file used to point at. Only the
+     *:alt variants stay below, since Base does not emit those. -->
 <!-- KEPT: Article-specific OG/Twitter tags - Base.astro isArticle=true නිසා render නොකරයි -->
 
 <!-- Open Graph - Article specific -->
@@ -168,33 +200,29 @@ const imageObjectSchema = image
 <meta property="og:title" content={title} />
 <meta property="og:description" content={description ?? title} />
 <meta property="og:url" content={postUrl} />
-<meta property="og:image" content={ogImageUrl} />
 <meta property="og:image:alt" content={title} />
-<meta property="og:image:width" content="1200" />
-<meta property="og:image:height" content="630" />
-<meta property="og:image:type" content="image/png" />
 <meta property="og:locale" content="si_LK" />
-<meta property="og:site_name" content="Wala Katha" />
+<meta property="og:site_name" content={siteName} />
 {date && <meta property="article:published_time" content={new Date(date).toISOString()} />}
 {date && <meta property="article:modified_time" content={hasUpdatedDate ? new Date(updated).toISOString() : new Date(date).toISOString()} />}
 <meta property="article:author" content={authorName} />
-{categories?.map((c: string) => <meta property="article:section" content={humanize(c)} />)}
-{tags?.map((t: string) => <meta property="article:tag" content={humanize(t)} />)}
+{safeCategories.map((c: string) => <meta property="article:section" content={humanize(c)} />)}
+{safeTags.map((t: string) => <meta property="article:tag" content={humanize(t)} />)}
 {extractedOnlyKeywords.map((k: string) => <meta property="article:tag" content={humanize(k)} />)}
 
 <!-- Twitter Card - Article specific -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content={title} />
 <meta name="twitter:description" content={description ?? title} />
-<meta name="twitter:image" content={ogImageUrl} />
 <meta name="twitter:image:alt" content={title} />
 <meta name="twitter:site" content="@WalaKatha" />
 
 <!-- Keywords & Author - article specific, Base.astro isArticle=true නිසා render නොකරයි -->
+<!-- REMOVED: revisit-after (a 1990s tag no search engine has ever supported)
+     and name="language" (non-standard; <html lang="si"> plus og:locale already
+     carry the language signal correctly). -->
 <meta name="keywords" content={autoExtractedKeywords.join(", ")} />
 <meta name="author" content={authorName} />
-<meta name="language" content="Sinhala" />
-<meta name="revisit-after" content="3 days" />
 
 <!-- BreadcrumbList Schema -->
 <script type="application/ld+json" set:html={breadcrumbSchema} />
@@ -207,18 +235,15 @@ const imageObjectSchema = image
 <section class="section !pt-6 sm:!pt-8 bg-[#010203] relative">
   <div class="container">
 
-    {/* 2026 AUTO-COLLAPSING VISIBLE BREADCRUMB UI (v4 - DYNAMIC
-        4-LEVEL TRAIL: Home -> Blog -> Category -> Post Title):
+    {/* 2026 AUTO-COLLAPSING VISIBLE BREADCRUMB UI (v5 - DYNAMIC
+        3-LEVEL TRAIL: Home -> Category -> Post Title):
 
-        HREF LOGIC GENERALIZED: previously the <a href> for each
-        non-last crumb was hardcoded per-index (i === 0 ? "/" : the
-        single category URL), which only worked for exactly 3 items.
-        Now every non-last crumb's href reads directly from
-        crumb.item (already a correct, absolute URL computed once in
-        the breadcrumbItems array above) - this makes the UI fully
-        generic over however many breadcrumb levels exist, so adding
-        a "Blog" level (or any future level) never requires touching
-        this render logic again.
+        HREF LOGIC GENERALIZED: every non-last crumb's href reads
+        directly from crumb.item (already a correct, absolute URL
+        computed once in the breadcrumbItems array above) - this makes
+        the UI fully generic over however many breadcrumb levels
+        exist, so changing the trail depth never requires touching
+        this render logic.
 
         SEO SAFETY: full breadcrumb <a> links සහ text සියල්ල DOM එකේ
         සම්පූර්ණයෙන්ම present වේ (display:none කිසිවිටෙකත් යොදා නැත) -
@@ -356,7 +381,7 @@ const imageObjectSchema = image
 
           {allAuthors
             .filter((author) =>
-              authors.map((a: string) => slugify(a)).includes(slugify(author.data.title))
+              safeAuthors.map((a: string) => slugify(a)).includes(slugify(author.data.title))
             )
             .map((author) => (
               <a
@@ -403,19 +428,21 @@ const imageObjectSchema = image
             {readingTime(post.body ?? "").toString()}
           </span>
 
-          <span class="post-meta-chip post-meta-chip-categories">
-            <BiCategoryAlt className="h-4 w-4 text-[#01AD9F] flex-shrink-0" />
-            <span class="flex flex-wrap items-center gap-1.5">
-              {categories.map((category: string) => (
-                <a
-                  href={withTrailingSlash(`/categories/${slugify(category)}`)}
-                  class="rounded-full bg-white/[0.06] px-2 py-0.5 text-[12.5px] font-bold text-[#F8F8FF]/85 transition-colors duration-200 hover:bg-[#01AD9F]/15 hover:text-[#01AD9F]"
-                >
-                  {humanize(category)}
-                </a>
-              ))}
+          {safeCategories.length > 0 && (
+            <span class="post-meta-chip post-meta-chip-categories">
+              <BiCategoryAlt className="h-4 w-4 text-[#01AD9F] flex-shrink-0" />
+              <span class="flex flex-wrap items-center gap-1.5">
+                {safeCategories.map((category: string) => (
+                  <a
+                    href={withTrailingSlash(`/categories/${slugify(category)}`)}
+                    class="rounded-full bg-white/[0.06] px-2 py-0.5 text-[12.5px] font-bold text-[#F8F8FF]/85 transition-colors duration-200 hover:bg-[#01AD9F]/15 hover:text-[#01AD9F]"
+                  >
+                    {humanize(category)}
+                  </a>
+                ))}
+              </span>
             </span>
-          </span>
+          )}
 
           {/* Divider before the like action - visible only from sm+ so the
               card never wraps around an orphaned divider on narrow phones. */}
@@ -523,9 +550,9 @@ const imageObjectSchema = image
             changes. */}
         <div class="border-t border-white/10 pt-6">
           <div class="flex flex-col items-center gap-6">
-            {tags.length > 0 && (
+            {safeTags.length > 0 && (
               <ul class="flex flex-wrap justify-center gap-2.5">
-                {tags.map((tag: string) => (
+                {safeTags.map((tag: string) => (
                   <li>
                     <a
                       href={withTrailingSlash(`/tags/${slugify(tag)}`)}
