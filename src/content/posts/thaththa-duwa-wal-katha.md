@@ -6,7 +6,7 @@ date: 2026-06-17
 image: "/images/posts/Thaththa-Duwa-wal-katha.webp"
 image_alt: "wal katha 2026 - සුදු ඇඳුමෙන් ඇඳ මත වැතිරී සිටින ලස්සන දුව | සිංහල වැල් කතා"
 draft: false
-authors: ["WalaKatha"]
+authors: ["Wal Katha"]
 tags: ["thaththa-katha", "duwa-katha", "family-katha"]
 categories: ["wal-katha"]
 ---
