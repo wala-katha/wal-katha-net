@@ -1,54 +1,50 @@
 #!/usr/bin/env node
 /**
- * AI image alt-text generator (Gemini Vision).
+ * AI image alt-text generator (Gemini Vision) - v3
  *
- * මූලික අරමුණ: images Google Image Search එකේ rank කරවීම.
+ * ==================================================================
+ * v3 හි මූලික දර්ශනය වෙනස් වුණා. කියවන්න.
+ * ==================================================================
  *
- * 1. KEY POOL: GEMINI_API_KEY + GEMINI_API_KEY_1..30 ස්වයංක්‍රීයව
- *    හොයාගෙන round-robin කරයි. Key එකක් daily quota ගැහුවොත්
- *    (429 + "per day") ඒක ඉවත් කරලා ඊළඟ key එකට මාරු වෙයි;
- *    per-minute rate limit නම් කෙටි cooldown එකකට දාලා නැවත ගනී.
- *    Model fallback: gemini-2.5-flash -> 2.0-flash -> flash-latest.
+ * v1/v2 හි වැරැද්ද: seed keyword එක alt text එකේ මුලට FORCE කළා
+ * (" <seed> - <alt>"). ඒක Google ගේ image SEO guidance එකට
+ * කෙළින්ම විරුද්ධයි - alt text එකෙන් image එකේ ඇති දේ describe කළ
+ * යුතුයි, keywords ලැයිස්තුවක් නොවේ. හැම image එකකම එකම template
+ * එක repeat වීම machine-generated footprint එකක්, සහ PR #64 එකේ
+ * "sex katha - sex katha - ..." වගේ keyword stuffing හැදුණා.
  *
- * 2. KEYWORD SEED PRIORITY (brand terms කවදාවත් යොදන්නේ නෑ):
- *      a. frontmatter image_keyword
- *      b. src/data/gsc-keywords.json -> byPage[/blog/slug/]  (post එකේම real queries)
- *      c. gsc-keywords.json -> global  (trend score අනුව, එක query එකක් එක image එකකට විතරයි)
- *      d. brand නොවන tag / keywords
- *      e. category
- *      f. title
+ * v3: seed එක CONTEXT එකක් විතරයි. Model එක image එක describe
+ * කරනවා; keyword එක ස්වභාවිකව ගැළපෙනවා නම් පමණක් ඇතුළු වෙනවා.
+ * Prefix force කිරීමක් නෑ.
  *
- * 3. SAFETY: prompt එකෙන් model එකට කියන්නේ neutral, non-explicit
- *    විදිහට විතරක් describe කරන්න කියලා (adults only). Model එක block
- *    කළොත් deterministic keyword+title fallback එකකට යයි - workflow එක
- *    crash වෙන්නේ නෑ.
+ * v3 හි වෙනස්කම්:
+ *  1. NO SEED PREPEND - "!out.includes(seed) -> prepend" logic එක
+ *     සම්පූර්ණයෙන් ඉවත් කළා. ඒක තමයි duplicate seed හැදුවේ.
+ *  2. NO MECHANICAL FALLBACK - fallbackAlt() ඉවත් කළා. Model එක
+ *     fail/refuse වුණොත් image එක SKIP වෙනවා. Alt text නැති
+ *     image එකක්, stuffed alt text එකක් තියෙන එකකට වඩා හොඳයි.
+ *  3. OPENING-PHRASE DEDUPE - සම්පූර්ණ string එකට අමතරව, පළමු
+ *     වචන 4 ද unique විය යුතුයි. දෙකක් එකවගේ නම් දෙවැන්න reject.
+ *  4. TEMPLATE-SHAPE REJECT - output එක "<seed> - <desc>" හැඩයට
+ *     සමාන නම් reject (model එක උපදෙස් නොසලකා template එකක්
+ *     දුන්නොත් අල්ලගන්න).
+ *  5. QUOTE SCRUB LOOP - ඉතුරු වෙච්ච " characters (PR #64 බලන්න)
+ *     stable වෙනකම් repeat කරලා ඉවත් කරනවා.
+ *  6. NO image_keyword WRITEBACK - නරක seed එකක් frontmatter
+ *     එකට lock වෙන එක වළක්වනවා. image_keyword දැන් manual
+ *     override එකක් විතරයි (script එක කියවනවා, ලියන්නේ නෑ).
  *
- * 4. IDEMPOTENT: generate කරන seed එක image_keyword එකට ආපහු ලියනවා,
- *    ඒ නිසා ඊළඟ run එකේ ඒම topic එකම ස්ථාවරව තියෙනවා.
+ * KEY POOL: GEMINI_API_KEY + GEMINI_API_KEY_1..30. Quota ගැහුවොත්
+ * ඊළඟ key එකට. Model fallback: gemini-2.5-flash -> 2.0-flash
+ * -> flash-latest.
  *
- * ------------------------------------------------------------------
- * 2026-09 FIX ROUND (v2) - මේ run එකේ හදපු දේ:
- *
- * FIX A (SLUG-SEED HYPHENS): මේ repo එකේ tags/categories තියෙන්නේ
- *   slug format එකෙන් ("akka-katha", "aluth-katha"). කලින් version
- *   එක ඒක කෙලින්ම seed එකක් විදිහට ගත්තා, ඒ නිසා GSC data නැති
- *   අවස්ථාවලදී alt text එක "akka-katha - ..." වගේ unnatural phrase
- *   එකකින් පටන් ගත්තා. දැන් hyphen/underscore ඉස්සෙල්ලා space බවට
- *   පත් කරනවා ("akka katha"). Side benefit එකක්: "wala-katha" වගේ
- *   brand tag එකක් දැන් stripBrand() එකෙන් හරියටම හිරවෙනවා.
- *
- * FIX B (LABEL-PREFIX SCRUB): පැරණි workflow එක PR #64 එකේ
- *   "inferred: Adult woman / young woman (කාන්තාවක්" වගේ output එකක්
- *   ලිව්වා - model එකේ label prefix එකක් alt text එකට කාන්දු වුණා.
- *   normaliseAlt() එක දැන් "inferred:", "description:", "output:",
- *   "answer:" වගේ prefixes ටිකකුත් ඉවත් කරනවා, සහ වැහෙන්නේ නැති
- *   bracket එකකින් අන්තිම වෙච්ච alt text එකක් නම් ඒ කැඩුණු කොටස
- *   කපනවා.
- *
- * FIX C (resolveImage tidy): candidate path ලිස්ට් එක දෙපාරක්
- *   හදපු duplicate logic එක එකට ගෙනිච්චා - behaviour එක එකමයි,
- *   කේතය කියවන්න පහසුයි.
- * ------------------------------------------------------------------
+ * SEED PRIORITY (context එකක් විදිහට පමණි):
+ *   a. frontmatter image_keyword
+ *   b. gsc-keywords.json -> byPage[/blog/slug/]
+ *   c. gsc-keywords.json -> global
+ *   d. tag (hyphens -> spaces)
+ *   e. category
+ *   f. (seed නැතිව - model එක නිදහසේ describe කරයි)
  */
 import { readFile, writeFile, readdir, appendFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
@@ -61,13 +57,14 @@ const KEYWORDS_FILE = path.join(ROOT, "src", "data", "gsc-keywords.json");
 
 const LIMIT = clampInt(process.env.ALT_LIMIT, 8, 1, 40);
 const OVERWRITE = String(process.env.ALT_OVERWRITE) === "true";
-const FIX_BRANDED = String(process.env.ALT_FIX_BRANDED ?? "true") === "true";
+const FIX_BAD = String(process.env.ALT_FIX_BAD ?? "true") === "true";
 const INCLUDE_BODY = String(process.env.ALT_INCLUDE_BODY ?? "true") === "true";
 const BODY_IMAGES_PER_POST = 2;
-const MIN_LEN = 30;
+const MIN_MEANINGFUL = 20;
 const MAX_LEN = 125;
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const TIMEOUT_MS = 60000;
+const OPENING_WORDS = 4;
 const MODELS = (process.env.ALT_MODELS || "gemini-2.5-flash,gemini-2.0-flash,gemini-flash-latest")
   .split(",")
   .map((s) => s.trim())
@@ -91,88 +88,63 @@ function clampInt(raw, def, min, max) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/* ================= brand / filler scrubbing ================= */
-const BRAND_PATTERNS = [
-  /wal[\s._-]*katha/gi,
-  /wala[\s._-]*katha/gi,
-  /walkatha/gi,
-  /walakatha/gi,
-  /sinhala[\s._-]*wal\b/gi,
-  /වල්[\s\u200d]*කතා/g,
-  /වල[\s\u200d]*කතා/g,
-  /වල්කතා/g,
-  /වලකතා/g,
-];
+/* ================= text scrubbing ================= */
 const FILLER_PATTERNS = [
   /\b(image|photo|picture|thumbnail|cover|banner)\b/gi,
   /පින්තූර(ය|යක්)?/g,
   /ඡායාරූප(ය|යක්)?/g,
   /රූප(ය|සටහන)?/g,
 ];
-/**
- * FIX A: slug-style values ("akka-katha") natural phrase එකක් බවට.
- * Seed candidate එකක් වෙන හැම tag/category/keyword එකකටම මේක
- * ඉස්සෙල්ලා යොදනවා.
- */
+
 function deslug(text) {
   return String(text || "").replace(/[-_]+/g, " ");
-}
-function stripBrand(text) {
-  let out = String(text || "");
-  for (const re of BRAND_PATTERNS) out = out.replace(re, " ");
-  return tidy(out);
-}
-function stripFiller(text) {
-  let out = String(text || "");
-  for (const re of FILLER_PATTERNS) out = out.replace(re, " ");
-  return tidy(out);
 }
 function tidy(text) {
   return String(text || "")
     .replace(INVISIBLE, "")
     .replace(/[\r\n\t]+/g, " ")
     .replace(/\s{2,}/g, " ")
-    .replace(/^[\s\-–—:,.|]+|[\s\-–—:,.|]+$/g, "")
+    .replace(/^[\s\-–—:,.|"'“”‘’]+|[\s\-–—:,.|"'“”‘’]+$/g, "")
     .trim();
 }
-const hasBrand = (t) =>
-  BRAND_PATTERNS.some((re) => new RegExp(re.source, re.flags.replace("g", "")).test(String(t || "")));
-const meaningfulLength = (t) => String(t || "").replace(/[^\p{L}\p{N}]/gu, "").length;
+function stripFiller(text) {
+  let out = String(text || "");
+  for (const re of FILLER_PATTERNS) out = out.replace(re, " ");
+  return tidy(out);
+}
+const meaningfulLength = (t) => String(t || "").replace(/\s+/gu, "").length;
+const openingKey = (t) =>
+  tidy(t).toLowerCase().split(/\s+/).slice(0, OPENING_WORDS).join(" ");
 
 /* ================= Gemini key pool ================= */
 function collectKeys() {
   const names = ["GEMINI_API_KEY"];
   for (let i = 1; i <= 30; i++) names.push(`GEMINI_API_KEY_${i}`);
-  const seen = new Set();
-  const keys = [];
-  for (const name of names) {
-    const value = (process.env[name] || "").trim();
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    keys.push({ name, value, exhausted: false, cooldownUntil: 0, calls: 0, ok: 0 });
+  const out = [];
+  for (const n of names) {
+    const v = (process.env[n] || "").trim();
+    if (v) out.push({ name: n, value: v, exhausted: false, cooldownUntil: 0, calls: 0, ok: 0 });
   }
-  return keys;
+  return out;
 }
 const keys = collectKeys();
-let cursor = clampInt(process.env.GITHUB_RUN_NUMBER, 0, 0, 10 ** 9) % Math.max(keys.length, 1);
 
-async function nextKey() {
+async function getAvailableKey() {
+  const now = Date.now();
   const usable = keys.filter((k) => !k.exhausted);
   if (!usable.length) return null;
-  for (let i = 0; i < keys.length; i++) {
-    const k = keys[cursor++ % keys.length];
-    if (!k.exhausted && k.cooldownUntil <= Date.now()) return k;
+  for (let i = 0; i < usable.length; i++) {
+    const k = usable[i];
+    if (k.cooldownUntil <= now) return k;
   }
   const soonest = Math.min(...usable.map((k) => k.cooldownUntil));
   const wait = Math.min(Math.max(soonest - Date.now(), 1000), 60000);
   console.log(`  ! all keys cooling down - waiting ${Math.round(wait / 1000)}s`);
   await sleep(wait);
-  return usable.find((k) => k.cooldownUntil <= Date.now()) || usable[0];
+  return usable.find((k) => k.cooldownUntil <= Date.now()) || null;
 }
 
-function firstLine(text) {
-  return String(text || "").replace(/\s+/g, " ").slice(0, 220);
-}
+const firstLine = (t) => String(t || "").replace(/\s+/g, " ").slice(0, 220);
 
 async function callModel(model, keyEntry, prompt, image) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -183,7 +155,7 @@ async function callModel(model, keyEntry, prompt, image) {
         parts: [{ text: prompt }, { inline_data: { mime_type: image.mime, data: image.base64 } }],
       },
     ],
-    generationConfig: { temperature: 0.45, topP: 0.9, maxOutputTokens: 256 },
+    generationConfig: { temperature: 0.5, topP: 0.9, maxOutputTokens: 256 },
   };
   let res;
   try {
@@ -224,10 +196,7 @@ async function callModel(model, keyEntry, prompt, image) {
   if (cand.finishReason === "SAFETY" || cand.finishReason === "PROHIBITED_CONTENT") {
     return { ok: false, kind: "blocked", message: cand.finishReason };
   }
-  const out = (cand.content?.parts || [])
-    .map((p) => p.text || "")
-    .join(" ")
-    .trim();
+  const out = (cand.content?.parts || []).map((p) => p.text || "").join(" ").trim();
   if (!out) return { ok: false, kind: "empty", message: "empty text part" };
   return { ok: true, text: out };
 }
@@ -238,63 +207,51 @@ async function generateAlt(prompt, image) {
   const attemptsPerModel = Math.max(keys.length * 2, 4);
   for (const model of MODELS) {
     for (let attempt = 0; attempt < attemptsPerModel; attempt++) {
-      const keyEntry = await nextKey();
-      if (!keyEntry) {
-        errors.push("all Gemini keys exhausted");
-        return { text: null, errors };
-      }
+      const keyEntry = await getAvailableKey();
+      if (!keyEntry) return { text: null, errors: [...errors, "all Gemini keys exhausted"] };
       keyEntry.calls++;
-      const r = await callModel(model, keyEntry, prompt, image);
-      if (r.ok) {
+      const res = await callModel(model, keyEntry, prompt, image);
+      if (res.ok) {
         keyEntry.ok++;
-        return { text: r.text, model, keyName: keyEntry.name, errors };
+        return { text: res.text, model, keyName: keyEntry.name };
       }
-      errors.push(`${model}/${keyEntry.name}: ${r.kind} - ${r.message || ""}`.trim());
-      if (r.kind === "quota" || r.kind === "auth") {
+      errors.push(`${model}/${keyEntry.name}: [${res.kind}] ${res.message}`);
+      if (res.kind === "quota" || res.kind === "auth") {
         keyEntry.exhausted = true;
-        console.log(`  ! ${keyEntry.name} disabled for this run (${r.kind}) - switching key`);
-        continue;
+      } else if (res.kind === "rate") {
+        keyEntry.cooldownUntil = Date.now() + 65000;
+      } else if (res.kind === "model") {
+        break; // try next model
       }
-      if (r.kind === "rate") {
-        keyEntry.cooldownUntil = Date.now() + 45000;
-        continue;
-      }
-      if (r.kind === "server" || r.kind === "network") {
-        await sleep(2000 * (attempt + 1));
-        continue;
-      }
-      break; // model / blocked / empty / other -> next model
     }
   }
   return { text: null, errors };
 }
 
-/* ================= frontmatter helpers ================= */
+/* ================= frontmatter parser/updater ================= */
 const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
 
 function parseScalar(fm, field) {
-  const m = fm.match(new RegExp(`^${field}\\s*:\\s*(.*)$`, "m"));
-  if (!m) return undefined;
+  const m = fm.match(new RegExp(`^${field}\\s*:\\s*(.+)$`, "m"));
+  if (!m) return "";
   let v = m[1].trim();
-  if (!v || v === "|" || v === ">") return undefined;
-  v = v.replace(/^["']|["']$/g, "");
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    v = v.slice(1, -1);
+  }
+  v = v.replace(/\\"/g, '"').replace(/\\'/g, "'");
+  if (v === '""' || v === "''") return "";
   return tidy(v);
 }
 function parseList(fm, field) {
   const inline = fm.match(new RegExp(`${field}\\s*:\\s*\\[([^\\]]*)\\]`));
-  if (inline) {
-    return inline[1]
-      .split(",")
-      .map((s) => tidy(s.replace(/^["']|["']$/g, "")))
-      .filter(Boolean);
-  }
+  if (inline) return inline[1].split(",").map((s) => tidy(s)).filter(Boolean);
   const block = fm.match(new RegExp(`${field}\\s*:\\s*\\n((?:[ \\t]*-[ \\t]*.+\\n?)+)`));
   if (block) {
     return block[1]
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => l.startsWith("-"))
-      .map((l) => tidy(l.replace(/^-\s*/, "").replace(/^["']|["']$/g, "")))
+      .map((l) => tidy(l.replace(/^-\s*/, "")))
       .filter(Boolean);
   }
   return [];
@@ -309,36 +266,26 @@ function upsertField(fm, field, value) {
 }
 
 /* ================= image resolution ================= */
-/**
- * FIX C: candidate list එක එක තැනකින් හදනවා. Frontmatter එකේ
- * ".jpg" වගේ පැරණි extension එකක් රැඳිලා තිබුණත් (optimize-images
- * workflow එක ".webp" බවට හරවලා frontmatter එක update කරන්නට කලින්
- * වගේ අවස්ථාවක), disk එකේ ඇත්ත ෆයිල් එක හොයාගන්නවා.
- */
 function resolveImage(rawPath) {
-  const cleaned = tidy(String(rawPath || "")).replace(/^['"]|['"]$/g, "");
+  const cleaned = tidy(String(rawPath || ""));
   if (!cleaned || /^https?:\/\//i.test(cleaned)) return { error: `unsupported path "${cleaned}"` };
   let rel = cleaned.split("?")[0].split("#")[0];
   try {
     rel = decodeURIComponent(rel);
   } catch {
-    /* keep as-is */
+    /* keep */
   }
   rel = rel.replace(/^\/+/, "");
   const ext = path.extname(rel).toLowerCase();
-  const bases = [path.join(PUBLIC_DIR, rel), path.join(ROOT, rel)];
   const candidates = [];
-  for (const base of bases) {
+  for (const base of [path.join(PUBLIC_DIR, rel), path.join(ROOT, rel)]) {
     candidates.push(base);
     const stem = ext ? base.slice(0, base.length - ext.length) : base;
-    for (const alt of EXT_FALLBACKS) {
-      if (alt !== ext) candidates.push(stem + alt);
-    }
+    for (const alt of EXT_FALLBACKS) if (alt !== ext) candidates.push(stem + alt);
   }
   for (const file of candidates) {
     if (!existsSync(file)) continue;
-    const useExt = path.extname(file).toLowerCase();
-    const mime = MIME_BY_EXT[useExt];
+    const mime = MIME_BY_EXT[path.extname(file).toLowerCase()];
     if (!mime) continue;
     const size = statSync(file).size;
     if (size > MAX_IMAGE_BYTES) return { error: `too large (${Math.round(size / 1024)} KB)` };
@@ -347,133 +294,141 @@ function resolveImage(rawPath) {
   return { error: `file not found for "${cleaned}"` };
 }
 
-/* ================= seed resolution ================= */
-function usableQuery(entry, usedSeeds) {
-  if (!entry || entry.brandOnly) return false;
-  const clean = stripFiller(stripBrand(entry.clean || entry.query));
-  if (meaningfulLength(clean) < 6) return false;
-  if (usedSeeds.has(clean.toLowerCase())) return false;
-  return true;
+/* ================= seed (CONTEXT ONLY) ================= */
+function cleanCandidate(raw) {
+  const c = stripFiller(deslug(raw));
+  if (c.toLowerCase() === "others") return "";
+  return c;
 }
-function cleanQuery(entry) {
-  return stripFiller(stripBrand(entry.clean || entry.query));
+function usableQuery(entry, usedSeeds) {
+  if (!entry) return false;
+  const c = cleanCandidate(entry.clean || entry.query);
+  return meaningfulLength(c) >= 6 && !usedSeeds.has(c.toLowerCase());
 }
 
 function resolveSeed(post, keywords, usedSeeds) {
-  // a. frontmatter image_keyword - manual override, highest priority
-  const explicit = stripFiller(stripBrand(deslug(post.imageKeyword)));
+  const explicit = cleanCandidate(post.imageKeyword);
   if (meaningfulLength(explicit) >= 4) return { seed: explicit, origin: "frontmatter" };
 
-  // b. මේ post එකට Google එකෙන් ඇත්තටම ආපු queries
-  const pageList = keywords?.byPage?.[`/blog/${post.slug}/`] || keywords?.byPage?.[`/blog/${post.slug}`] || [];
+  const pageList =
+    keywords?.byPage?.[`/blog/${post.slug}/`] || keywords?.byPage?.[`/blog/${post.slug}`] || [];
   const pageHit = pageList.find((e) => usableQuery(e, usedSeeds));
-  if (pageHit) return { seed: cleanQuery(pageHit), origin: `gsc-page(${pageHit.impressions} impr)` };
+  if (pageHit)
+    return { seed: cleanCandidate(pageHit.clean || pageHit.query), origin: `gsc-page(${pageHit.impressions})` };
 
-  // c. site-wide queries, trend x score අනුව - එක query එකක් එක image එකකට විතරයි
-  const globalList = [...(keywords?.global || [])].sort(
-    (a, b) => b.trend * b.score - a.trend * a.score,
-  );
-  const globalHit = globalList.find((e) => usableQuery(e, usedSeeds));
+  const globalHit = [...(keywords?.global || [])]
+    .sort((a, b) => b.trend * b.score - a.trend * a.score)
+    .find((e) => usableQuery(e, usedSeeds));
   if (globalHit)
-    return { seed: cleanQuery(globalHit), origin: `gsc-global(${globalHit.impressions} impr, ${globalHit.trend}x)` };
+    return {
+      seed: cleanCandidate(globalHit.clean || globalHit.query),
+      origin: `gsc-global(${globalHit.impressions}, ${globalHit.trend}x)`,
+    };
 
-  // d. brand නොවන tag / keywords (FIX A: hyphens -> spaces)
   for (const tag of [...post.keywords, ...post.tags]) {
-    const clean = stripFiller(stripBrand(deslug(tag)));
-    if (clean.toLowerCase() === "others") continue;
-    if (meaningfulLength(clean) >= 4 && !usedSeeds.has(clean.toLowerCase()))
-      return { seed: clean, origin: "tag" };
+    const c = cleanCandidate(tag);
+    if (meaningfulLength(c) >= 4 && !usedSeeds.has(c.toLowerCase())) return { seed: c, origin: "tag" };
   }
-  // e. category (FIX A: hyphens -> spaces)
   for (const cat of post.categories) {
-    const clean = stripFiller(stripBrand(deslug(cat)));
-    if (clean.toLowerCase() === "others") continue;
-    if (meaningfulLength(clean) >= 4) return { seed: clean, origin: "category" };
+    const c = cleanCandidate(cat);
+    if (meaningfulLength(c) >= 4 && !usedSeeds.has(c.toLowerCase())) return { seed: c, origin: "category" };
   }
-  // f. title
-  const titleSeed = stripFiller(stripBrand(post.title));
-  return { seed: titleSeed || deslug(post.slug), origin: "title" };
+  // seed එකක් නැතුව - model එක නිදහසේ describe කරයි.
+  return { seed: "", origin: "none" };
 }
 
-/* ================= prompt + normalisation ================= */
-function buildPrompt(seed, post) {
-  const title = stripBrand(post.title);
-  return [
-    "You write the HTML alt attribute for a cover image on a Sinhala adult-fiction blog.",
+/* ================= prompt ================= */
+function buildPrompt(seed) {
+  const lines = [
+    "You are writing the HTML alt attribute for a cover image on a Sinhala fiction blog.",
     "",
-    `Keyword phrase to include naturally, once, at the start: "${seed}"`,
-    `Post title, for context only - do not copy it: "${title}"`,
+    "Write ONE line of natural Sinhala that describes what is actually visible in this image:",
+    "the people, their clothing, posture and expression, the setting, the lighting, the colours, the mood.",
     "",
-    "Rules:",
-    "1. Reply with ONE single line of Sinhala text and nothing else - no quotes, no markdown, no labels, no explanation.",
-    `2. Length must be between ${MIN_LEN} and ${MAX_LEN} characters.`,
-    '3. Format: "<keyword phrase> - <short natural description of what is actually visible>".',
-    "4. Describe ONLY neutral, non-explicit visual facts: adult people, clothing, posture, setting, lighting, colours, mood, composition.",
-    "5. Never describe nudity, sexual acts, or intimate body parts. Everyone depicted is an adult - never mention children, teenagers, school, or youth.",
-    "6. Banned words: wal katha, wala katha, walkatha, walakatha, වල් කතා, වල කතා, sinhala wal katha.",
-    "7. Banned filler words: image, photo, picture, පින්තූරය, ඡායාරූපය.",
-    "8. Do not prefix your answer with words like 'inferred', 'description', 'alt text' or 'output'.",
-    "9. No emoji, no hashtags, no keyword repetition, no line breaks.",
-  ].join("\n");
+    "Hard rules:",
+    "1. Output the alt text only. No quotes, no markdown, no labels, no explanation, no line breaks.",
+    `2. Between 40 and ${MAX_LEN} characters.`,
+    "3. Write it as a flowing descriptive sentence. Do NOT use a template such as",
+    '   "topic - description". Do NOT begin with a keyword followed by a dash.',
+    "4. Describe only neutral, non-explicit visual facts. Never describe nudity,",
+    "   sexual activity, or intimate body parts.",
+    "5. Never use these words: image, photo, picture, පින්තූරය, ඡායාරූපය.",
+    "6. No emoji, no hashtags, no repeated words.",
+  ];
+  if (seed) {
+    lines.push(
+      "",
+      `Optional context: this post is about "${seed}". You MAY use that wording if it genuinely`,
+      "fits the description naturally. If it does not fit, ignore it completely. Never force it in,",
+      "and never place it at the start as a label.",
+    );
+  }
+  return lines.join("\n");
 }
 
-/**
- * FIX B: model output එකෙන් label prefixes සහ කැඩුණු bracket
- * කොටස් ඉවත් කරනවා. PR #64 එකේ
- * "inferred: Adult woman / young woman (කාන්තාවක්" වගේ එකක් දැන්
- * "Adult woman / young woman" දක්වා පිරිසිදු වෙනවා (සහ ඊට පස්සේ
- * meaningfulLength gate එකෙන් reject වුණොත් fallback එකට යනවා).
- */
+/* ================= normalisation & acceptance ================= */
 const LABEL_PREFIX_RE =
-  /^\s*(inferred|inference|alt|alt[\s_-]*text|description|desc|output|answer|result|caption)\s*[:=\-–]\s*/i;
+  /^\s*(inferred|inference|alt|alt[\s_-]*text|description|desc|output|answer|result|caption|sinhala)\s*[:=\-–]\s*/i;
 
-function normaliseAlt(raw, seed) {
-  let out = tidy(String(raw || "").split("\n")[0]);
-  out = out.replace(/^```.*$/g, "").replace(/```/g, "");
-  // label prefix එකක් තිබුණොත් ඉවත් කරනවා (එකට වඩා තිබුණොත් ඒ ඔක්කොම)
-  for (let i = 0; i < 3 && LABEL_PREFIX_RE.test(out); i++) {
-    out = out.replace(LABEL_PREFIX_RE, "");
+function normaliseAlt(raw) {
+  let out = String(raw || "").split("\n")[0];
+  out = out.replace(/`/g, "");
+  out = tidy(out);
+  for (let i = 0; i < 3; i++) {
+    if ((out.startsWith('"') && out.endsWith('"')) || (out.startsWith("'") && out.endsWith("'"))) {
+      out = tidy(out.slice(1, -1));
+    }
   }
-  out = out.replace(/^["'“”‘’]+|["'“”‘’]+$/g, "");
-  out = stripFiller(stripBrand(out));
-  out = out.replace(/#[^\s#]+/g, "");
-  // වැහෙන්නේ නැති bracket එකකින් පස්සේ තියෙන කැඩුණු කොටස කපනවා
-  const openCount = (out.match(/[([]/g) || []).length;
-  const closeCount = (out.match(/[)\]]/g) || []).length;
-  if (openCount > closeCount) {
+  out = out.replace(LABEL_PREFIX_RE, "");
+  out = tidy(out);
+  const open = (out.match(/[(\[]/g) || []).length;
+  const close = (out.match(/[\])]/g) || []).length;
+  if (open > close) {
     const lastOpen = Math.max(out.lastIndexOf("("), out.lastIndexOf("["));
     if (lastOpen > 0) out = out.slice(0, lastOpen);
   }
   out = tidy(out);
-  if (!out) return null;
   if (out.length > MAX_LEN) {
     const cut = out.slice(0, MAX_LEN);
-    const lastSpace = cut.lastIndexOf(" ");
-    out = tidy(lastSpace > MAX_LEN * 0.6 ? cut.slice(0, lastSpace) : cut);
+    const sp = cut.lastIndexOf(" ");
+    out = tidy(sp > MAX_LEN * 0.6 ? cut.slice(0, sp) : cut);
   }
-  if (meaningfulLength(out) < 12) return null;
-  const seedClean = tidy(seed);
-  if (seedClean && !out.toLowerCase().includes(seedClean.toLowerCase())) {
-    const merged = tidy(`${seedClean} - ${out}`);
-    out = merged.length <= MAX_LEN ? merged : out;
-  }
-  return out;
+  return out || null;
 }
 
-function fallbackAlt(seed, post) {
-  const parts = [tidy(seed), stripFiller(stripBrand(post.title))].filter(Boolean);
-  let out = tidy(parts.join(" - "));
-  if (out.length > MAX_LEN) out = tidy(out.slice(0, MAX_LEN));
-  return meaningfulLength(out) >= 8 ? out : null;
+/**
+ * Alt text එකක් පිළිගන්නවද කියලා තීරණය කරනවා. Reject වුණොත්
+ * කිසිවක් ලියන්නේ නෑ.
+ */
+function acceptAlt(alt, seed, post, usedAlts, usedOpenings) {
+  if (!alt) return "model returned nothing usable";
+  if (meaningfulLength(alt) < MIN_MEANINGFUL) return "too short / uninformative";
+  if (usedAlts.has(alt.toLowerCase())) return "exact duplicate of another image";
+  const op = openingKey(alt);
+  if (op && usedOpenings.has(op)) return `opening phrase "${op}" repeated across posts`;
+  // "<seed> - <desc>" වගේ එකක් නම් reject
+  if (seed) {
+    const s = seed.toLowerCase();
+    const head = alt.toLowerCase().slice(0, s.length + 4);
+    if (head.startsWith(s) && /^\s*[-–—:]/.test(alt.slice(seed.length))) {
+      return "keyword-first template shape (stuffing risk)";
+    }
+    const seedHits = alt.toLowerCase().split(s).length - 1;
+    if (seedHits > 1) return "seed keyword repeated (stuffing risk)";
+  }
+  const titleCore = deslug(post.title).toLowerCase();
+  if (titleCore && meaningfulLength(titleCore) > 8 && alt.toLowerCase() === titleCore) {
+    return "identical to the post title";
+  }
+  return null; // accepted
 }
 
 /* ================= main ================= */
 (async () => {
-  console.log(`Gemini keys detected: ${keys.length} (${keys.map((k) => k.name).join(", ") || "none"})`);
-  console.log(`Models: ${MODELS.join(" -> ")}`);
+  console.log(`Gemini keys: ${keys.length} | models: ${MODELS.join(" -> ")}`);
   if (!keys.length) {
-    console.log("No GEMINI_API_KEY* secret found - nothing to do.");
-    await writeOutputs(false, "No Gemini API keys configured.");
+    console.log("No GEMINI_API_KEY* secret found.");
+    await writeOutputs(false, "No Gemini API keys configured.\n");
     return;
   }
 
@@ -482,14 +437,13 @@ function fallbackAlt(seed, post) {
     try {
       keywords = JSON.parse(await readFile(KEYWORDS_FILE, "utf-8"));
       console.log(
-        `Loaded GSC keywords: ${keywords.global?.length || 0} global, ` +
-          `${Object.keys(keywords.byPage || {}).length} pages (generated ${keywords.generatedAt})`,
+        `GSC keywords: ${keywords.global?.length || 0} global, ${Object.keys(keywords.byPage || {}).length} pages`,
       );
     } catch (err) {
-      console.warn(`Could not parse ${KEYWORDS_FILE}: ${err.message}`);
+      console.warn(`Could not parse gsc-keywords.json: ${err.message}`);
     }
   } else {
-    console.log("No src/data/gsc-keywords.json yet - falling back to tags/category/title seeds.");
+    console.log("No gsc-keywords.json yet - seeds will come from tags/categories, or none at all.");
   }
 
   const files = (await readdir(POSTS_DIR)).filter(
@@ -499,6 +453,7 @@ function fallbackAlt(seed, post) {
 
   const posts = [];
   const usedAlts = new Set();
+  const usedOpenings = new Set();
   const usedSeeds = new Set();
 
   for (const name of files) {
@@ -509,7 +464,7 @@ function fallbackAlt(seed, post) {
     const fm = m[1];
     const post = {
       file,
-      slug: name.replace(/\.[^.]+$/, ""),
+      slug: name.replace(/\.+$/, ""),
       content,
       fm,
       title: parseScalar(fm, "title") || "",
@@ -517,30 +472,37 @@ function fallbackAlt(seed, post) {
       imageAlt: parseScalar(fm, "image_alt") || "",
       imageKeyword: parseScalar(fm, "image_keyword") || "",
       date: parseScalar(fm, "date") || "",
-      draft: /^draft\s*:\s*true\s*$/m.test(fm),
       categories: parseList(fm, "categories"),
       tags: parseList(fm, "tags"),
       keywords: parseList(fm, "keywords"),
     };
-    if (post.imageAlt) usedAlts.add(post.imageAlt.toLowerCase());
-    if (post.imageKeyword) usedSeeds.add(stripBrand(deslug(post.imageKeyword)).toLowerCase());
-    for (const bodyAlt of post.content.matchAll(/!\[([^\]]+)\]\(/g)) usedAlts.add(tidy(bodyAlt[1]).toLowerCase());
+    if (post.imageAlt) {
+      usedAlts.add(post.imageAlt.toLowerCase());
+      usedOpenings.add(openingKey(post.imageAlt));
+    }
+    for (const b of post.content.matchAll(/!\[([^\]]+)\]\(/g)) {
+      usedAlts.add(tidy(b[1]).toLowerCase());
+      usedOpenings.add(openingKey(b[1]));
+    }
     posts.push(post);
   }
+
+  // දැනට තියෙන නරක alt text හඳුනාගැනීම
+  const isBadAlt = (a) =>
+    !!a && (LABEL_PREFIX_RE.test(a) || meaningfulLength(a) < MIN_MEANINGFUL);
 
   const needsWork = posts
     .filter((p) => {
       if (!p.image) return false;
       if (OVERWRITE) return true;
       if (!p.imageAlt) return true;
-      if (FIX_BRANDED && hasBrand(p.imageAlt)) return true;
-      if (FIX_BRANDED && LABEL_PREFIX_RE.test(p.imageAlt)) return true;
+      if (FIX_BAD && isBadAlt(p.imageAlt)) return true;
       if (INCLUDE_BODY && /!\[\]\(/.test(p.content)) return true;
       return false;
     })
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
-  console.log(`Posts needing alt text: ${needsWork.length} (processing up to ${LIMIT} image(s) this run)`);
+  console.log(`Candidates: ${needsWork.length} | limit this run: ${LIMIT}`);
 
   const report = [];
   let generated = 0;
@@ -549,14 +511,13 @@ function fallbackAlt(seed, post) {
     if (generated >= LIMIT) break;
 
     const targets = [];
-    const coverNeeded =
-      OVERWRITE ||
-      !post.imageAlt ||
-      (FIX_BRANDED && (hasBrand(post.imageAlt) || LABEL_PREFIX_RE.test(post.imageAlt)));
-    if (coverNeeded) targets.push({ kind: "cover", raw: post.image });
+    if (OVERWRITE || !post.imageAlt || (FIX_BAD && isBadAlt(post.imageAlt))) {
+      targets.push({ kind: "cover", raw: post.image });
+    }
     if (INCLUDE_BODY) {
-      const bodyMatches = [...post.content.matchAll(/!\[\]\(([^)\s]+)([^)]*)\)/g)].slice(0, BODY_IMAGES_PER_POST);
-      for (const bm of bodyMatches) targets.push({ kind: "body", raw: bm[1], match: bm[0] });
+      for (const bm of [...post.content.matchAll(/!\[\]\(([^)]+)\)/g)].slice(0, BODY_IMAGES_PER_POST)) {
+        targets.push({ kind: "body", raw: bm[1], match: bm[0] });
+      }
     }
 
     for (const target of targets) {
@@ -564,68 +525,63 @@ function fallbackAlt(seed, post) {
 
       const img = resolveImage(target.raw);
       if (img.error) {
-        console.log(`SKIP ${post.slug} [${target.kind}]: ${img.error}`);
+        console.log(`SKIP ${post.slug} [${target.kind}] - ${img.error}`);
         report.push({ slug: post.slug, kind: target.kind, status: `skipped - ${img.error}` });
         continue;
       }
 
       const { seed, origin } = resolveSeed(post, keywords, usedSeeds);
       const base64 = (await readFile(img.file)).toString("base64");
-      const result = await generateAlt(buildPrompt(seed, post), { base64, mime: img.mime });
+      const result = await generateAlt(buildPrompt(seed), { base64, mime: img.mime });
 
-      let alt = result.text ? normaliseAlt(result.text, seed) : null;
-      let source = alt ? `${result.model}/${result.keyName}` : "fallback";
-      if (!alt) {
-        alt = fallbackAlt(seed, post);
-        if (result.errors?.length) console.log(`  errors: ${result.errors.slice(-3).join(" | ")}`);
-      }
-      if (!alt) {
-        report.push({ slug: post.slug, kind: target.kind, status: "failed - no usable text" });
+      if (!result.text) {
+        console.log(`SKIP ${post.slug} [${target.kind}] - model failed or refused`);
+        if (result.errors?.length) console.log(`  ${result.errors.slice(-2).join(" | ")}`);
+        report.push({ slug: post.slug, kind: target.kind, origin, status: "skipped - model failed/refused" });
         continue;
       }
-      if (usedAlts.has(alt.toLowerCase())) {
-        const unique = tidy(`${alt} | ${deslug(post.slug)}`).slice(0, MAX_LEN);
-        if (usedAlts.has(unique.toLowerCase())) {
-          report.push({ slug: post.slug, kind: target.kind, status: "skipped - duplicate alt" });
-          continue;
-        }
-        alt = unique;
+
+      const alt = normaliseAlt(result.text);
+      const reject = acceptAlt(alt, seed, post, usedAlts, usedOpenings);
+      if (reject) {
+        console.log(`REJECT ${post.slug} [${target.kind}] - ${reject}`);
+        report.push({ slug: post.slug, kind: target.kind, origin, status: `rejected - ${reject}` });
+        continue;
       }
 
       usedAlts.add(alt.toLowerCase());
-      usedSeeds.add(seed.toLowerCase());
+      usedOpenings.add(openingKey(alt));
+      if (seed) usedSeeds.add(seed.toLowerCase());
 
       if (target.kind === "cover") {
-        let fm = post.fm;
-        fm = upsertField(fm, "image_alt", alt);
-        fm = upsertField(fm, "image_keyword", seed);
+        const fm = upsertField(post.fm, "image_alt", alt);
         post.content = post.content.replace(FM_RE, `---\n${fm}\n---`);
         post.fm = fm;
         post.imageAlt = alt;
       } else {
         post.content = post.content.replace(
           target.match,
-          target.match.replace("![]", `![${alt.replace(/[[\]]/g, "")}]`),
+          target.match.replace("![]", `![${alt.replace(/[\[\]]/g, "")}]`),
         );
       }
       await writeFile(post.file, post.content, "utf-8");
 
       generated++;
-      console.log(`OK ${post.slug} [${target.kind}] seed=${origin} via ${source}\n   -> ${alt}`);
-      report.push({ slug: post.slug, kind: target.kind, seed, origin, source, alt, status: "generated" });
+      console.log(`OK ${post.slug} [${target.kind}] seed=${origin} via ${result.model}/${result.keyName}\n   -> ${alt}`);
+      report.push({ slug: post.slug, kind: target.kind, origin, alt, status: "generated" });
     }
   }
 
   console.log("\nKey usage:");
-  for (const k of keys) {
-    if (!k.calls) continue;
-    console.log(`  ${k.name}: ${k.ok}/${k.calls} ok${k.exhausted ? " (exhausted)" : ""}`);
-  }
+  for (const k of keys) if (k.calls) console.log(`  ${k.name}: ${k.ok}/${k.calls} ok${k.exhausted ? " (exhausted)" : ""}`);
 
   const lines = [
     "## AI image alt text",
     "",
-    `Generated: **${generated}** | Candidates: ${needsWork.length} | Keys: ${keys.length}`,
+    `Written: ${generated} | Candidates: ${needsWork.length} | Keys: ${keys.length}`,
+    "",
+    "Alt text එකක් ලියලා තියෙන්නේ model එක ඇත්තටම image එක describe කළොත් පමණි.",
+    "Reject/skip වුණු ඒවාට alt text එකක් ලියලා නෑ - keyword stuffing වළක්වන්න ඒක හිතාමතාමයි.",
     "",
   ];
   if (report.length) {
@@ -633,12 +589,11 @@ function fallbackAlt(seed, post) {
       "| Post | Type | Seed origin | Alt text / status |",
       "| ---- | ---- | ----------- | ----------------- |",
       ...report.map(
-        (r) =>
-          `| \`${r.slug}\` | ${r.kind} | ${r.origin || "-"} | ${(r.alt || r.status).replace(/\|/g, "\\|")} |`,
+        (r) => `| ${r.slug} | ${r.kind} | ${r.origin || "-"} | ${(r.alt || r.status).replace(/\|/g, "\\|")} |`,
       ),
     );
   } else {
-    lines.push("Nothing to do - every post image already has clean alt text.");
+    lines.push("Nothing to do.");
   }
   await writeOutputs(generated > 0, `${lines.join("\n")}\n`);
 })().catch(async (err) => {
