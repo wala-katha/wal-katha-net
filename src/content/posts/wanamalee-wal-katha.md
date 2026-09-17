@@ -5,7 +5,7 @@ description: "ඈ වනමලී ආශා මද්දුම බණ්ඩා�
 date: 2026-08-05
 image: "/images/posts/Wanamalee-wal-katha.webp"
 draft: false
-authors: ["WalaKatha"]
+authors: ["Wal Katha"]
 tags: ["wala-katha", "aluth-katha", "sex-katha"]
 categories: ["other-wal-katha"]
 ---
