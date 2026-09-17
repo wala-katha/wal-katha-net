@@ -4,7 +4,8 @@ meta_title: "Nethuge Wal Katha - Sinhala School Stories Collection"
 description: "මම ගම්පහ ප්‍රසිද්ධ ජාත්‍යන්තර පාසලකට ගියෙ. මේ සිද්ධිය වෙනකොට මම උසස්පෙල පංතියට ගියා විතරයි."
 date: 2026-08-08
 image: "/images/posts/nethuge-wal-katha.webp"
-image_alt: "wal katha story - රතු පාට ඇඳුමෙන් සැරසුණු කෙල්ල | සිංහල වැල් කතා"
+image_keyword: "school"
+image_alt: "school - නෙතූගේ වැල කතා - Nethuge"
 draft: true
 authors: ["Wala Katha"]
 tags: ["wal-katha-school", "sri-lankan-school-stories", "sinhala-school-katha"]

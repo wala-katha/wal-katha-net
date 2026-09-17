@@ -4,7 +4,8 @@ meta_title: "Gedara Driver Wal Katha - ගෙදර ඩ්‍රයිවර් 
 description: "මම බැදල ඉන්නෙ මට බබාල දෙන්නෙක් ඉන්නව මගේ මහත්තය රට රස්සාවකට ගිය දවස්වල ගෙදර ඩ්‍රයිවර් සමඟ සිදුවූ රසවත් සත්‍ය අත්දැකීම මෙම කතාවෙන් කියවන්න."
 date: 2026-06-18
 image: "/images/posts/Gedara-driver-wal-katha.webp"
-image_alt: "wal katha story - සුදු ඇඳුමින් ඇඳ මත සිටින තරුණිය | සිංහල වැල් කතා"
+image_keyword: "akka katha"
+image_alt: "akka katha - ගෙදර ඩ්රයිවර් - Gedara driver"
 draft: false
 authors: ["Wal Katha"]
 tags: ["akka-katha", "aluth-katha", "hot-katha"]

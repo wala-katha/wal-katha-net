@@ -4,6 +4,8 @@ meta_title: "Wanamalee Wal Katha | Best Sinhala Wal Katha Collection"
 description: "ඈ වනමලී ආශා මද්දුම බණ්ඩාර. ඇයට ඉන්න එකම සහෝදරයා වජිර ජීවන්ත බණ්ඩාර. පියාගේ වියෝවෙන් පස්සේ සියල්ල බැලුවේ ඔහු."
 date: 2026-08-05
 image: "/images/posts/Wanamalee-wal-katha.webp"
+image_keyword: "\"aluth katha"
+image_alt: "\"aluth katha - Wanamalee - වනමලී"
 draft: false
 authors: ["Wal Katha"]
 tags: ["wala-katha", "aluth-katha", "sex-katha"]

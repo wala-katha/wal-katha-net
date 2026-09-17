@@ -4,7 +4,8 @@ meta_title: "Office Wal Katha Sinhala - New Wal Katha Collection"
 description: "මගේ වයිෆ් නිමාලි වයස 28යි. එයා වැඩ කරන්නෙ ප්‍රසිද්ධ රක්‍ෂණ සමාගමක​. එයාගෙ ඔෆිස් එකේ බොස් මිස්ටර් රන්ජිත්."
 date: 2026-08-06
 image: "/images/posts/Nimali-saha-boss.webp"
-image_alt: "Wal Katha office කතාවේ මල් මෝස්තර ඇඳුමකින් සැරසී මෝටර් රථය තුළ සිනහසෙන නිමාලි"
+image_keyword: "\"office"
+image_alt: "\"office - නිමාලි සහ බොස් - office"
 draft: false
 authors: ["Wala Katha"]
 tags: ["wal-katha", "office-wal-katha", "office-katha", "wal-katha-office"]
