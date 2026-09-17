@@ -25,6 +25,30 @@
  *
  * 4. IDEMPOTENT: generate කරන seed එක image_keyword එකට ආපහු ලියනවා,
  *    ඒ නිසා ඊළඟ run එකේ ඒම topic එකම ස්ථාවරව තියෙනවා.
+ *
+ * ------------------------------------------------------------------
+ * 2026-09 FIX ROUND (v2) - මේ run එකේ හදපු දේ:
+ *
+ * FIX A (SLUG-SEED HYPHENS): මේ repo එකේ tags/categories තියෙන්නේ
+ *   slug format එකෙන් ("akka-katha", "aluth-katha"). කලින් version
+ *   එක ඒක කෙලින්ම seed එකක් විදිහට ගත්තා, ඒ නිසා GSC data නැති
+ *   අවස්ථාවලදී alt text එක "akka-katha - ..." වගේ unnatural phrase
+ *   එකකින් පටන් ගත්තා. දැන් hyphen/underscore ඉස්සෙල්ලා space බවට
+ *   පත් කරනවා ("akka katha"). Side benefit එකක්: "wala-katha" වගේ
+ *   brand tag එකක් දැන් stripBrand() එකෙන් හරියටම හිරවෙනවා.
+ *
+ * FIX B (LABEL-PREFIX SCRUB): පැරණි workflow එක PR #64 එකේ
+ *   "inferred: Adult woman / young woman (කාන්තාවක්" වගේ output එකක්
+ *   ලිව්වා - model එකේ label prefix එකක් alt text එකට කාන්දු වුණා.
+ *   normaliseAlt() එක දැන් "inferred:", "description:", "output:",
+ *   "answer:" වගේ prefixes ටිකකුත් ඉවත් කරනවා, සහ වැහෙන්නේ නැති
+ *   bracket එකකින් අන්තිම වෙච්ච alt text එකක් නම් ඒ කැඩුණු කොටස
+ *   කපනවා.
+ *
+ * FIX C (resolveImage tidy): candidate path ලිස්ට් එක දෙපාරක්
+ *   හදපු duplicate logic එක එකට ගෙනිච්චා - behaviour එක එකමයි,
+ *   කේතය කියවන්න පහසුයි.
+ * ------------------------------------------------------------------
  */
 import { readFile, writeFile, readdir, appendFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
@@ -85,6 +109,14 @@ const FILLER_PATTERNS = [
   /ඡායාරූප(ය|යක්)?/g,
   /රූප(ය|සටහන)?/g,
 ];
+/**
+ * FIX A: slug-style values ("akka-katha") natural phrase එකක් බවට.
+ * Seed candidate එකක් වෙන හැම tag/category/keyword එකකටම මේක
+ * ඉස්සෙල්ලා යොදනවා.
+ */
+function deslug(text) {
+  return String(text || "").replace(/[-_]+/g, " ");
+}
 function stripBrand(text) {
   let out = String(text || "");
   for (const re of BRAND_PATTERNS) out = out.replace(re, " ");
@@ -277,6 +309,12 @@ function upsertField(fm, field, value) {
 }
 
 /* ================= image resolution ================= */
+/**
+ * FIX C: candidate list එක එක තැනකින් හදනවා. Frontmatter එකේ
+ * ".jpg" වගේ පැරණි extension එකක් රැඳිලා තිබුණත් (optimize-images
+ * workflow එක ".webp" බවට හරවලා frontmatter එක update කරන්නට කලින්
+ * වගේ අවස්ථාවක), disk එකේ ඇත්ත ෆයිල් එක හොයාගන්නවා.
+ */
 function resolveImage(rawPath) {
   const cleaned = tidy(String(rawPath || "")).replace(/^['"]|['"]$/g, "");
   if (!cleaned || /^https?:\/\//i.test(cleaned)) return { error: `unsupported path "${cleaned}"` };
@@ -287,11 +325,14 @@ function resolveImage(rawPath) {
     /* keep as-is */
   }
   rel = rel.replace(/^\/+/, "");
-  const candidates = [path.join(PUBLIC_DIR, rel), path.join(ROOT, rel)];
   const ext = path.extname(rel).toLowerCase();
-  for (const base of [path.join(PUBLIC_DIR, rel), path.join(ROOT, rel)]) {
+  const bases = [path.join(PUBLIC_DIR, rel), path.join(ROOT, rel)];
+  const candidates = [];
+  for (const base of bases) {
+    candidates.push(base);
+    const stem = ext ? base.slice(0, base.length - ext.length) : base;
     for (const alt of EXT_FALLBACKS) {
-      if (alt !== ext) candidates.push(base.slice(0, base.length - ext.length) + alt);
+      if (alt !== ext) candidates.push(stem + alt);
     }
   }
   for (const file of candidates) {
@@ -319,13 +360,16 @@ function cleanQuery(entry) {
 }
 
 function resolveSeed(post, keywords, usedSeeds) {
-  const explicit = stripFiller(stripBrand(post.imageKeyword || ""));
+  // a. frontmatter image_keyword - manual override, highest priority
+  const explicit = stripFiller(stripBrand(deslug(post.imageKeyword)));
   if (meaningfulLength(explicit) >= 4) return { seed: explicit, origin: "frontmatter" };
 
+  // b. මේ post එකට Google එකෙන් ඇත්තටම ආපු queries
   const pageList = keywords?.byPage?.[`/blog/${post.slug}/`] || keywords?.byPage?.[`/blog/${post.slug}`] || [];
   const pageHit = pageList.find((e) => usableQuery(e, usedSeeds));
   if (pageHit) return { seed: cleanQuery(pageHit), origin: `gsc-page(${pageHit.impressions} impr)` };
 
+  // c. site-wide queries, trend x score අනුව - එක query එකක් එක image එකකට විතරයි
   const globalList = [...(keywords?.global || [])].sort(
     (a, b) => b.trend * b.score - a.trend * a.score,
   );
@@ -333,19 +377,22 @@ function resolveSeed(post, keywords, usedSeeds) {
   if (globalHit)
     return { seed: cleanQuery(globalHit), origin: `gsc-global(${globalHit.impressions} impr, ${globalHit.trend}x)` };
 
+  // d. brand නොවන tag / keywords (FIX A: hyphens -> spaces)
   for (const tag of [...post.keywords, ...post.tags]) {
-    const clean = stripFiller(stripBrand(tag));
+    const clean = stripFiller(stripBrand(deslug(tag)));
     if (clean.toLowerCase() === "others") continue;
     if (meaningfulLength(clean) >= 4 && !usedSeeds.has(clean.toLowerCase()))
       return { seed: clean, origin: "tag" };
   }
+  // e. category (FIX A: hyphens -> spaces)
   for (const cat of post.categories) {
-    const clean = stripFiller(stripBrand(cat));
+    const clean = stripFiller(stripBrand(deslug(cat)));
     if (clean.toLowerCase() === "others") continue;
     if (meaningfulLength(clean) >= 4) return { seed: clean, origin: "category" };
   }
+  // f. title
   const titleSeed = stripFiller(stripBrand(post.title));
-  return { seed: titleSeed || post.slug.replace(/-/g, " "), origin: "title" };
+  return { seed: titleSeed || deslug(post.slug), origin: "title" };
 }
 
 /* ================= prompt + normalisation ================= */
@@ -358,24 +405,45 @@ function buildPrompt(seed, post) {
     `Post title, for context only - do not copy it: "${title}"`,
     "",
     "Rules:",
-    "1. Reply with ONE single line of Sinhala text and nothing else - no quotes, no markdown, no explanation.",
+    "1. Reply with ONE single line of Sinhala text and nothing else - no quotes, no markdown, no labels, no explanation.",
     `2. Length must be between ${MIN_LEN} and ${MAX_LEN} characters.`,
     '3. Format: "<keyword phrase> - <short natural description of what is actually visible>".',
     "4. Describe ONLY neutral, non-explicit visual facts: adult people, clothing, posture, setting, lighting, colours, mood, composition.",
     "5. Never describe nudity, sexual acts, or intimate body parts. Everyone depicted is an adult - never mention children, teenagers, school, or youth.",
     "6. Banned words: wal katha, wala katha, walkatha, walakatha, වල් කතා, වල කතා, sinhala wal katha.",
     "7. Banned filler words: image, photo, picture, පින්තූරය, ඡායාරූපය.",
-    "8. No emoji, no hashtags, no keyword repetition, no line breaks.",
+    "8. Do not prefix your answer with words like 'inferred', 'description', 'alt text' or 'output'.",
+    "9. No emoji, no hashtags, no keyword repetition, no line breaks.",
   ].join("\n");
 }
+
+/**
+ * FIX B: model output එකෙන් label prefixes සහ කැඩුණු bracket
+ * කොටස් ඉවත් කරනවා. PR #64 එකේ
+ * "inferred: Adult woman / young woman (කාන්තාවක්" වගේ එකක් දැන්
+ * "Adult woman / young woman" දක්වා පිරිසිදු වෙනවා (සහ ඊට පස්සේ
+ * meaningfulLength gate එකෙන් reject වුණොත් fallback එකට යනවා).
+ */
+const LABEL_PREFIX_RE =
+  /^\s*(inferred|inference|alt|alt[\s_-]*text|description|desc|output|answer|result|caption)\s*[:=\-–]\s*/i;
 
 function normaliseAlt(raw, seed) {
   let out = tidy(String(raw || "").split("\n")[0]);
   out = out.replace(/^```.*$/g, "").replace(/```/g, "");
-  out = out.replace(/^(alt\s*(text)?\s*[:=]\s*)/i, "");
+  // label prefix එකක් තිබුණොත් ඉවත් කරනවා (එකට වඩා තිබුණොත් ඒ ඔක්කොම)
+  for (let i = 0; i < 3 && LABEL_PREFIX_RE.test(out); i++) {
+    out = out.replace(LABEL_PREFIX_RE, "");
+  }
   out = out.replace(/^["'“”‘’]+|["'“”‘’]+$/g, "");
   out = stripFiller(stripBrand(out));
   out = out.replace(/#[^\s#]+/g, "");
+  // වැහෙන්නේ නැති bracket එකකින් පස්සේ තියෙන කැඩුණු කොටස කපනවා
+  const openCount = (out.match(/[([]/g) || []).length;
+  const closeCount = (out.match(/[)\]]/g) || []).length;
+  if (openCount > closeCount) {
+    const lastOpen = Math.max(out.lastIndexOf("("), out.lastIndexOf("["));
+    if (lastOpen > 0) out = out.slice(0, lastOpen);
+  }
   out = tidy(out);
   if (!out) return null;
   if (out.length > MAX_LEN) {
@@ -455,7 +523,7 @@ function fallbackAlt(seed, post) {
       keywords: parseList(fm, "keywords"),
     };
     if (post.imageAlt) usedAlts.add(post.imageAlt.toLowerCase());
-    if (post.imageKeyword) usedSeeds.add(stripBrand(post.imageKeyword).toLowerCase());
+    if (post.imageKeyword) usedSeeds.add(stripBrand(deslug(post.imageKeyword)).toLowerCase());
     for (const bodyAlt of post.content.matchAll(/!\[([^\]]+)\]\(/g)) usedAlts.add(tidy(bodyAlt[1]).toLowerCase());
     posts.push(post);
   }
@@ -466,6 +534,7 @@ function fallbackAlt(seed, post) {
       if (OVERWRITE) return true;
       if (!p.imageAlt) return true;
       if (FIX_BRANDED && hasBrand(p.imageAlt)) return true;
+      if (FIX_BRANDED && LABEL_PREFIX_RE.test(p.imageAlt)) return true;
       if (INCLUDE_BODY && /!\[\]\(/.test(p.content)) return true;
       return false;
     })
@@ -480,7 +549,10 @@ function fallbackAlt(seed, post) {
     if (generated >= LIMIT) break;
 
     const targets = [];
-    const coverNeeded = OVERWRITE || !post.imageAlt || (FIX_BRANDED && hasBrand(post.imageAlt));
+    const coverNeeded =
+      OVERWRITE ||
+      !post.imageAlt ||
+      (FIX_BRANDED && (hasBrand(post.imageAlt) || LABEL_PREFIX_RE.test(post.imageAlt)));
     if (coverNeeded) targets.push({ kind: "cover", raw: post.image });
     if (INCLUDE_BODY) {
       const bodyMatches = [...post.content.matchAll(/!\[\]\(([^)\s]+)([^)]*)\)/g)].slice(0, BODY_IMAGES_PER_POST);
@@ -512,7 +584,7 @@ function fallbackAlt(seed, post) {
         continue;
       }
       if (usedAlts.has(alt.toLowerCase())) {
-        const unique = tidy(`${alt} | ${post.slug.replace(/-/g, " ")}`).slice(0, MAX_LEN);
+        const unique = tidy(`${alt} | ${deslug(post.slug)}`).slice(0, MAX_LEN);
         if (usedAlts.has(unique.toLowerCase())) {
           report.push({ slug: post.slug, kind: target.kind, status: "skipped - duplicate alt" });
           continue;
@@ -529,8 +601,12 @@ function fallbackAlt(seed, post) {
         fm = upsertField(fm, "image_keyword", seed);
         post.content = post.content.replace(FM_RE, `---\n${fm}\n---`);
         post.fm = fm;
+        post.imageAlt = alt;
       } else {
-        post.content = post.content.replace(target.match, target.match.replace("![]", `![${alt.replace(/[[\]]/g, "")}]`));
+        post.content = post.content.replace(
+          target.match,
+          target.match.replace("![]", `![${alt.replace(/[[\]]/g, "")}]`),
+        );
       }
       await writeFile(post.file, post.content, "utf-8");
 
