@@ -90,6 +90,31 @@ const postsCollection = defineCollection({
       // Fully optional - existing posts without this field build and
       // render exactly as before, falling back to post title as alt.
       image_alt: z.string().optional(),
+      // 2026-09 GSC-DRIVEN ALT-TEXT SEED: generate-alt-text.yml eke
+      // seed keyword priority eke MEEKA thamai wadiyenma udin (1st).
+      // Me field eka post ekakata manually set kalot, alt text eka
+      // hadanne e keyword eka mula kotasa lesa thiyalaa - gsc-keywords
+      // .json eken enna query ekak ho tag/category/title fallback
+      // ekak thoranne natha.
+      //
+      // Workflow eka alt text ekak generate karapu pasu, thaman
+      // thoraagath seed eka aapahu me field ekata liyanavaa. Ekenma
+      // elanga run ekedi ema post ekata ema topic ekama sthawara
+      // wenava (idempotent) - dawasin dawasa alt text eka wenas wela
+      // Google ta confusing signal ekak yanne natha.
+      //
+      // WADAGATH: me field eka schema eke NATHI nam, Zod eka frontmatter
+      // eken eeka silently strip karanava - ekenma workflow ekata eeka
+      // aapahu kiyawanna bari wela, typo ekak ho vaeradi value ekak
+      // build ekedi kisidu error ekak nodi sangavenava. Ekai meeka
+      // methana declare karala thiyenne.
+      //
+      // Brand terms (wal katha / wala katha / walkatha adiya) me
+      // field eke DAANNA EPA - workflow eka evaa force-strip karanava,
+      // mokada image ranking ekata brand keyword stuffing ekak
+      // udawwak nokara haniyak karana nisa. Trend/long-tail phrase
+      // ekak vitarak daanna.
+      image_keyword: z.string().optional(),
       // NOTE: default() intentionally uses a factory function
       // (() => [...]) rather than a plain array literal. Zod's own
       // guidance is to prefer a factory for array/object defaults -
