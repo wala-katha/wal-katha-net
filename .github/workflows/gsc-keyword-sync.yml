@@ -6,8 +6,20 @@ name: Sync GSC Keywords
 # Secret: GOOGLE_INDEXING_KEY (google-indexing.yml එකේ ඒම key එකම).
 # Cloud Console එකේ "Google Search Console API" එක enable කරන්න ඕන.
 #
+# 2026-09 FIX: කලින් version එක "git diff --quiet" එකෙන් වෙනසක්
+# තියෙනවද බැලුවා. src/data/ folder එක repo එකේ තිබුණේ නෑ, ඒ නිසා
+# පළමු run එකේ gsc-keywords.json එක UNTRACKED file එකක් වුණා -
+# git diff untracked files ගණන් ගන්නේ නෑ, ඒ නිසා workflow එක
+# "no changes" කියලා exit වෙලා දත්ත නැති වුණා. දැන් git status
+# --porcelain පාවිච්චි කරනවා, ඒක untracked සහ modified දෙකම අල්ලනවා.
+#
 # main එකට කෙලින්ම push කරන්න බලයි; branch protection නිසා fail වුණොත්
 # ස්වයංක්‍රීයව PR එකකට වැටෙයි.
+#
+# සටහන: GITHUB_TOKEN එකෙන් කරන push එකක් වෙනත් workflow එකක්
+# trigger කරන්නේ නෑ (GitHub Actions නීතියක්). ඒ නිසා මේක දිවුවාට
+# පස්සේ "AI Image Alt Text" එක manually run කරන්න, නැත්නම් ඒකේ
+# දෛනික cron එක එනකම් බලන්න.
 on:
   schedule:
     - cron: "0 4 * * 1"
@@ -28,6 +40,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +48,10 @@ jobs:
         with:
           node-version: 22
 
+      # googleapis එක root package.json එකට touch නොකර isolated
+      # /tmp folder එකක install කරයි - google-indexing.yml එකේම
+      # pattern එකම. Version එක pin කරලා තියෙන්නේ අනපේක්ෂිත
+      # breaking change එකකින් workflow එක කැඩෙන එක වළක්වන්න.
       - name: Install googleapis in isolated temp folder
         run: |
           mkdir -p /tmp/gsc-tool
@@ -56,7 +73,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if git diff --quiet -- src/data/gsc-keywords.json; then
+          if [ -z "$(git status --porcelain -- src/data/gsc-keywords.json)" ]; then
             echo "No keyword changes - nothing to commit."
             exit 0
           fi
@@ -74,6 +91,7 @@ jobs:
           EXISTING=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' || true)
           if [ -n "$EXISTING" ]; then
             gh pr edit "$EXISTING" --body-file /tmp/gsc-summary.md
+            echo "Updated existing PR #$EXISTING"
           else
             gh pr create --head "$BRANCH" --base main \
               --title "chore(seo): Search Console keyword sync" \
