@@ -6,7 +6,7 @@ date: 2026-08-06
 image: "/images/posts/Nimali-saha-boss.webp"
 image_alt: "Wal Katha office කතාවේ මල් මෝස්තර ඇඳුමකින් සැරසී මෝටර් රථය තුළ සිනහසෙන නිමාලි"
 draft: false
-authors: ["WalKatha"]
+authors: ["Wala Katha"]
 tags: ["wal-katha", "office-wal-katha", "office-katha", "wal-katha-office"]
 categories: ["Wal-Katha-Office"]
 ---
