@@ -6,7 +6,7 @@ date: 2026-06-18
 image: "/images/posts/Gedara-driver-wal-katha.webp"
 image_alt: "wal katha story - සුදු ඇඳුමින් ඇඳ මත සිටින තරුණිය | සිංහල වැල් කතා"
 draft: false
-authors: ["WalKatha"]
+authors: ["Wal Katha"]
 tags: ["akka-katha", "aluth-katha", "hot-katha"]
 categories: ["amma-wal-katha","school-wal-katha","lesbian-guy-wal-katha","family-wal-katha","new-wal-katha","old-wal-katha","other-wal-katha"]
 ---
