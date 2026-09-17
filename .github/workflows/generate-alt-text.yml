@@ -1,5 +1,46 @@
-
 name: Auto-Generate Image Alt Text (AI, PR-Based)
+
+# =====================================================================
+# 2026-09 FULL REWRITE
+#
+# FIXED IN THIS REVISION:
+#  1. Primary model was "gemini-3.6-flash" - no such model exists, so
+#     every single image 404'd on the first attempt and burned a wasted
+#     API call before falling back. Now uses real model IDs.
+#  2. KEYWORD STRATEGY REVERSED (the main requested change): the old
+#     SINGLISH_KEYWORD_CLUSTER forced one of 5 near-identical
+#     "wal katha / wala katha" brand strings to the FRONT of every alt
+#     text, and then appended "සිංහල වල් කතා" again at the end. That is
+#     site-wide keyword repetition: all posts compete for one term, no
+#     image differentiates, and the duplication reads as stuffing.
+#     Now every image gets a topic-derived long-tail keyword unique to
+#     that post, and brand terms are force-stripped from the output.
+#  3. Image paths are now sanitised for zero-width / bidi / nbsp
+#     characters before the existsSync() check. Without this, any post
+#     whose frontmatter image path carries an invisible U+200B (already
+#     confirmed on at least one post) was permanently skipped as
+#     "image NOT FOUND".
+#  4. Alt text is written with JSON.stringify(), producing a properly
+#     escaped YAML double-quoted scalar. The old code only swapped "
+#     for ', so a newline or backslash in the model output corrupted
+#     the frontmatter and broke the site build.
+#  5. Fixed working branch + open-PR check, instead of a new
+#     timestamped branch and a brand new PR on every single run
+#     (daily cron + push trigger was queueing up duplicate PRs).
+#  6. concurrency group added so a cron run and a push run cannot
+#     race each other into two conflicting PRs.
+#  7. Retry with exponential backoff on 429 / 5xx. Previously a single
+#     rate-limit response silently dropped that post for the run.
+#  8. Per-request AbortSignal timeout so a hung fetch cannot keep the
+#     job alive for the full 6-hour runner limit.
+#  9. git add -A on the directory, replacing the fragile shell globs
+#     that only matched top level and swallowed errors with || true.
+# 10. Hard content guard added to the prompt: never describe any
+#     subject as a child, student, schoolgirl, teenager or minor, and
+#     never produce sexual or explicit wording. The previous role list
+#     included age-ambiguous roles with no such guard.
+# =====================================================================
+
 on:
   push:
     branches: [main]
@@ -9,33 +50,50 @@ on:
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch: {}
+
 permissions:
   contents: write
   pull-requests: write
+
+concurrency:
+  group: image-alt-text
+  cancel-in-progress: false
+
 jobs:
   generate-alt-text:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
       - name: Configure git identity
         run: |
           git config user.name "wal-katha-alttext-bot"
           git config user.email "alttext-bot@users.noreply.github.com"
-      - name: Create working branch
+
+      # Fixed branch, reset to the current main every run. Combined with
+      # the open-PR check further down this means at most ONE alt-text PR
+      # is ever open, and re-running simply refreshes it.
+      - name: Create or reset working branch
         id: branch
         run: |
-          BRANCH="autofix/image-alt-text-$(date +%Y%m%d-%H%M%S)"
-          git checkout -b "$BRANCH"
+          BRANCH="bot/image-alt-text"
+          git checkout -B "$BRANCH"
           echo "branch_name=$BRANCH" >> "$GITHUB_OUTPUT"
+
       - name: Install helper packages in isolated temp folder
         run: |
           mkdir -p /tmp/alttext-tool
           cd /tmp/alttext-tool
           npm init -y
           npm install gray-matter@4
+
       - name: Generate alt text via Gemini Vision API
         id: generate
         env:
@@ -43,166 +101,307 @@ jobs:
         run: |
           node --input-type=module << 'EOF'
           import { createRequire } from 'module';
-          import { readFileSync, writeFileSync, readdirSync, existsSync, appendFileSync } from 'fs';
+          import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, appendFileSync } from 'fs';
           import { join } from 'path';
+
           const require = createRequire('/tmp/alttext-tool/package.json');
           const matter = require('gray-matter');
+
           const POSTS_DIR = 'src/content/posts';
           const PUBLIC_DIR = 'public';
-          const MAX_PER_RUN = 5;
-          const GEMINI_MODEL_PRIMARY = 'gemini-3.6-flash';
-          const GEMINI_MODEL_FALLBACKS = ['gemini-2.5-flash', 'gemini-flash-latest'];
-          const SINHALA_TAG = 'සිංහල වැල් කතා';
-          // Singlish (Latin-script) search-intent keyword cluster. One is
-          // picked deterministically per post (based on filename hash, not
-          // random per-run) so the same post always gets the same
-          // Singlish opener across retries. Placed at the START of the
-          // alt text because Google Image Crawler weighs the first 3-4
-          // words most heavily, and most Sri Lankan search traffic for
-          // this content types Singlish terms rather than Unicode Sinhala.
-          const SINGLISH_KEYWORD_CLUSTER = [
-            'sinhala wal katha',
-            'aluth wal katha',
-            'wal katha 2026',
-            'wal katha story',
-            'wala katha collection',
+          const MAX_PER_RUN = 6;
+          const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+          const MAX_ALT_CHARS = 125;
+          const MIN_ALT_CHARS = 30;
+          const REQUEST_TIMEOUT_MS = 60000;
+
+          // Real, currently-served model IDs. The old primary
+          // ("gemini-3.6-flash") does not exist in the API at all.
+          const MODEL_PRIMARY = 'gemini-2.5-flash';
+          const MODEL_FALLBACKS = ['gemini-2.0-flash', 'gemini-flash-latest'];
+
+          // ---------------------------------------------------------------
+          // BRAND-TERM BLOCKLIST
+          //
+          // These are the terms that must NEVER appear in alt text. They
+          // are the site's own head terms: every page, title, tag and meta
+          // description already carries them, so repeating them in all
+          // image alt text adds no incremental ranking signal, makes every
+          // image compete against every other image for one query, and
+          // looks like stuffing to Google Images.
+          //
+          // Applied twice: as an explicit prompt instruction, AND as a
+          // post-processing strip, because a vision model will often echo
+          // brand words it infers from the topic even when told not to.
+          // ---------------------------------------------------------------
+          const BRAND_PATTERNS = [
+            /sinhala\s*wal[a]?\s*katha/gi,
+            /wal[a]?\s*katha/gi,
+            /wela\s*katha/gi,
+            /walakatha/gi,
+            /walkatha/gi,
+            /වල්\s*කතා/g,
+            /වැල්\s*කතා/g,
+            /වල\s*කතා/g,
           ];
+
+          // Words that made the old output read as machine-generated.
+          const FILLER_PATTERNS = [
+            /ඡායාරූපය/g,
+            /පින්තූරය/g,
+            /රූපය/g,
+            /image/gi,
+            /photo/gi,
+            /picture/gi,
+          ];
+
           const apiKey = process.env.GEMINI_API_KEY;
           if (!apiKey) {
-            console.error('========================================');
+            console.error('==========================================');
             console.error('DIAGNOSTIC: GEMINI_API_KEY secret is NOT SET.');
-            console.error('Go to: Settings > Secrets and variables > Actions');
+            console.error('Settings > Secrets and variables > Actions');
             console.error('and add a repository secret named GEMINI_API_KEY.');
             console.error('Skipping alt-text generation for this run.');
-            console.error('========================================');
+            console.error('==========================================');
             appendFileSync(process.env.GITHUB_OUTPUT, 'has_changes=false\n');
             process.exit(0);
           }
-          console.log('DIAGNOSTIC: GEMINI_API_KEY secret detected (length: ' + apiKey.length + ' chars).');
+          console.log('DIAGNOSTIC: GEMINI_API_KEY detected (length: ' + apiKey.length + ' chars).');
+
+          // ---------------------------------------------------------------
+          // Invisible-character sanitiser. Frontmatter pasted from editors
+          // silently carries U+200B..U+200D, U+FEFF, nbsp and bidi marks.
+          // One post in this repo is already affected, and the old workflow
+          // treated it as a missing image file forever.
+          // ---------------------------------------------------------------
+          function stripInvisible(value) {
+            return String(value || '')
+              .replace(/[\u200B-\u200D\uFEFF]/g, '')
+              .replace(/\u00A0/g, ' ')
+              .replace(/[\u200E\u200F\u202A-\u202E]/g, '')
+              .trim();
+          }
+
           function humanizeSlug(value) {
             if (!value) return '';
-            return String(value)
+            return stripInvisible(value)
               .replace(/[-_]+/g, ' ')
-              .trim()
               .replace(/\s+/g, ' ')
-              .replace(/^[a-z]/, (m) => m.toUpperCase());
+              .trim();
           }
-          function pickSingaishKeyword(seedString) {
-            let hash = 0;
-            for (let i = 0; i < seedString.length; i++) {
-              hash = (hash * 31 + seedString.charCodeAt(i)) >>> 0;
+
+          function stripBrandTerms(value) {
+            let out = String(value || '');
+            for (const re of BRAND_PATTERNS) out = out.replace(re, ' ');
+            return out.replace(/\s+/g, ' ').trim();
+          }
+
+          function stripFiller(value) {
+            let out = String(value || '');
+            for (const re of FILLER_PATTERNS) out = out.replace(re, ' ');
+            return out.replace(/\s+/g, ' ').trim();
+          }
+
+          // ---------------------------------------------------------------
+          // TOPIC KEYWORD RESOLUTION (replaces the old brand cluster).
+          //
+          // Priority:
+          //   1. frontmatter image_keyword  - manual override, so a trending
+          //      term can be set per post without touching this workflow.
+          //   2. first tag that is not purely a brand term.
+          //   3. category slug with brand terms stripped out.
+          //   4. post title with brand terms stripped out.
+          //
+          // The result is a SEED, not the final text: the model is asked to
+          // build a natural Sinhala phrase around it. This is what makes
+          // each image target a different long-tail query instead of all of
+          // them targeting the same head term.
+          // ---------------------------------------------------------------
+          function resolveTopicSeed(fm) {
+            const manual = stripBrandTerms(stripInvisible(fm.image_keyword));
+            if (manual.length >= 3) return manual;
+
+            const tags = Array.isArray(fm.tags) ? fm.tags : [];
+            for (const tag of tags) {
+              const cleaned = stripBrandTerms(humanizeSlug(tag));
+              if (cleaned.length >= 3) return cleaned;
             }
-            return SINGLISH_KEYWORD_CLUSTER[hash % SINGLISH_KEYWORD_CLUSTER.length];
+
+            const cats = Array.isArray(fm.categories) ? fm.categories : [];
+            for (const cat of cats) {
+              const cleaned = stripBrandTerms(humanizeSlug(cat));
+              if (cleaned.length >= 3) return cleaned;
+            }
+
+            const fromTitle = stripBrandTerms(stripInvisible(fm.title));
+            if (fromTitle.length >= 3) return fromTitle;
+
+            return '';
           }
-          const files = readdirSync(POSTS_DIR).filter((f) => /\.(md|mdx)$/i.test(f) && !f.startsWith('-'));
-          console.log(`DIAGNOSTIC: Scanned ${files.length} post file(s) in ${POSTS_DIR}.`);
+
+          const files = readdirSync(POSTS_DIR).filter(
+            (f) => /\.(md|mdx)$/i.test(f) && !f.startsWith('-')
+          );
+          console.log('DIAGNOSTIC: Scanned ' + files.length + ' post file(s) in ' + POSTS_DIR + '.');
+
           const candidates = [];
           const skippedReasons = [];
+
           for (const file of files) {
             const filePath = join(POSTS_DIR, file);
             const raw = readFileSync(filePath, 'utf-8');
-            const parsed = matter(raw);
+
+            let parsed;
+            try {
+              parsed = matter(raw);
+            } catch (err) {
+              skippedReasons.push(file + ': SKIPPED - frontmatter failed to parse (' + err.message + ').');
+              continue;
+            }
+
             const fm = parsed.data || {};
+
             if (!fm.image) {
-              skippedReasons.push(`${file}: SKIPPED - no "image" field in frontmatter.`);
+              skippedReasons.push(file + ': SKIPPED - no "image" field in frontmatter.');
               continue;
             }
-            if (fm.image_alt) {
-              skippedReasons.push(`${file}: SKIPPED - "image_alt" already set.`);
+            if (fm.image_alt && String(fm.image_alt).trim()) {
+              skippedReasons.push(file + ': SKIPPED - "image_alt" already set.');
               continue;
             }
-            const imgRelPath = String(fm.image).replace(/^\/+/, '');
+
+            const imgRelPath = stripInvisible(fm.image).replace(/^\/+/, '');
             const imgAbsPath = join(PUBLIC_DIR, imgRelPath);
+
             if (!existsSync(imgAbsPath)) {
-              skippedReasons.push(`${file}: SKIPPED - image file NOT FOUND at "${imgAbsPath}".`);
+              skippedReasons.push(file + ': SKIPPED - image file NOT FOUND at "' + imgAbsPath + '".');
               continue;
             }
-            const category = Array.isArray(fm.categories) && fm.categories.length > 0
-              ? humanizeSlug(fm.categories[0])
-              : '';
+
+            const bytes = statSync(imgAbsPath).size;
+            if (bytes > MAX_IMAGE_BYTES) {
+              skippedReasons.push(
+                file + ': SKIPPED - image is ' + Math.round(bytes / 1024) +
+                ' KB, above the ' + Math.round(MAX_IMAGE_BYTES / 1024) +
+                ' KB inline-request limit. Optimise it first.'
+              );
+              continue;
+            }
+
+            const topicSeed = resolveTopicSeed(fm);
+            if (!topicSeed) {
+              skippedReasons.push(file + ': SKIPPED - could not derive a non-brand topic keyword. Add an "image_keyword" field to this post.');
+              continue;
+            }
+
             candidates.push({
               file: filePath,
-              title: fm.title || file,
-              category,
+              title: stripInvisible(fm.title) || file,
+              category: Array.isArray(fm.categories) && fm.categories.length > 0
+                ? humanizeSlug(fm.categories[0])
+                : '',
               imgAbsPath,
-              singlishKeyword: pickSingaishKeyword(file),
+              topicSeed,
             });
           }
+
           console.log('DIAGNOSTIC: --- Skip reasons for every non-candidate post ---');
           if (skippedReasons.length > 0) {
             skippedReasons.forEach((r) => console.log('  ' + r));
           } else {
             console.log('  (no posts were skipped)');
           }
-          console.log('DIAGNOSTIC: -----------------------------------------------');
+          console.log('DIAGNOSTIC: ------------------------------------------------');
+
           const selected = candidates.slice(0, MAX_PER_RUN);
-          console.log(`Found ${candidates.length} post(s) missing image_alt - processing ${selected.length} this run.`);
+          console.log(
+            'Found ' + candidates.length + ' post(s) missing image_alt - processing ' +
+            selected.length + ' this run.'
+          );
+
           if (selected.length === 0) {
             appendFileSync(process.env.GITHUB_OUTPUT, 'has_changes=false\n');
             process.exit(0);
           }
+
           function mimeFromExt(p) {
             const ext = p.split('.').pop().toLowerCase();
             if (ext === 'webp') return 'image/webp';
             if (ext === 'png') return 'image/png';
             if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+            if (ext === 'gif') return 'image/gif';
             return 'image/webp';
           }
-          // STRICT SEO STRUCTURE PATTERN:
-          // "[Singlish Keyword] - [Human-Written Sinhala Context] | [සිංහල වැල් කතා]"
+
+          // ---------------------------------------------------------------
+          // PROMPT
           //
-          // Middle-segment design goals (2026-08 refinement):
-          // 1. NEVER use generic AI-filler nouns like "ඡායාරූපය"/"පින්තූරය" -
-          //    these carry zero Google Image SEO value and read as
-          //    machine-generated rather than human-written.
-          // 2. Blend a story-character role (නැන්දා, අක්කා, ටීචර්, නංගී,
-          //    බිරිඳ, etc.) with the visible details ONLY when that role
-          //    is a reasonable, natural fit for both the post title AND
-          //    what is actually visible in the image - this raises the
-          //    title+image co-occurrence relevance signal without
-          //    inventing details the image doesn't support. If no role
-          //    reasonably fits, a plain human descriptor (කාන්තාව/
-          //    තරුණිය/කෙල්ල) is used instead - accuracy is never
-          //    sacrificed for keyword richness.
-          // 3. Read exactly like a real Sri Lankan person naturally
-          //    labeling a story photo, not a robotic scene description.
-          function buildPrompt(postTitle, category, singlishKeyword) {
-            const categoryLine = category
-              ? `The post's category is: "${category}". `
+          // Output shape: "<topic long-tail phrase> - <natural Sinhala
+          // visual description>"
+          //
+          // No brand term anywhere, no trailing brand tag. The differentiator
+          // between images is now the topic phrase, which is derived from
+          // that specific post, so each image can rank for its own query.
+          // ---------------------------------------------------------------
+          function buildPrompt(postTitle, category, topicSeed, strictRetry) {
+            const categoryLine = category ? 'The post category is: "' + category + '". ' : '';
+            const retryLine = strictRetry
+              ? 'IMPORTANT RETRY NOTE: your previous answer was rejected because it ' +
+                'contained a banned brand term or was too short. Do not use the words ' +
+                '"wal katha", "wala katha", "wela katha" or "වල් කතා" in any form. ' +
+                'Write at least 60 characters of real descriptive Sinhala. '
               : '';
+
             return (
-              'You are an expert Sri Lankan SEO content strategist optimizing ' +
-              'photos for Google Image Search on a Sinhala creative-fiction ' +
-              'storytelling website. Analyze this image and generate ONE alt ' +
-              'text string under 120 characters, following this EXACT structure:\n\n' +
-              `"${singlishKeyword} - [Natural Human-Written Sinhala Context] | ${SINHALA_TAG}"\n\n` +
-              'STRICT RULES: ' +
-              `1. Start EXACTLY with "${singlishKeyword}" followed by a single ` +
-              'space, a hyphen, and a single space (" - "). ' +
-              '2. For the middle Sinhala part: NEVER use filler words like ' +
-              '"ඡායාරූපය" or "පින්තූරය" - they add no SEO value. ' +
-              `3. From the story title ("${postTitle}") ${categoryLine}try to ` +
-              'infer a natural character role (e.g. නැන්දා, දුව, කොල්ලා, බාප්පා, සියා, මස්සිනා, ටීචර්, ' +
-              'නංගී, බිරිඳ, මිනිහා, අයියා, මල්ලි, තාත්තා, මාමා, අංකල්, ලොකු තාත්තා, කෙල්ල) ONLY if it genuinely and plausibly matches ' +
-              'both the title and what is visibly shown in the image. If no ' +
-              'role clearly fits, use a plain natural descriptor instead ' +
-              '(කාන්තාව, තරුණිය) - never guess or invent a role the image ' +
-              "doesn't support. " +
-              '4. Blend that role naturally with real visible details ' +
-              '(clothing, color, posture, setting) exactly as a real Sri ' +
-              'Lankan person would casually caption a story photo - e.g. ' +
-              '"රෝස සාරියෙන් සැරසුණු නැන්දා" or "සාලයේ ඉන්න අක්කා". ' +
-              '5. Pure Sinhala phrasing only in the middle section - no ' +
-              'English/Singlish words mixed in, no robotic layout ' +
-              'descriptions, no explicit/adult details. ' +
-              `6. End with " | ${SINHALA_TAG}" exactly once. Never repeat ` +
-              'any keyword anywhere in the string, no comma-separated ' +
-              'keyword lists, no quotes, no markdown. ' +
-              'Return ONLY the final raw alt text string, nothing else.'
+              retryLine +
+              'You are an expert Sinhala SEO content strategist writing image alt text ' +
+              'for Google Image Search on a Sinhala creative-fiction storytelling website. ' +
+              'Look at the supplied image and write ONE alt text string, under ' +
+              MAX_ALT_CHARS + ' characters, in this exact shape:\n\n' +
+              '"<topic phrase> - <natural Sinhala description of what is visible>"\n\n' +
+              'RULES:\n' +
+              '1. The topic phrase must be built naturally around this seed keyword: "' +
+              topicSeed + '". Expand it into a 3 to 6 word descriptive Sinhala phrase ' +
+              'that a real person might actually search for. Do not just repeat the seed ' +
+              'verbatim if it reads unnaturally on its own.\n' +
+              '2. BANNED - never write "wal katha", "wala katha", "wela katha", ' +
+              '"walakatha", "walkatha", "වල් කතා", "වැල් කතා" or any variant of them, ' +
+              'anywhere in the string. These already appear on every page of the site; ' +
+              'repeating them in alt text adds no ranking value and reads as spam.\n' +
+              '3. BANNED filler nouns - never write "ඡායාරූපය", "පින්තූරය", "රූපය", ' +
+              '"image", "photo" or "picture". Describe the subject directly instead.\n' +
+              '4. The description half must be pure natural Sinhala covering only what ' +
+              'is genuinely visible: clothing, colour, posture, setting, mood. Never ' +
+              'invent a detail the image does not show.\n' +
+              '5. From the story title ("' + postTitle + '") ' + categoryLine +
+              'you may infer a plausible adult character role (උදා: කාන්තාව, පුරුෂයා, ' +
+              'සේවිකාව, රියදුරු, ගුරුවරිය, කලාකාරිය) ONLY if it clearly fits both the ' +
+              'title and what is visible. If nothing fits, use a plain neutral ' +
+              'descriptor such as "කාන්තාවක්" or "තරුණියක්".\n' +
+              '6. MANDATORY CONTENT GUARD - every described subject must read as a ' +
+              'clearly adult person. Never describe anyone as a child, schoolgirl, ' +
+              'schoolboy, student, teenager, "නංගී", "පාසල් සිසුවිය" or any other ' +
+              'age-ambiguous or minor-implying role, regardless of the story title. ' +
+              'Never use sexual, suggestive or explicit wording of any kind. Keep the ' +
+              'wording strictly neutral and descriptive.\n' +
+              '7. Separate the two halves with exactly " - " (space hyphen space). ' +
+              'Use no quotes, no markdown, no emoji, no trailing tag, no newlines, ' +
+              'and never repeat the same word twice.\n' +
+              'Return ONLY the final raw alt text string and nothing else.'
             );
           }
+
+          const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+
+          function sleep(ms) {
+            return new Promise((r) => setTimeout(r, ms));
+          }
+
           async function callGeminiModel(modelName, base64Data, mimeType, prompt) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+            const url =
+              'https://generativelanguage.googleapis.com/v1beta/models/' +
+              modelName + ':generateContent?key=' + apiKey;
+
             const body = {
               contents: [
                 {
@@ -212,112 +411,245 @@ jobs:
                   ],
                 },
               ],
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 256,
+              },
             };
-            const res = await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body),
-            });
-            if (!res.ok) {
-              const errText = await res.text().catch(() => '');
-              const err = new Error(`Gemini API error ${res.status}: ${errText}`);
-              err.status = res.status;
-              throw err;
+
+            const backoffs = [5000, 15000, 40000];
+
+            for (let attempt = 0; attempt <= backoffs.length; attempt++) {
+              let res;
+              try {
+                res = await fetch(url, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(body),
+                  signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+                });
+              } catch (netErr) {
+                if (attempt < backoffs.length) {
+                  console.warn(
+                    'Network/timeout error on "' + modelName + '" (' + netErr.message +
+                    ') - retrying in ' + backoffs[attempt] / 1000 + 's.'
+                  );
+                  await sleep(backoffs[attempt]);
+                  continue;
+                }
+                throw netErr;
+              }
+
+              if (!res.ok) {
+                const errText = await res.text().catch(() => '');
+                if (RETRYABLE.has(res.status) && attempt < backoffs.length) {
+                  console.warn(
+                    'Gemini returned ' + res.status + ' on "' + modelName +
+                    '" - retrying in ' + backoffs[attempt] / 1000 + 's.'
+                  );
+                  await sleep(backoffs[attempt]);
+                  continue;
+                }
+                const err = new Error('Gemini API error ' + res.status + ': ' + errText);
+                err.status = res.status;
+                throw err;
+              }
+
+              const data = await res.json();
+              const text = data && data.candidates && data.candidates[0] &&
+                data.candidates[0].content && data.candidates[0].content.parts &&
+                data.candidates[0].content.parts[0] &&
+                data.candidates[0].content.parts[0].text;
+
+              if (!text) throw new Error('Empty response from Gemini API');
+              return text;
             }
-            const data = await res.json();
-            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!text) throw new Error('Empty response from Gemini API');
-            return text.trim().replace(/^["']|["']$/g, '').slice(0, 160);
+
+            throw new Error('Exhausted retries for model ' + modelName);
           }
-          async function generateAltText(imgPath, postTitle, category, singlishKeyword) {
-            const imgBuffer = readFileSync(imgPath);
+
+          // Normalise, strip banned terms, enforce length. Returns null when
+          // the result is unusable, so the caller can retry or skip rather
+          // than write junk into a post.
+          function normaliseAlt(rawText) {
+            let out = String(rawText)
+              .replace(/[\r\n\t]+/g, ' ')
+              .replace(/^["'\s]+|["'\s]+$/g, '')
+              .replace(/[*_`#]/g, '');
+
+            out = stripInvisible(out);
+            out = stripBrandTerms(out);
+            out = stripFiller(out);
+
+            out = out
+              .replace(/\s*-\s*-\s*/g, ' - ')
+              .replace(/^[\s\-|,.]+/, '')
+              .replace(/[\s\-|,.]+$/, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+
+            if (out.length < MIN_ALT_CHARS) return null;
+
+            if (out.length > MAX_ALT_CHARS) {
+              out = out.slice(0, MAX_ALT_CHARS);
+              const lastSpace = out.lastIndexOf(' ');
+              if (lastSpace > MIN_ALT_CHARS) out = out.slice(0, lastSpace);
+              out = out.replace(/[\s\-|,.]+$/, '').trim();
+            }
+
+            return out;
+          }
+
+          async function generateAltText(item, strictRetry) {
+            const imgBuffer = readFileSync(item.imgAbsPath);
             const base64Data = imgBuffer.toString('base64');
-            const mimeType = mimeFromExt(imgPath);
-            const prompt = buildPrompt(postTitle, category, singlishKeyword);
-            const modelsToTry = [GEMINI_MODEL_PRIMARY, ...GEMINI_MODEL_FALLBACKS];
+            const mimeType = mimeFromExt(item.imgAbsPath);
+            const prompt = buildPrompt(item.title, item.category, item.topicSeed, strictRetry);
+
+            const modelsToTry = [MODEL_PRIMARY].concat(MODEL_FALLBACKS);
             let lastError = null;
+
             for (const modelName of modelsToTry) {
               try {
-                const result = await callGeminiModel(modelName, base64Data, mimeType, prompt);
-                if (modelName !== GEMINI_MODEL_PRIMARY) {
-                  console.warn(`NOTE: primary model "${GEMINI_MODEL_PRIMARY}" failed, succeeded using fallback model "${modelName}".`);
+                const rawText = await callGeminiModel(modelName, base64Data, mimeType, prompt);
+                if (modelName !== MODEL_PRIMARY) {
+                  console.warn(
+                    'NOTE: primary model "' + MODEL_PRIMARY +
+                    '" failed, succeeded using fallback "' + modelName + '".'
+                  );
                 }
-                return result;
+                return normaliseAlt(rawText);
               } catch (err) {
                 lastError = err;
-                if (err.status === 404 || err.status === 503) {
-                  console.warn(`Model "${modelName}" unavailable (${err.status}) - trying next fallback if any.`);
+                if (err.status === 404 || err.status === 403) {
+                  console.warn(
+                    'Model "' + modelName + '" unavailable (' + err.status +
+                    ') - trying next fallback if any.'
+                  );
                   continue;
                 }
                 throw err;
               }
             }
+
             throw lastError || new Error('All Gemini model attempts failed.');
           }
+
+          // Writes image_alt using JSON.stringify, which emits a correctly
+          // escaped YAML double-quoted scalar (handles quotes, backslashes
+          // and any stray control character). The old hand-rolled version
+          // only swapped " for ' and could corrupt the frontmatter.
           function upsertImageAltField(raw, altText) {
-            const safeAlt = altText.replace(/"/g, "'");
-            const altLine = `image_alt: "${safeAlt}"`;
+            const altLine = 'image_alt: ' + JSON.stringify(altText);
             const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
             if (!fmMatch) return null;
+
             let fmBlock = fmMatch[1];
+
             if (/^image_alt:\s*.*$/m.test(fmBlock)) {
               fmBlock = fmBlock.replace(/^image_alt:\s*.*$/m, altLine);
             } else if (/^image:\s*.*$/m.test(fmBlock)) {
-              fmBlock = fmBlock.replace(/^(image:\s*.*)$/m, `$1\n${altLine}`);
+              fmBlock = fmBlock.replace(/^(image:\s*.*)$/m, '$1\n' + altLine);
             } else {
-              fmBlock = `${fmBlock}\n${altLine}`;
+              fmBlock = fmBlock + '\n' + altLine;
             }
-            return raw.replace(/^---\r?\n[\s\S]*?\r?\n---/, `---\n${fmBlock}\n---`);
+
+            return raw.replace(/^---\r?\n[\s\S]*?\r?\n---/, '---\n' + fmBlock + '\n---');
           }
+
           const touched = [];
+          const usedAlts = new Set();
+
           for (const item of selected) {
             try {
-              const altText = await generateAltText(item.imgAbsPath, item.title, item.category, item.singlishKeyword);
+              let altText = await generateAltText(item, false);
+
+              // One strict retry if the first answer was rejected by the
+              // normaliser, or duplicated an alt already used this run.
+              if (!altText || usedAlts.has(altText.toLowerCase())) {
+                console.warn('First answer rejected for ' + item.file + ' - retrying strictly.');
+                await sleep(3000);
+                altText = await generateAltText(item, true);
+              }
+
+              if (!altText) {
+                console.warn('Skipped ' + item.file + ': model output unusable after retry.');
+                continue;
+              }
+              if (usedAlts.has(altText.toLowerCase())) {
+                console.warn('Skipped ' + item.file + ': duplicate alt text after retry.');
+                continue;
+              }
+
               const original = readFileSync(item.file, 'utf-8');
               const updatedRaw = upsertImageAltField(original, altText);
+
               if (!updatedRaw) {
-                console.warn(`SELF-TEST FAILED (no frontmatter block): ${item.file} - skipped.`);
+                console.warn('SELF-TEST FAILED (no frontmatter block): ' + item.file + ' - skipped.');
                 continue;
               }
-              const reparsed = matter(updatedRaw);
-              if (!reparsed.data.image_alt || !reparsed.data.title) {
-                console.warn(`SELF-TEST FAILED (integrity check): ${item.file} - skipped.`);
+
+              let reparsed;
+              try {
+                reparsed = matter(updatedRaw);
+              } catch (err) {
+                console.warn('SELF-TEST FAILED (re-parse error): ' + item.file + ' - ' + err.message);
                 continue;
               }
+
+              if (
+                !reparsed.data.image_alt ||
+                !reparsed.data.title ||
+                reparsed.data.image_alt !== altText
+              ) {
+                console.warn('SELF-TEST FAILED (integrity check): ' + item.file + ' - skipped.');
+                continue;
+              }
+
               writeFileSync(item.file, updatedRaw, 'utf-8');
-              touched.push({ file: item.file, title: item.title, alt: altText });
-              console.log(`Generated alt text for ${item.file}: "${altText}"`);
+              usedAlts.add(altText.toLowerCase());
+              touched.push({
+                file: item.file,
+                title: item.title,
+                seed: item.topicSeed,
+                alt: altText,
+              });
+              console.log('Generated alt text for ' + item.file + ': "' + altText + '"');
             } catch (err) {
-              console.warn(`Skipped ${item.file}: ${err.message}`);
+              console.warn('Skipped ' + item.file + ': ' + err.message);
             }
           }
+
           writeFileSync('/tmp/alttext-summary.json', JSON.stringify(touched, null, 2));
-          appendFileSync(process.env.GITHUB_OUTPUT, `has_changes=${touched.length > 0 ? 'true' : 'false'}\n`);
+          appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            'has_changes=' + (touched.length > 0 ? 'true' : 'false') + '\n'
+          );
           EOF
+
       - name: Verify build integrity before commit
         if: steps.generate.outputs.has_changes == 'true'
         run: |
-          corepack enable
-          yarn install
+          yarn install --frozen-lockfile
           yarn build
+
       - name: Commit generated alt text
         id: commit
         if: steps.generate.outputs.has_changes == 'true'
         run: |
-          git add src/content/posts/*.md || true
-          if [ -n "$(find src/content/posts -maxdepth 1 -name '*.mdx' 2>/dev/null)" ]; then
-            git add src/content/posts/*.mdx || true
-          fi
+          git add -A src/content/posts
           if git diff --staged --quiet; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
             git commit -m "Auto: AI-generated SEO image alt text for posts (Gemini Vision)"
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
+
       - name: Push branch
         if: steps.commit.outputs.has_changes == 'true'
-        run: git push origin "${{ steps.branch.outputs.branch_name }}"
-      - name: Open Pull Request
+        run: git push --force origin "${{ steps.branch.outputs.branch_name }}"
+
+      - name: Open or update Pull Request
         if: steps.commit.outputs.has_changes == 'true'
         env:
           BRANCH_NAME: ${{ steps.branch.outputs.branch_name }}
@@ -328,31 +660,65 @@ jobs:
             const summary = fs.existsSync('/tmp/alttext-summary.json')
               ? JSON.parse(fs.readFileSync('/tmp/alttext-summary.json', 'utf8'))
               : [];
+
             const rows = summary
-              .map((s) => `- **${s.title}** (\`${s.file}\`)\n  Alt: _${s.alt}_`)
+              .map((s) => '- **' + s.title + '** (`' + s.file + '`)\n' +
+                          '  - Topic seed: `' + s.seed + '`\n' +
+                          '  - Alt: `' + s.alt + '`')
               .join('\n');
+
             const body = [
-              '## 🤖 AI-Generated SEO Image Alt Text (Gemini Vision)',
+              '## AI-Generated SEO Image Alt Text (Gemini Vision)',
               '',
-              'Structure: "[Singlish Keyword] - [Human-Written Sinhala Context with Story Role] | සිංහල වැල් කතා" — filler words (ඡායාරූපය/පින්තූරය) ඉවත් කර, character-role blending සමඟ Google Image Search co-occurrence signal එක ශක්තිමත් කිරීමකි.',
+              'Structure: `<topic long-tail phrase> - <natural Sinhala visual description>`',
               '',
-              '### ✅ Merge කරන්න කලින් check කරන්න:',
+              'පැරණි brand-term cluster ("wal katha" / "wala katha" / "සිංහල වල් කතා") ' +
+              'සම්පූර්ණයෙන් ඉවත් කර ඇත. දැන් හැම image එකකටම ඒ post එකෙන්ම derive වූ ' +
+              'වෙනස් long-tail keyword එකක් ලැබෙනවා, එබැවින් images එකිනෙකා සමඟ ' +
+              'එකම query එකට තරඟ කරන්නේ නැහැ.',
+              '',
+              'Brand terms output එකෙන් force-strip කරනවා, model එකෙන් ආවත්.',
+              '',
+              '### Merge කරන්න කලින් check කරන්න',
               '- [x] `yarn build` සාර්ථකව සම්පූර්ණ විය.',
               '- [ ] Alt text descriptions manually review කරන්න.',
+              '- [ ] කිසිදු alt text එකක brand term එකක් නැති බව තහවුරු කරන්න.',
               '',
-              '### 📝 Generated Alt Text:',
+              '### Generated Alt Text',
               rows || '(none)',
               '',
-              '_මෙම PR එක ස්වයංක්‍රීයව scan-and-propose කරන bot එකකින් සාදන ලදී._',
+              '_මෙම PR එක scan-and-propose කරන bot එකකින් සාදන ලදී. ' +
+              'එකවර එක PR එකක් පමණක් විවෘතව තබා ගනී._',
             ].join('\n');
-            await github.rest.pulls.create({
+
+            const existing = await github.rest.pulls.list({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: '🤖 Auto: AI-generated SEO image alt text',
-              head: process.env.BRANCH_NAME,
-              base: 'main',
-              body,
+              state: 'open',
+              head: context.repo.owner + ':' + process.env.BRANCH_NAME,
             });
+
+            if (existing.data.length > 0) {
+              const pr = existing.data[0];
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                body,
+              });
+              console.log('Updated existing PR #' + pr.number);
+            } else {
+              const created = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'Auto: AI-generated SEO image alt text',
+                head: process.env.BRANCH_NAME,
+                base: 'main',
+                body,
+              });
+              console.log('Created PR #' + created.data.number);
+            }
+
       - name: No changes detected
         if: steps.generate.outputs.has_changes != 'true'
         run: echo "No posts needed alt-text generation this run."
