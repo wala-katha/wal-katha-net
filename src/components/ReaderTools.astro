@@ -1,0 +1,50 @@
+---
+// ReaderTools.astro
+// layout එකේ </body> ට කලින් <ReaderTools /> විදිහට තියන්න.
+import '../styles/reader-tools.css';
+---
+
+<div class="rt-root" data-rt-root>
+  <div class="rt-progress" aria-hidden="true"><i></i></div>
+
+  <button
+    class="rt-fab"
+    type="button"
+    aria-expanded="false"
+    aria-controls="rt-panel"
+    aria-label="කියවීමේ මෙවලම් විවෘත කරන්න"
+    title="කියවීමේ මෙවලම්"
+  >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M4 6h16M4 12h16M4 18h10" />
+    </svg>
+  </button>
+
+  <div class="rt-scrim" hidden></div>
+
+  <aside
+    id="rt-panel"
+    class="rt-panel"
+    role="dialog"
+    aria-modal="false"
+    aria-label="කියවීමේ මෙවලම්"
+    data-open="0"
+    hidden
+  >
+    <header class="rt-head">
+      <strong class="rt-title">අන්තර්ගතය</strong>
+      <button class="rt-iconbtn rt-close" type="button" aria-label="වසන්න">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M18 6 6 18M6 6l12 12" />
+        </svg>
+      </button>
+    </header>
+
+    <nav class="rt-tabs" role="tablist" aria-label="මෙවලම්"></nav>
+    <div class="rt-body" role="tabpanel"></div>
+  </aside>
+</div>
+
+<script>
+  import '../scripts/reader-tools.js';
+</script>
