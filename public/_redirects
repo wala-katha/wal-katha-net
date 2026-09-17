@@ -9,9 +9,68 @@
 # නැත (theme demo/template leftover slugs), එබැවින් ඒවා 404 වශයෙන්ම
 # පැවතීම නිවැරදි හැසිරීමකි.
 
-/categories/amma-katha/                    /categories/amma-wala-katha/          301
-/categories/amma-katha                     /categories/amma-wala-katha/          301
-/categories/lesbian-and-guy-wala-katha/    /categories/lesbian-guy-wala-katha/   301
-/categories/lesbian-and-guy-wala-katha     /categories/lesbian-guy-wala-katha/   301
-/copyright/                                /copyright-credit-policy/             301
-/copyright                                 /copyright-credit-policy/             301
+# ---------------------------------------------------------------
+# 2026-09 FIX #1 — redirect TARGET slug typo (301 → 404 chain).
+# මෙම rules දෙකේ target එක "amma-wala-katha" / "lesbian-guy-wala-katha"
+# ලෙස ලියා තිබුණි, නමුත් site එකේ ඇත්ත category slugs වන්නේ
+# "amma-wal-katha" සහ "lesbian-guy-wal-katha" (sitemap-0.xml බලන්න).
+# එබැවින් පැරණි link එකක් 301 වී ගොස් 404 එකකට වැටුණි — Google
+# මේක "redirect error" ලෙස treat කරයි, එනම් 404 එකට වඩා නරකයි.
+# දැන් target දෙකම ඇත්ත, 200 දෙන URLs වෙත යොමු කර ඇත.
+# ---------------------------------------------------------------
+/categories/amma-katha/                  /categories/amma-wal-katha/         301
+/categories/amma-katha                   /categories/amma-wal-katha/         301
+/categories/lesbian-and-guy-wala-katha/  /categories/lesbian-guy-wal-katha/  301
+/categories/lesbian-and-guy-wala-katha   /categories/lesbian-guy-wal-katha/  301
+
+# පැරණි "wala-katha" spelling එකෙන් index වී තිබිය හැකි variants ද
+# නිවැරදි slug එකට යොමු කරයි (defensive — costs nothing).
+/categories/amma-wala-katha/             /categories/amma-wal-katha/         301
+/categories/amma-wala-katha              /categories/amma-wal-katha/         301
+/categories/lesbian-guy-wala-katha/      /categories/lesbian-guy-wal-katha/  301
+/categories/lesbian-guy-wala-katha       /categories/lesbian-guy-wal-katha/  301
+
+# ---------------------------------------------------------------
+# Copyright page rename.
+# ---------------------------------------------------------------
+/copyright/                              /copyright-credit-policy/           301
+/copyright                               /copyright-credit-policy/           301
+
+# ---------------------------------------------------------------
+# 2026-09 FIX #2 — AUTHOR ENTITY CONSOLIDATION redirects.
+#
+# පසුබිම: කලින් author files දෙකක් තිබුණි —
+#     src/content/authors/walkatha.md   → /authors/walkatha/
+#     src/content/authors/walakatha.md  → /authors/walakatha/
+# posts සියල්ලේ `authors: ["WalKatha"]` තිබූ නිසා සියලු posts
+# /authors/walkatha/ එකට resolve වී, /authors/walakatha/ එක
+# හිස්, thin-content, indexed page එකක් ලෙස ඉතිරි වුණි.
+#
+# දැන් ඒ දෙකම delete කර, slugify() (github-slugger) output එකට
+# හරියටම ගැළපෙන අලුත් files දෙකක් හදා ඇත:
+#     src/content/authors/wal-katha.md   → /authors/wal-katha/
+#     src/content/authors/wala-katha.md  → /authors/wala-katha/
+#
+# එබැවින් පැරණි URLs දෙක origin එකේ තවත් නැත (verified: cache-bust
+# query එකක් සමඟ දෙකම 404 දෙයි; query නැතුව 200 පෙනෙන්නේ Cloudflare
+# edge cache එකේ පැරණි HTML නිසා පමණි). Google ඒ දෙක index කර
+# තිබූ නිසා 301 redirect එකක් අවශ්‍යයි — එවිට පැරණි URL එකේ
+# link equity නව canonical author page එකට pass වේ.
+#
+# Mapping හේතුව:
+#   walkatha  → wal-katha   (සියලු posts 9ම මෙහි තිබූ නිසා)
+#   walakatha → wala-katha  (naming එකට ළඟම ගැළපීම)
+#
+# trailing-slash සහ non-slash variants දෙකම ලියා ඇත. splat (/*)
+# rule එක sub-paths (උදා: /authors/walkatha/page/2/) ද අල්ලයි —
+# Cloudflare Pages හි splat එකෙන් zero characters ද match වන
+# නිසා root path එකත් මෙයින්ම ආවරණය වේ, නමුත් explicit lines
+# ඉදිරියෙන් තැබීම first-match-wins order එකේ වඩාත් පැහැදිලියි.
+# ---------------------------------------------------------------
+/authors/walkatha/                       /authors/wal-katha/                 301
+/authors/walkatha                        /authors/wal-katha/                 301
+/authors/walkatha/*                      /authors/wal-katha/                 301
+
+/authors/walakatha/                      /authors/wala-katha/                301
+/authors/walakatha                       /authors/wala-katha/                301
+/authors/walakatha/*                     /authors/wala-katha/                301
