@@ -6,7 +6,7 @@ date: 2026-06-18
 image: "/images/posts/Nandage-duwa-wal-katha.webp"
 image_alt: "aluth wal katha - කළු මල් ගවුමෙන් සැරසුණු නැන්දගේ දුව | සිංහල වැල් කතා"
 draft: false
-authors: ["WalKatha"]
+authors: ["Wal Katha"]
 tags: ["akka-katha", "aluth-katha", "family-katha"]
 categories: ["wal-katha"]
 ---
