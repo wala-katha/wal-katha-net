@@ -1,0 +1,81 @@
+name: Sync GSC Keywords
+# Google Search Console Search Analytics API එකෙන් queries අරගෙන
+# src/data/gsc-keywords.json එකට ලියයි. generate-alt-text workflow එක
+# මේ ගොනුව seed keywords සඳහා කියවයි.
+#
+# Secret: GOOGLE_INDEXING_KEY (google-indexing.yml එකේ ඒම key එකම).
+# Cloud Console එකේ "Google Search Console API" එක enable කරන්න ඕන.
+#
+# main එකට කෙලින්ම push කරන්න බලයි; branch protection නිසා fail වුණොත්
+# ස්වයංක්‍රීයව PR එකකට වැටෙයි.
+on:
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: "Days of Search Console data to pull"
+        default: "90"
+      min_impressions:
+        description: "Minimum impressions to keep a query"
+        default: "2"
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: gsc-keyword-sync
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install googleapis in isolated temp folder
+        run: |
+          mkdir -p /tmp/gsc-tool
+          cd /tmp/gsc-tool
+          npm init -y >/dev/null 2>&1
+          npm install googleapis@144 --no-audit --no-fund
+
+      - name: Pull Search Analytics data
+        env:
+          GOOGLE_INDEXING_KEY: ${{ secrets.GOOGLE_INDEXING_KEY }}
+          GSC_SERVICE_ACCOUNT_JSON: ${{ secrets.GSC_SERVICE_ACCOUNT_JSON }}
+          GSC_SITE_URL: ${{ vars.GSC_SITE_URL }}
+          SITE_HOST: www.walakatha.net
+          LOOKBACK_DAYS: ${{ inputs.lookback_days || '90' }}
+          MIN_IMPRESSIONS: ${{ inputs.min_impressions || '2' }}
+        run: node scripts/gsc-keyword-sync.mjs
+
+      - name: Commit result (direct to main, PR fallback)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- src/data/gsc-keywords.json; then
+            echo "No keyword changes - nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/gsc-keywords.json
+          git commit -m "chore(seo): sync Search Console keyword data"
+          if git push origin HEAD:main; then
+            echo "Pushed keyword data straight to main."
+            exit 0
+          fi
+          echo "Direct push rejected - opening a pull request instead."
+          BRANCH="bot/gsc-keywords"
+          git push --force origin "HEAD:refs/heads/$BRANCH"
+          EXISTING=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' || true)
+          if [ -n "$EXISTING" ]; then
+            gh pr edit "$EXISTING" --body-file /tmp/gsc-summary.md
+          else
+            gh pr create --head "$BRANCH" --base main \
+              --title "chore(seo): Search Console keyword sync" \
+              --body-file /tmp/gsc-summary.md
+          fi
