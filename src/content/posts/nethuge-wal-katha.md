@@ -6,7 +6,7 @@ date: 2026-08-08
 image: "/images/posts/nethuge-wal-katha.webp"
 image_alt: "wal katha story - රතු පාට ඇඳුමෙන් සැරසුණු කෙල්ල | සිංහල වැල් කතා"
 draft: true
-authors: ["WalKatha"]
+authors: ["Wala Katha"]
 tags: ["wal-katha-school", "sri-lankan-school-stories", "sinhala-school-katha"]
 categories: ["school-wal-katha"]
 ---
