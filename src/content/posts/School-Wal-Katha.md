@@ -6,7 +6,7 @@ date: 2026-08-06
 image: "/images/posts/School-Wal-Katha.webp"
 image_alt: "Sinhala Wal Katha පාසල් ප්‍රේමය වෙනුවෙන් සුදු කමිසය සහ නිල් ටයි පටිය පැළඳ සිටින සිසුවිය wal katha 2026"
 draft: true
-authors: ["WalKatha"]
+authors: ["Wala Katha"]
 tags: ["wala-katha", "wal katha school", "sri lankan school stories", "sinhala school katha"]
 categories: ["school-wal-katha"]
 ---
