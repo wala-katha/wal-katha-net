@@ -4,6 +4,7 @@ meta_title: "methsala akka wala katha | Sinhala Wal Katha"
 description: "මම ඉන්නේ දකුනු පලාතෙ. ටවුන් එකේ ඉදල ටිකක් දුර එන්න ඕන. මම වැඩ කරන්නේ කොළඹ. මමත් ඉතින් හොද ජොබ් එකක් කරන්නේ..."
 date: 2026-06-18
 image: "/images/posts/Methsala-akka-wal-katha.webp"
+image_alt: "aluth wal katha - නිල් පාට ගවුමෙන් සැරසුණු මේත්සලා අක්කා | සිංහල වැල් කතා"
 draft: false
 authors: ["WalKatha"]
 tags: ["akka-katha", "aluth-katha", "sex-katha"]
