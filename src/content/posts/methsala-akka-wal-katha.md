@@ -5,7 +5,7 @@ description: "මම ඉන්නේ දකුනු පලාතෙ. ටවු�
 date: 2026-06-18
 image: "/images/posts/Methsala-akka-wal-katha.webp"
 draft: false
-authors: ["WalKatha"]
+authors: ["Wala Katha"]
 tags: ["akka-katha", "aluth-katha", "sex-katha"]
 categories: ["wal-katha"]
 ---
