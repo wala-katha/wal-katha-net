@@ -1,0 +1,65 @@
+---
+/**
+ * ReaderTools.astro
+ * --------------------------------------------------------------------------
+ * Base.astro හි </body> ට කලින්, <Footer /> එකට පස්සේ තියන්න.
+ *
+ * NOTES:
+ * - data-allow-select: Base.astro හි content-protection script එක
+ *   selectstart/copy events block කරනවා, නමුත් [data-allow-select]
+ *   ඇතුළත ඒක skip වෙනවා. panel එකේ select/range controls නිවැරදිව
+ *   වැඩ කරන්න මේක අවශ්‍යයි.
+ * - age-gate: overlay එකේ z-index 999999, සහ
+ *   `body > *:not(#age-gate-overlay)` වලට pointer-events:none —
+ *   ඒ නිසා age gate pending නම් මේ panel එක ස්වයංක්‍රීයවම අක්‍රීයයි.
+ *   හිතාමතා ඒ overlay එකට ඉහළින් යන්නේ නෑ.
+ * - comment FAB එක bottom-6 right-6 නිසා, මේ FAB එක දකුණු දාරයේ මැද
+ *   උසින් තියෙනවා (CSS: .rt-fab { top: 40% }) — collide වෙන්නේ නෑ.
+ */
+import "./reader-tools.css";
+---
+
+<div class="rt-root" data-rt-root data-allow-select>
+  <div class="rt-progress" aria-hidden="true"><i></i></div>
+
+  <button
+    class="rt-fab"
+    type="button"
+    aria-expanded="false"
+    aria-controls="rt-panel"
+    aria-label="කියවීමේ මෙවලම් විවෘත කරන්න"
+    title="කියවීමේ මෙවලම්"
+  >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h10" />
+    </svg>
+  </button>
+
+  <div class="rt-scrim" hidden></div>
+
+  <aside
+    id="rt-panel"
+    class="rt-panel"
+    role="dialog"
+    aria-label="කියවීමේ මෙවලම්"
+    data-open="0"
+    hidden
+  >
+    <header class="rt-head">
+      <span class="rt-head-dot" aria-hidden="true"></span>
+      <strong class="rt-title">අන්තර්ගතය</strong>
+      <button class="rt-iconbtn rt-close" type="button" aria-label="වසන්න">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M18 6 6 18M6 6l12 12" />
+        </svg>
+      </button>
+    </header>
+
+    <nav class="rt-tabs" role="tablist" aria-label="කියවීමේ මෙවලම්"></nav>
+    <div class="rt-body" role="tabpanel"></div>
+  </aside>
+</div>
+
+<script>
+  import "./reader-tools.js";
+</script>
