@@ -786,6 +786,8 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
           if (tag === "input" || tag === "textarea" || tag === "select" || tag === "option") return true;
           if (target.isContentEditable) return true;
           if (target.closest && target.closest("[data-allow-select]")) return true;
+          // + Reader Tools — the panel's own controls must stay interactive.
+          if (target.closest && target.closest(".rt-root")) return true;
           return false;
         }
 
