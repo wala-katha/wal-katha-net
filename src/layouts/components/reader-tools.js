@@ -1,8 +1,11 @@
 // ==========================================================================
-// Reader Tools — logic only. Chrome සහ themes reader-tools.css එකේ.
+// Reader Tools — logic only. Chrome + themes = reader-tools.css
 // --------------------------------------------------------------------------
-// මේ ෆයිල් එකේ slash-star block comment පාවිච්චි කරන්නේ නෑ. nested
-// comment එකකින් build එක කැඩෙන ප්‍රශ්නය ආපහු එන්නේ නැති වෙන්නයි.
+// මේ ෆයිල් එකේ slash-star block comment පාවිච්චි කරන්නේ නෑ (nested comment
+// නිසා build කැඩෙන ප්‍රශ්නය ආපහු එන්නේ නැති වෙන්නයි).
+//
+// Panel markup එක මේ script එකම හදනවා. ReaderTools.astro එකේ
+// <div class="rt-root" data-rt-root></div> එකක් තිබුණත් නැතත් වැඩ කරනවා.
 //
 // අලුත් tool එකක් (මේ ෆයිල් එක වෙනස් නොකර):
 //   ReaderTools.register({ id, label, icon, order, mount(box, ctx) {} });
@@ -23,6 +26,7 @@
     '#main-content article .content',
     '#main-content .content',
     '#main-content article',
+    'main article',
   ];
 
   const DIM_CANDIDATES = ['header', 'footer', '#comments', '.related-posts'];
@@ -71,8 +75,9 @@
   const isNum = (v) => typeof v === 'number' && isFinite(v);
   const round = (n, step) => Math.round(n / step) * step;
   const reduceMotion = () =>
-    window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const isMobile = () => window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
+    !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const isMobile = () => !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
+  const behavior = () => (reduceMotion() ? 'auto' : 'smooth');
 
   function el(tag, attrs, kids) {
     const n = document.createElement(tag);
@@ -97,9 +102,8 @@
     return n;
   }
 
-  // One rAF per frame maximum. Every scroll consumer shares ONE handler;
-  // binding a second scroll listener per navigation was what eventually
-  // locked the tab up.
+  // frame එකකට rAF එකයි. scroll consumer හැමෝම එකම handler එකක් බෙදාගන්නවා;
+  // navigation එකකට එකක් බැඳුණු නිසා තමයි කලින් tab එක හිර වුණේ.
   function rafOnce(fn) {
     let queued = false;
     return function () {
@@ -112,11 +116,11 @@
     };
   }
 
-  // Tracked listeners: everything added goes through here so teardown can
-  // remove all of them, with no chance of a stale handler surviving a
-  // ClientRouter swap.
+  // Tracked listeners: එකතු කරන හැම එකක්ම මෙතනින් යනවා, ඒ නිසා teardown
+  // එකේදී එකක්වත් ඉතුරු වෙන්නේ නෑ.
   const bound = [];
   function listen(target, type, fn, opts) {
+    if (!target) return;
     target.addEventListener(type, fn, opts);
     bound.push([target, type, fn, opts]);
   }
@@ -155,8 +159,8 @@
 
   const state = load();
 
-  // Debounced writes. Slider drag fired one synchronous localStorage write
-  // per pointer move, which is disk I/O on the main thread.
+  // Debounced writes. Slider drag එකේදී pointer move එකකට synchronous
+  // localStorage write එකක් = main thread disk I/O.
   let storeTimer = null;
   function save() {
     if (storeTimer) clearTimeout(storeTimer);
@@ -210,6 +214,7 @@
     up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
     down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
     reset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 14.6-5.9"/><path d="M19 3v4.5h-4.5"/></svg>',
+    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   };
 
   // --------------------------------------------------------------- elements
@@ -224,19 +229,99 @@
   let activeTab = null;
   let cleanupTab = null;
   let lastFocus = null;
+  let pctEl = null;
+  let curPath = typeof location !== 'undefined' ? location.pathname : '/';
 
-  function collect() {
-    ui.root = $('.rt-root[data-rt-root]');
-    if (!ui.root) return false;
-    ui.bar = $('.rt-progress > i', ui.root);
-    ui.fab = $('.rt-fab', ui.root);
-    ui.scrim = $('[data-rt-scrim]', ui.root);
-    ui.panel = $('#rt-panel', ui.root);
-    ui.tabs = $('.rt-tabs', ui.root);
-    ui.body = $('.rt-body', ui.root);
-    ui.sub = $('[data-rt-sub]', ui.root);
-    ui.close = $('.rt-close', ui.root);
-    return !!(ui.panel && ui.tabs && ui.body && ui.fab);
+  // ------------------------------------------------------------ build chrome
+
+  function ensureRoot() {
+    const found = $$('[data-rt-root], .rt-root');
+    if (!found.length) {
+      const r = el('div', { class: 'rt-root', 'data-rt-root': '' });
+      document.body.appendChild(r);
+      return r;
+    }
+    // duplicate root (Astro markup + JS) එකක් නොතිබෙන බව තහවුරු කරනවා
+    for (let i = 1; i < found.length; i++) {
+      try { found[i].remove(); } catch (e) {}
+    }
+    const root = found[0];
+    root.classList.add('rt-root');
+    root.setAttribute('data-rt-root', '');
+    return root;
+  }
+
+  function buildChrome() {
+    if (!document.body) return false;
+    const root = ensureRoot();
+
+    // හැම boot එකකටම fresh rebuild -> stale node හෝ duplicate නෑ.
+    root.textContent = '';
+    root.setAttribute('data-open', '0');
+    root.setAttribute('data-rt-ready', '0');
+    // Base.astro එකේ copy-protection selectstart blocker එකෙන් බේරෙන්න
+    root.setAttribute('data-allow-select', '');
+
+    const bar = el('i');
+    const progress = el('div', { class: 'rt-progress', 'aria-hidden': 'true' }, bar);
+
+    const fab = el('button', {
+      class: 'rt-fab',
+      type: 'button',
+      id: 'rt-fab',
+      'aria-controls': 'rt-panel',
+      'aria-expanded': 'false',
+      'aria-label': 'කියවීමේ මෙවලම්',
+    }, [
+      el('span', { class: 'rt-fab-ico', html: ICON.type, 'aria-hidden': 'true' }),
+      el('span', { class: 'rt-fab-txt', text: 'මෙවලම්' }),
+    ]);
+
+    const scrim = el('div', { class: 'rt-scrim', 'data-rt-scrim': '', 'aria-hidden': 'true' });
+
+    const sub = el('span', { class: 'rt-sub', 'data-rt-sub': '' });
+    const closeBtn = el('button', {
+      class: 'rt-iconbtn rt-close',
+      type: 'button',
+      'aria-label': 'වසන්න',
+      html: ICON.close,
+    });
+
+    const head = el('div', { class: 'rt-head' }, [
+      el('span', { class: 'rt-head-dot', 'aria-hidden': 'true' }),
+      el('span', { class: 'rt-head-txt' }, [
+        el('span', { class: 'rt-title', text: 'කියවීමේ මෙවලම්' }),
+        sub,
+      ]),
+      closeBtn,
+    ]);
+
+    const tabs = el('div', { class: 'rt-tabs', role: 'tablist', 'aria-label': 'මෙවලම්' });
+    const body = el('div', { class: 'rt-body', role: 'tabpanel', tabindex: '-1' });
+
+    const panel = el('aside', {
+      class: 'rt-panel',
+      id: 'rt-panel',
+      role: 'dialog',
+      'aria-label': 'කියවීමේ මෙවලම්',
+      tabindex: '-1',
+    }, [head, tabs, body]);
+
+    root.appendChild(progress);
+    root.appendChild(fab);
+    root.appendChild(scrim);
+    root.appendChild(panel);
+
+    ui.root = root;
+    ui.bar = bar;
+    ui.fab = fab;
+    ui.scrim = scrim;
+    ui.panel = panel;
+    ui.tabs = tabs;
+    ui.body = body;
+    ui.sub = sub;
+    ui.close = closeBtn;
+    return true;
   }
 
   // --------------------------------------------------------------- article
@@ -245,14 +330,14 @@
     for (let i = 0; i < ARTICLE_CANDIDATES.length; i++) {
       const n = $(ARTICLE_CANDIDATES[i]);
       if (!n) continue;
-      if (ui.root && ui.root.contains(n)) continue;
+      if (ui.root && (ui.root.contains(n) || n.contains(ui.root))) continue;
       if ((n.textContent || '').trim().length >= MIN_ARTICLE_CHARS) return n;
     }
     return null;
   }
 
-  // The panel is an <aside>; a blanket `aside` selector dimmed the panel
-  // itself in focus mode. Explicit list + containment guard instead.
+  // Panel එක <aside> එකක්; blanket `aside` selector එකක් panel එකම dim කළා.
+  // ඒ නිසා explicit list + containment guard.
   function markDim() {
     DIM_CANDIDATES.forEach((sel) => {
       $$(sel).forEach((n) => {
@@ -261,6 +346,10 @@
         n.setAttribute('data-rt-dim', '');
       });
     });
+  }
+
+  function clearDim() {
+    $$('[data-rt-dim]').forEach((n) => n.removeAttribute('data-rt-dim'));
   }
 
   function words() {
@@ -280,12 +369,23 @@
     r.setAttribute('data-rt-page', state.page);
     r.setAttribute('data-rt-font', state.font);
     r.setAttribute('data-rt-measure', state.measure);
-    r.setAttribute('data-rt-focus', state.focus ? 'on' : 'off');
     r.style.setProperty('--rt-font-scale', String(state.fontScale));
     r.style.setProperty('--rt-line-height', String(state.lineHeight));
     r.style.setProperty('--rt-letter', state.letter + 'em');
-    if (article) article.setAttribute('data-rt-article', '');
-    if (state.focus) markDim();
+
+    if (article) {
+      article.setAttribute('data-rt-article', '');
+      r.setAttribute('data-rt-has-article', '1');
+    } else {
+      r.removeAttribute('data-rt-has-article');
+    }
+
+    // ලිපියක් නැති පිටුවක (home / category / tag) focus mode කිසි විටෙක
+    // ක්‍රියාත්මක නොවේ — header/footer නොපෙනීමේ ගැටලුවට මූලික හේතුව මෙයයි.
+    const focusOn = !!state.focus && !!article;
+    r.setAttribute('data-rt-focus', focusOn ? 'on' : 'off');
+    if (focusOn) markDim();
+    else clearDim();
   }
 
   function set(patch, opts) {
@@ -304,8 +404,29 @@
     else r.classList.remove('rt-locked');
   }
 
+  function focusables() {
+    if (!ui.panel) return [];
+    return $$('button, [href], select, input, [tabindex]:not([tabindex="-1"])', ui.panel)
+      .filter((n) => !n.disabled && n.offsetParent !== null);
+  }
+
+  function trap(e) {
+    if (!isOpen || e.key !== 'Tab' || !ui.panel) return;
+    const f = focusables();
+    if (!f.length) return;
+    const first = f[0];
+    const last = f[f.length - 1];
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === ui.panel)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
   function open() {
-    if (!ui.root || isOpen) return;
+    if (!ui.root || isOpen || !article) return;
     if (document.documentElement.classList.contains('age-gate-pending')) return;
     isOpen = true;
     lastFocus = document.activeElement;
@@ -313,12 +434,11 @@
     ui.fab.setAttribute('aria-expanded', 'true');
     lockScroll(true);
     if (!activeTab && tools.length) showTab(tools[0].id);
-    const delay = reduceMotion() ? 0 : 80;
     setTimeout(() => {
       if (isOpen && ui.panel) {
         try { ui.panel.focus({ preventScroll: true }); } catch (e) {}
       }
-    }, delay);
+    }, reduceMotion() ? 0 : 80);
     emit('open');
   }
 
@@ -326,10 +446,12 @@
     if (!ui.root || !isOpen) return;
     isOpen = false;
     ui.root.setAttribute('data-open', '0');
-    ui.fab.setAttribute('aria-expanded', 'false');
+    if (ui.fab) ui.fab.setAttribute('aria-expanded', 'false');
     lockScroll(false);
     if (lastFocus && document.contains(lastFocus)) {
       try { lastFocus.focus({ preventScroll: true }); } catch (e) {}
+    } else if (ui.fab) {
+      try { ui.fab.focus({ preventScroll: true }); } catch (e) {}
     }
     lastFocus = null;
     emit('close');
@@ -380,6 +502,7 @@
       try { cleanupTab(); } catch (e) { console.warn('[reader-tools] cleanup', e); }
     }
     cleanupTab = null;
+    pctEl = null;
   }
 
   function showTab(id) {
@@ -396,8 +519,11 @@
       if (typeof c === 'function') cleanupTab = c;
     } catch (e) {
       console.warn('[reader-tools] mount ' + id, e);
-      ui.body.appendChild(el('p', { class: 'rt-note', 'data-warn': '1', text: 'මෙම මෙවලම පූරණය නොවුණි.' }));
+      ui.body.appendChild(el('p', {
+        class: 'rt-note', 'data-warn': '1', text: 'මෙම මෙවලම පූරණය නොවුණි.',
+      }));
     }
+    emit('tab', id);
   }
 
   // ------------------------------------------------------------- ui bits
@@ -443,7 +569,9 @@
       patch[key] = v;
       set(patch);
     });
-    input.addEventListener('change', () => saveNow());
+    input.addEventListener('change', saveNow);
+    // touch drag එක page scroll එකට යන්නේ නැති බව තහවුරු කරනවා
+    input.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
     return el('div', { class: 'rt-group' }, [
       el('p', { class: 'rt-label', text: label }),
       el('div', { class: 'rt-row' }, [input, out]),
@@ -476,6 +604,10 @@
         ]),
       ]));
 
+      // per-frame querySelector එකක් වෙනුවට cache
+      pctEl = $('[data-rt-pct]', box);
+      if (pctEl) pctEl.textContent = Math.round(lastPct * 100) + '%';
+
       const group = el('div', { class: 'rt-group' }, [
         el('p', { class: 'rt-label', text: 'කොටස්' }),
       ]);
@@ -490,7 +622,7 @@
           text: 'මෙම ලිපියේ උපශීර්ෂ නැහැ. "කියවීම" ටැබ් එකෙන් ස්වයං-අනුචලනය භාවිත කරන්න.',
         }));
         box.appendChild(group);
-        return;
+        return () => { pctEl = null; };
       }
 
       const list = el('ul', { class: 'rt-toc' });
@@ -502,7 +634,7 @@
           text: (h.textContent || '').trim(),
           onclick: (ev) => {
             ev.preventDefault();
-            h.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
+            h.scrollIntoView({ behavior: behavior(), block: 'start' });
             if (isMobile()) close();
           },
         });
@@ -512,7 +644,7 @@
       group.appendChild(list);
       box.appendChild(group);
 
-      // No own scroll listener - the shared handler calls this.
+      // තමන්ගේ scroll listener එකක් නෑ — shared handler එක මේක call කරනවා.
       tocSync = () => {
         let cur = null;
         for (let i = 0; i < pairs.length; i++) {
@@ -522,7 +654,10 @@
       };
       tocSync();
 
-      return () => { tocSync = null; };
+      return () => {
+        tocSync = null;
+        pctEl = null;
+      };
     },
   });
 
@@ -549,7 +684,7 @@
 
       box.appendChild(slider('අකුරු ප්‍රමාණය', 'fontScale', (v) => Math.round(v * 100) + '%'));
       box.appendChild(slider('පේළි පරතරය', 'lineHeight', (v) => v.toFixed(2)));
-      box.appendChild(slider('අකුරු පරතරය', 'letter', (v) => Math.round(v * 1000) + ''));
+      box.appendChild(slider('අකුරු පරතරය', 'letter', (v) => String(Math.round(v * 1000))));
 
       box.appendChild(segment('පේළි පළල', state.measure, [
         { value: 'narrow', label: 'පටු' },
@@ -583,20 +718,19 @@
     if (id && engine && typeof engine.speak === 'function') engines[id] = engine;
   }
 
-  // Chrome silently truncates utterances longer than ~15s, so long
-  // paragraphs were being cut mid-sentence. Split on sentence boundaries.
+  // Chrome එක තනි utterance එකක් ~15s ට වැඩි වුණාම කපනවා, ඒ නිසා දිග
+  // ඡේද මැදින් නැවතුණා. වාක්‍ය මායිම්වලින් කඩනවා.
   function chunk(text) {
     const out = [];
-    let rest = (text || '').trim();
+    let rest = (text || '').replace(/\s+/g, ' ').trim();
     while (rest.length > TTS_CHUNK) {
       let cut = -1;
-      const window_ = rest.slice(0, TTS_CHUNK);
-      ['. ', '! ', '? ', '। ', ', ', ' '].forEach((sep) => {
-        if (cut < 0) {
-          const i = window_.lastIndexOf(sep);
-          if (i > TTS_CHUNK * 0.5) cut = i + sep.length;
-        }
-      });
+      const head = rest.slice(0, TTS_CHUNK);
+      const seps = ['. ', '! ', '? ', '। ', ', ', ' '];
+      for (let i = 0; i < seps.length && cut < 0; i++) {
+        const at = head.lastIndexOf(seps[i]);
+        if (at > TTS_CHUNK * 0.5) cut = at + seps[i].length;
+      }
       if (cut < 0) cut = TTS_CHUNK;
       out.push(rest.slice(0, cut).trim());
       rest = rest.slice(cut).trim();
@@ -608,12 +742,14 @@
   let tts = null;
 
   function ttsStopHard() {
-    if (!tts) return;
-    tts.stopped = true;
-    tts.playing = false;
-    if (tts.kick) {
-      clearTimeout(tts.kick);
-      tts.kick = null;
+    if (tts) {
+      tts.stopped = true;
+      tts.playing = false;
+      tts.userPaused = false;
+      if (tts.kick) {
+        clearTimeout(tts.kick);
+        tts.kick = null;
+      }
     }
     try {
       if (window.speechSynthesis) window.speechSynthesis.cancel();
@@ -629,7 +765,10 @@
     mount(box) {
       const synth = window.speechSynthesis;
       if (!synth) {
-        box.appendChild(el('p', { class: 'rt-note', 'data-warn': '1', text: 'මෙම බ්‍රව්සරය හඬ කියවීමට (TTS) සහාය නොදක්වයි.' }));
+        box.appendChild(el('p', {
+          class: 'rt-note', 'data-warn': '1',
+          text: 'මෙම බ්‍රව්සරය හඬ කියවීමට (TTS) සහාය නොදක්වයි.',
+        }));
         return;
       }
 
@@ -637,7 +776,10 @@
         ? $$(BLOCK_SEL, article).filter((n) => (n.textContent || '').trim().length > 1)
         : [];
       if (!blocks.length) {
-        box.appendChild(el('p', { class: 'rt-note', 'data-warn': '1', text: 'කියවීමට අන්තර්ගතයක් හමු නොවුණි.' }));
+        box.appendChild(el('p', {
+          class: 'rt-note', 'data-warn': '1',
+          text: 'කියවීමට අන්තර්ගතයක් හමු නොවුණි.',
+        }));
         return;
       }
 
@@ -646,13 +788,21 @@
         chunk(node.textContent).forEach((text) => queue.push({ node: node, text: text }));
       });
 
-      tts = { i: 0, playing: false, stopped: true, kick: null };
+      ttsStopHard();
+      tts = { i: 0, playing: false, stopped: true, userPaused: false, kick: null };
 
       const note = el('p', { class: 'rt-note', text: 'සූදානම්.' });
       const select = el('select', { class: 'rt-select', 'aria-label': 'හඬ තෝරන්න' });
-      const btnPlay = el('button', { class: 'rt-btn', 'data-primary': '1', type: 'button', html: ICON.play + '<span>කියවන්න</span>' });
-      const btnPause = el('button', { class: 'rt-btn', type: 'button', html: ICON.pause, 'aria-label': 'විරාමය' });
-      const btnStop = el('button', { class: 'rt-btn', type: 'button', html: ICON.stop, 'aria-label': 'නතර කරන්න' });
+      const btnPlay = el('button', {
+        class: 'rt-btn', 'data-primary': '1', type: 'button',
+        html: ICON.play + '<span>කියවන්න</span>',
+      });
+      const btnPause = el('button', {
+        class: 'rt-btn', type: 'button', html: ICON.pause, 'aria-label': 'විරාමය',
+      });
+      const btnStop = el('button', {
+        class: 'rt-btn', type: 'button', html: ICON.stop, 'aria-label': 'නතර කරන්න',
+      });
 
       let voicesFilled = false;
 
@@ -660,15 +810,16 @@
         const all = synth.getVoices() || [];
         if (!all.length) return;
         voicesFilled = true;
+        const keep = select.value;
         select.textContent = '';
         const si = all.filter((v) => (v.lang || '').toLowerCase().indexOf('si') === 0);
         si.concat(all.filter((v) => si.indexOf(v) < 0)).forEach((v) => {
-          select.appendChild(el('option', { value: v.voiceURI, text: v.name + ' (' + v.lang + ')' }));
+          select.appendChild(el('option', {
+            value: v.voiceURI, text: v.name + ' (' + v.lang + ')',
+          }));
         });
-        if (state.voiceURI) {
-          const has = all.some((v) => v.voiceURI === state.voiceURI);
-          if (has) select.value = state.voiceURI;
-        }
+        const want = keep || state.voiceURI;
+        if (want && all.some((v) => v.voiceURI === want)) select.value = want;
         if (!si.length) {
           note.setAttribute('data-warn', '1');
           note.textContent =
@@ -680,12 +831,16 @@
       }
 
       fillVoices();
-      // Chrome populates the list asynchronously; this event may fire more
-      // than once, hence the idempotent rebuild above.
+      // Chrome list එක async විදිහට පුරවනවා; event එක එකකට වඩා වාරයක්
+      // වෙඩි වෙන්න පුළුවන් නිසා fillVoices idempotent.
       synth.addEventListener('voiceschanged', fillVoices);
       const poll = setTimeout(() => { if (!voicesFilled) fillVoices(); }, 400);
 
       select.addEventListener('change', () => set({ voiceURI: select.value }, { immediate: true }));
+
+      function label(txt) {
+        btnPlay.innerHTML = ICON.play + '<span>' + txt + '</span>';
+      }
 
       function highlight(node) {
         $$('.rt-speaking').forEach((n) => { if (n !== node) n.classList.remove('rt-speaking'); });
@@ -696,7 +851,7 @@
         if (!tts || tts.stopped) return;
         if (i >= queue.length) {
           ttsStopHard();
-          btnPlay.innerHTML = ICON.play + '<span>කියවන්න</span>';
+          label('කියවන්න');
           note.removeAttribute('data-warn');
           note.textContent = 'කියවීම අවසන්.';
           return;
@@ -720,49 +875,58 @@
           if (tts && !tts.stopped) speakAt(i + 1);
         };
         u.onerror = (ev) => {
-          if (ev && ev.error === 'interrupted') return;
+          if (ev && (ev.error === 'interrupted' || ev.error === 'canceled')) return;
           note.setAttribute('data-warn', '1');
           note.textContent = 'හඬ කියවීමේ දෝෂයක්. වෙනත් හඬක් තෝරා නැවත උත්සාහ කරන්න.';
           ttsStopHard();
-          btnPlay.innerHTML = ICON.play + '<span>කියවන්න</span>';
+          label('කියවන්න');
         };
-        synth.speak(u);
+        try {
+          synth.speak(u);
+        } catch (e) {
+          ttsStopHard();
+          label('කියවන්න');
+        }
       }
 
       function play() {
         if (!tts) return;
         if (tts.playing && synth.paused) {
-          synth.resume();
+          tts.userPaused = false;
+          try { synth.resume(); } catch (e) {}
           note.textContent = 'කියවනවා...';
-          btnPlay.innerHTML = ICON.play + '<span>කියවනවා</span>';
+          label('කියවනවා');
           return;
         }
         if (tts.playing) return;
         tts.stopped = false;
         tts.playing = true;
+        tts.userPaused = false;
         note.removeAttribute('data-warn');
         note.textContent = 'කියවනවා...';
-        btnPlay.innerHTML = ICON.play + '<span>කියවනවා</span>';
-        // Safari drops a speak() issued in the same tick as cancel().
+        label('කියවනවා');
+        // Safari එක cancel() එකම tick එකේ speak() එකක් අත් හරිනවා.
         try { synth.cancel(); } catch (e) {}
         tts.kick = setTimeout(() => {
-          if (tts) tts.kick = null;
-          speakAt(tts ? tts.i : 0);
-        }, 80);
+          if (!tts) return;
+          tts.kick = null;
+          speakAt(tts.i);
+        }, 90);
       }
 
       function pause() {
         if (tts && tts.playing && !synth.paused) {
-          synth.pause();
+          tts.userPaused = true;
+          try { synth.pause(); } catch (e) {}
           note.textContent = 'විරාමයේ.';
-          btnPlay.innerHTML = ICON.play + '<span>දිගටම</span>';
+          label('දිගටම');
         }
       }
 
       function stop() {
         ttsStopHard();
         if (tts) tts.i = 0;
-        btnPlay.innerHTML = ICON.play + '<span>කියවන්න</span>';
+        label('කියවන්න');
         note.removeAttribute('data-warn');
         note.textContent = 'නතර කළා.';
       }
@@ -779,7 +943,10 @@
       box.appendChild(slider('ස්වරය', 'pitch', (v) => v.toFixed(2)));
       box.appendChild(el('div', { class: 'rt-row' }, [btnPlay, btnPause, btnStop]));
       box.appendChild(note);
-      box.appendChild(el('p', { class: 'rt-empty', text: 'කොටස් ' + queue.length + 'ක් පෝලිමේ. පිටුව මාරු වූ විට හඬ ස්වයංක්‍රීයව නවතී.' }));
+      box.appendChild(el('p', {
+        class: 'rt-empty',
+        text: 'කොටස් ' + queue.length + 'ක් පෝලිමේ. පිටුව මාරු වූ විට හඬ ස්වයංක්‍රීයව නවතී.',
+      }));
 
       return () => {
         clearTimeout(poll);
@@ -805,7 +972,10 @@
 
       let raf = null;
       let carry = 0;
-      const btn = el('button', { class: 'rt-btn', type: 'button', html: ICON.down + '<span>ස්වයං-අනුචලනය</span>' });
+      const btn = el('button', {
+        class: 'rt-btn', type: 'button',
+        html: ICON.down + '<span>ස්වයං-අනුචලනය</span>',
+      });
 
       function stopScroll() {
         if (raf) cancelAnimationFrame(raf);
@@ -830,13 +1000,20 @@
 
       btn.addEventListener('click', () => {
         if (raf) { stopScroll(); return; }
+        carry = 0;
         btn.innerHTML = ICON.pause + '<span>අනුචලනය නවත්වන්න</span>';
         btn.setAttribute('data-primary', '1');
         raf = requestAnimationFrame(step);
       });
 
-      // Any manual input cancels it, otherwise the page fights the reader.
-      const abort = () => { if (raf) stopScroll(); };
+      // Manual input එකකින් නවතිනවා. නමුත් panel එක ඇතුළේ සිදු වන
+      // touch/wheel එකකින් නවතුනොත් ඒ click එකම ආපහු start කරනවා —
+      // ඒ නිසා root එක ඇතුළේ event නොසලකනවා.
+      const abort = (ev) => {
+        if (!raf) return;
+        if (ui.root && ev && ev.target && ui.root.contains(ev.target)) return;
+        stopScroll();
+      };
       ['wheel', 'touchstart', 'keydown'].forEach((t) =>
         window.addEventListener(t, abort, { passive: true })
       );
@@ -846,7 +1023,7 @@
 
       let saved = 0;
       try {
-        saved = parseFloat(localStorage.getItem(posKey(location.pathname)) || '0') || 0;
+        saved = parseFloat(localStorage.getItem(posKey(curPath)) || '0') || 0;
       } catch (e) {}
       if (saved > 0.04 && saved < 0.95) {
         box.appendChild(el('button', {
@@ -855,7 +1032,7 @@
           html: ICON.up + '<span>කලින් නැවතුණ තැනට (' + Math.round(saved * 100) + '%)</span>',
           onclick: () => {
             const max = document.documentElement.scrollHeight - window.innerHeight;
-            window.scrollTo({ top: max * saved, behavior: reduceMotion() ? 'auto' : 'smooth' });
+            window.scrollTo({ top: max * saved, behavior: behavior() });
             if (isMobile()) close();
           },
         }));
@@ -864,11 +1041,13 @@
       box.appendChild(el('div', { class: 'rt-row' }, [
         el('button', {
           class: 'rt-btn', type: 'button', html: ICON.up + '<span>මුලට</span>',
-          onclick: () => window.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' }),
+          onclick: () => window.scrollTo({ top: 0, behavior: behavior() }),
         }),
         el('button', {
           class: 'rt-btn', type: 'button', html: ICON.down + '<span>අන්තිමට</span>',
-          onclick: () => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: reduceMotion() ? 'auto' : 'smooth' }),
+          onclick: () => window.scrollTo({
+            top: document.documentElement.scrollHeight, behavior: behavior(),
+          }),
         }),
       ]));
 
@@ -911,7 +1090,10 @@
         el('p', { class: 'rt-label', text: 'භාෂාව තෝරන්න' }),
         seg,
       ]));
-      box.appendChild(el('p', { class: 'rt-note', text: 'Google Translate හි පිටු-පරිවර්තනය අලුත් කවුළුවක විවෘත වේ.' }));
+      box.appendChild(el('p', {
+        class: 'rt-note',
+        text: 'Google Translate හි පිටු-පරිවර්තනය අලුත් කවුළුවක විවෘත වේ.',
+      }));
     },
   });
 
@@ -925,34 +1107,36 @@
     const pct = max > 4 ? clamp(window.scrollY / max, 0, 1) : 0;
     lastPct = pct;
 
-    // transform, not width: stays on the compositor, no layout per frame.
+    // width නෙවෙයි transform: compositor එකේ රැඳෙනවා, frame එකකට layout නෑ.
     if (ui.bar) ui.bar.style.transform = 'scaleX(' + pct.toFixed(4) + ')';
 
-    const pctEl = ui.body ? $('[data-rt-pct]', ui.body) : null;
-    if (pctEl) pctEl.textContent = Math.round(pct * 100) + '%';
+    // panel එක වැහුණු විට DOM වැඩක් නෑ.
+    if (isOpen) {
+      if (pctEl) pctEl.textContent = Math.round(pct * 100) + '%';
+      if (tocSync) tocSync();
+    }
 
-    if (tocSync) tocSync();
-
-    // localStorage is synchronous disk I/O. Writing it on every frame was
-    // a primary cause of the scroll freeze; once per 1.5s is plenty.
+    // localStorage = synchronous disk I/O. frame එකකට ලියපු එක තමයි
+    // scroll freeze එකේ ප්‍රධාන හේතුව; 1.5s එකකට එකක් ඇති.
     const now = Date.now();
     if (pct > 0.02 && now - lastSave > POS_SAVE_MS) {
       lastSave = now;
       try {
-        localStorage.setItem(posKey(location.pathname), pct.toFixed(3));
+        localStorage.setItem(posKey(curPath), pct.toFixed(3));
       } catch (e) {}
     }
   });
 
   function flushPos() {
-    if (lastPct <= 0.02) return;
-    try {
-      localStorage.setItem(posKey(location.pathname), lastPct.toFixed(3));
-    } catch (e) {}
+    if (lastPct > 0.02) {
+      try {
+        localStorage.setItem(posKey(curPath), lastPct.toFixed(3));
+      } catch (e) {}
+    }
     saveNow();
   }
 
-  // ------------------------------------------------------------ boot/teardown
+  // -------------------------------------------------------- boot/teardown
 
   let booted = false;
 
@@ -966,18 +1150,27 @@
       if (e.key === 'Escape' && isOpen) {
         e.stopPropagation();
         close();
+        return;
       }
+      if (e.altKey && (e.key === 'r' || e.key === 'R')) {
+        e.preventDefault();
+        toggle();
+        return;
+      }
+      trap(e);
     });
     listen(window, 'pagehide', flushPos);
     listen(document, 'visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
         flushPos();
-        if (window.speechSynthesis && tts && tts.playing) {
+        if (window.speechSynthesis && tts && tts.playing && !window.speechSynthesis.paused) {
           try { window.speechSynthesis.pause(); } catch (e) {}
         }
+      } else if (window.speechSynthesis && tts && tts.playing && !tts.userPaused) {
+        try { window.speechSynthesis.resume(); } catch (e) {}
       }
     });
-    // The age gate removes its class on verification; re-evaluate then.
+    // age gate එක verify වුණාම class එක අයින් කරනවා; එවිට ආපහු බලනවා.
     listen(document, 'wk:age-verified', () => {
       if (ui.root && article) ui.root.setAttribute('data-rt-ready', '1');
     });
@@ -988,17 +1181,21 @@
     ttsStopHard();
     tts = null;
     tocSync = null;
+    pctEl = null;
     flushPos();
     unlistenAll();
     lockScroll(false);
     isOpen = false;
     activeTab = null;
     lastFocus = null;
+    lastPct = 0;
     if (ui.root) {
       ui.root.setAttribute('data-open', '0');
       ui.root.setAttribute('data-rt-ready', '0');
     }
-    $$('[data-rt-dim]').forEach((n) => n.removeAttribute('data-rt-dim'));
+    clearDim();
+    document.documentElement.setAttribute('data-rt-focus', 'off');
+    document.documentElement.removeAttribute('data-rt-has-article');
     Object.keys(ui).forEach((k) => { ui[k] = null; });
     article = null;
     booted = false;
@@ -1006,20 +1203,27 @@
 
   function boot() {
     if (booted) return;
-    if (!collect()) return;
+    if (!document.body) return;
+    curPath = location.pathname;
+    if (!buildChrome()) return;
     booted = true;
 
     article = findArticle();
     apply();
 
     if (!article) {
-      // ලිපියක් නෙමෙයි (home, category, tag). පෙනුම යොදනවා, panel නෑ.
+      // ලිපියක් නෙමෙයි (home / category / tag): FAB, progress, panel නෑ.
+      // dim එකත් apply() එකෙන් පිරිසිදු වුණා, ඒ නිසා header/footer නොපෙනීම නෑ.
       ui.root.setAttribute('data-rt-ready', '0');
+      if (ui.bar) ui.bar.style.transform = 'scaleX(0)';
+      emit('boot', { article: null });
       return;
     }
 
     ui.root.setAttribute('data-rt-ready', '1');
-    if (ui.sub) ui.sub.textContent = words().toLocaleString('en-US') + ' වචන · ' + minutes() + ' මිනිත්තු';
+    if (ui.sub) {
+      ui.sub.textContent = words().toLocaleString('en-US') + ' වචන · ' + minutes() + ' මිනිත්තු';
+    }
 
     renderTabs();
     bindGlobal();
@@ -1033,16 +1237,16 @@
     boot();
   }
 
-  // ClientRouter. before-swap tears everything down so no handler, rAF or
-  // utterance survives into the next page; page-load rebuilds. `booted`
-  // keeps the initial double-fire (DOMContentLoaded + page-load) harmless.
+  // ClientRouter: before-swap එකෙන් සියල්ල teardown වෙනවා, ඒ නිසා handler,
+  // rAF හෝ utterance එකක් ඊළඟ පිටුවට යන්නේ නෑ. page-load එකෙන් නැවත හදනවා.
+  // `booted` flag එකෙන් DOMContentLoaded + page-load double-fire නිරුපද්‍රිතයි.
   document.addEventListener('astro:before-swap', teardown);
   document.addEventListener('astro:page-load', boot);
 
   // ---------------------------------------------------------------- api
 
   window.ReaderTools = {
-    version: 3,
+    version: 4,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
@@ -1052,8 +1256,10 @@
     set: set,
     on: on,
     boot: boot,
+    teardown: teardown,
     get state() { return Object.assign({}, state); },
     get article() { return article; },
+    get tools() { return tools.map((t) => t.id); },
     get engines() { return Object.keys(engines); },
   };
 })();
