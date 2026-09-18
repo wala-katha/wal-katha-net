@@ -118,14 +118,27 @@ html[data-rt-page="sepia"] :is([data-rt-article], .custom-post-content) blockquo
 }
 
 /* focus mode.
-   [data-rt-has-article="1"] guard: reader-tools.js only sets it when a real
-   article exists. Without it a stored focus=on flag dimmed the header and
-   footer on the home / category pages and they looked like they had
-   vanished. opacity only - `filter` promotes a compositing layer on
-   header/footer and turned every scroll frame into a repaint. */
-html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim] {
-  opacity: 0.28;
+   Two guards, because a stale focus flag used to hide the header and
+   footer on the home page AND inside posts:
+     1. data-rt-focus="on"        - only while the user asks for it
+     2. data-rt-has-article="1"   - only on a real article page
+   The reset rule below runs whenever either guard is missing, so even a
+   leftover data-rt-dim attribute cannot keep anything invisible. The
+   header is no longer in the JS dim list at all. opacity only - `filter`
+   promotes a compositing layer and turns every scroll frame into a
+   repaint. */
+[data-rt-dim] {
   transition: opacity 0.3s ease;
+}
+html:not([data-rt-focus="on"]) [data-rt-dim],
+html:not([data-rt-has-article="1"]) [data-rt-dim] {
+  opacity: 1 !important;
+  visibility: visible !important;
+  filter: none !important;
+  pointer-events: auto !important;
+}
+html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim] {
+  opacity: 0.55;
 }
 html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim]:hover,
 html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim]:focus-within {
@@ -691,7 +704,7 @@ html.rt-locked body {
   .rt-root {
     display: none !important;
   }
-  html[data-rt-focus="on"] [data-rt-dim] {
-    opacity: 1;
+  [data-rt-dim] {
+    opacity: 1 !important;
   }
 }
