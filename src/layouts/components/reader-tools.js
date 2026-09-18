@@ -1,30 +1,38 @@
-/* ==========================================================================
-   Reader Tools — core + built-in tools
-   --------------------------------------------------------------------------
-   Dependency නැහැ. Astro ClientRouter (view transitions) safe.
+// ==========================================================================
+// Reader Tools — core + built-in tools
+// --------------------------------------------------------------------------
+// Dependency නැහැ. Astro ClientRouter (view transitions) safe.
+// මේ ෆයිල් එකේ block comment (slash-star) පාවිච්චි කරන්නේ නෑ — nested
+// comment එකකින් build එක කැඩෙන ප්‍රශ්නය ආපහු එන්නේ නැති වෙන්නයි.
+//
+// අලුත් tool එකක් එකතු කරන්න (මේ ෆයිල් එක වෙනස් කරන්න ඕන නෑ):
+//
+//   ReaderTools.register({
+//     id: 'bookmarks',
+//     label: 'සලකුණු',
+//     icon: '<svg ...></svg>',
+//     order: 60,
+//     mount(container, ctx) {
+//       // container = panel body element
+//       // ctx = { state, set, on, el, $, $$, article, ICON, close, showTab }
+//       return () => {};   // cleanup
+//     }
+//   });
+// ==========================================================================
 
-   අලුත් tool එකක් එකතු කරන්න (මේ ෆයිල් එක වෙනස් කරන්න ඕන නෑ):
-
-     ReaderTools.register({
-       id: 'bookmarks',
-       label: 'සලකුණු',
-       icon: '<svg ... </svg>',
-       order: 60,
-       mount(container, ctx) {
-         // container = panel body element
-         // ctx = { state, set, on, el, $, $$, article, ICON, close, showTab }
-         return () => { /* cleanup */ };
-       }
-     });
-   ========================================================================== */
 (() => {
   'use strict';
+
+  if (window.__wkReaderToolsLoaded) return;
+  window.__wkReaderToolsLoaded = true;
+
+  // ------------------------------------------------------------------ config
 
   const STORE_KEY = 'wk:reader:v1';
   const posKey = (p) => 'wk:reader:pos:' + p;
 
-  /* මේ සයිට් එකේ article wrapper = .custom-post-content (PostSingle.astro).
-     ඉතිරි ඒවා fallback. */
+  // මේ සයිට් එකේ article wrapper = .custom-post-content (PostSingle.astro).
+  // ඉතිරි ඒවා fallback.
   const ARTICLE_CANDIDATES = [
     '[data-rt-article]',
     '.custom-post-content',
@@ -34,144 +42,396 @@
   ];
 
   const HEADING_SEL = 'h2, h3, h4';
+  const BLOCK_SEL = 'p, li, h2, h3, h4, blockquote';
   const MIN_ARTICLE_CHARS = 400;
+  const WORDS_PER_MIN = 160;
 
   const DEFAULTS = {
-    page: 'dark',        // dark | paper | sepia | contrast
-    font: 'sinhala',     // sinhala | serif | system
-    fontScale: 1,
-    lineHeight: 1.85,
-    letter: 0,
-    measure: 'normal',   // narrow | normal | wide
+    page: 'dark',      // dark | paper | sepia | contrast
+    font: 'sinhala',   // sinhala | serif | system
+    fontScale: 1,      // 0.85 - 1.6
+    lineHeight: 1.85,  // 1.4 - 2.4
+    letter: 0,         // -0.01 - 0.06 (em)
+    measure: 'normal', // narrow | normal | wide
     focus: false,
-    rate: 1,
+    rate: 1,           // 0.6 - 1.6
     voiceURI: '',
-    tab: 'toc',
+    scrollSpeed: 3,    // 1 - 10
   };
 
-  /* ---------------- storage ---------------- */
-  function readStore() {
-    try {
-      return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(STORE_KEY) || '{}'));
-    } catch (e) {
-      return Object.assign({}, DEFAULTS);
-    }
-  }
-  function writeStore(s) {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch (e) {}
-  }
+  const LIMITS = {
+    fontScale: [0.85, 1.6, 0.05],
+    lineHeight: [1.4, 2.4, 0.05],
+    letter: [-0.01, 0.06, 0.005],
+    rate: [0.6, 1.6, 0.05],
+    scrollSpeed: [1, 10, 1],
+  };
 
-  let state = readStore();
+  // ------------------------------------------------------------------ helpers
 
-  /* ---------------- helpers ---------------- */
-  const $  = (s, c) => (c || document).querySelector(s);
-  const $$ = (s, c) => Array.prototype.slice.call((c || document).querySelectorAll(s));
-  const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+  const $ = (sel, root) => (root || document).querySelector(sel);
+  const $$ = (sel, root) => Array.prototype.slice.call((root || document).querySelectorAll(sel));
 
-  function el(tag, attrs, html) {
-    const n = document.createElement(tag);
+  function el(tag, attrs, children) {
+    const node = document.createElement(tag);
     if (attrs) {
       Object.keys(attrs).forEach((k) => {
         const v = attrs[k];
-        if (v === false || v == null) return;
-        n.setAttribute(k, v === true ? '' : String(v));
+        if (v === null || v === undefined || v === false) return;
+        if (k === 'class') node.className = v;
+        else if (k === 'html') node.innerHTML = v;
+        else if (k === 'text') node.textContent = v;
+        else if (k.slice(0, 2) === 'on' && typeof v === 'function') {
+          node.addEventListener(k.slice(2).toLowerCase(), v);
+        } else node.setAttribute(k, String(v));
       });
     }
-    if (html) n.innerHTML = html;
-    return n;
-  }
-
-  let _article = null;
-  function article() {
-    if (_article && _article.isConnected) return _article;
-    _article = null;
-    for (let i = 0; i < ARTICLE_CANDIDATES.length; i++) {
-      const sel = ARTICLE_CANDIDATES[i];
-      const n = $(sel);
-      if (!n) continue;
-      const len = (n.textContent || '').trim().length;
-      if (sel === '[data-rt-article]' || len >= MIN_ARTICLE_CHARS) { _article = n; break; }
-    }
-    if (_article && !_article.hasAttribute('data-rt-article')) {
-      _article.setAttribute('data-rt-article', '');
-    }
-    return _article;
-  }
-
-  /* focus mode එකේදී මැකෙන්න ඕන කොටස් auto-mark.
-     article එකේ ancestor chain එකේ sibling ඔක්කොම = "අවට දේ". */
-  let dimMarked = false;
-  function markDimTargets() {
-    if (dimMarked) return;
-    const a = article();
-    if (!a) return;
-    let node = a;
-    while (node && node !== document.body) {
-      const parent = node.parentElement;
-      if (!parent) break;
-      Array.prototype.slice.call(parent.children).forEach((sib) => {
-        if (sib === node) return;
-        if (sib.closest && sib.closest('.rt-root')) return;
-        if (sib.id === 'age-gate-overlay') return;
-        const t = sib.tagName;
-        if (t === 'SCRIPT' || t === 'STYLE' || t === 'LINK' || t === 'NOSCRIPT') return;
-        sib.setAttribute('data-rt-dim', '');
+    if (children) {
+      (Array.isArray(children) ? children : [children]).forEach((c) => {
+        if (c === null || c === undefined || c === false) return;
+        node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
       });
-      node = parent;
     }
-    dimMarked = true;
+    return node;
   }
 
-  const ICON = {
-    panel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
-    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
-    list:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
-    aa:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 18 7.5 6l4.5 12M4.6 14h5.8M14 18l3.5-9L21 18m-6.2-3h4.9"/></svg>',
-    voice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
-    eye:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',
-    globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/></svg>',
-    play:  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
-    pause: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>',
-    stop:  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>',
-  };
+  const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+  const num = (v, fb) => (typeof v === 'number' && isFinite(v) ? v : fb);
 
-  /* ---------------- event bus ---------------- */
-  const bus = {};
-  function on(ev, fn) {
-    (bus[ev] = bus[ev] || []).push(fn);
-    return function off() {
-      const arr = bus[ev] || [];
-      const i = arr.indexOf(fn);
-      if (i > -1) arr.splice(i, 1);
+  function rafThrottle(fn) {
+    let queued = false;
+    return function () {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        fn();
+      });
     };
   }
-  function emit(ev, data) {
-    (bus[ev] || []).slice().forEach((f) => {
-      try { f(data); } catch (e) { console.error('[reader-tools]', e); }
+
+  function round(n, step) {
+    const inv = 1 / step;
+    return Math.round(n * inv) / inv;
+  }
+
+  // ------------------------------------------------------------------ storage
+
+  function readStore() {
+    let saved = {};
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) saved = JSON.parse(raw) || {};
+    } catch (e) {
+      saved = {};
+    }
+    const s = Object.assign({}, DEFAULTS, saved);
+    s.fontScale = clamp(num(s.fontScale, 1), LIMITS.fontScale[0], LIMITS.fontScale[1]);
+    s.lineHeight = clamp(num(s.lineHeight, 1.85), LIMITS.lineHeight[0], LIMITS.lineHeight[1]);
+    s.letter = clamp(num(s.letter, 0), LIMITS.letter[0], LIMITS.letter[1]);
+    s.rate = clamp(num(s.rate, 1), LIMITS.rate[0], LIMITS.rate[1]);
+    s.scrollSpeed = clamp(num(s.scrollSpeed, 3), LIMITS.scrollSpeed[0], LIMITS.scrollSpeed[1]);
+    if (['dark', 'paper', 'sepia', 'contrast'].indexOf(s.page) < 0) s.page = 'dark';
+    if (['sinhala', 'serif', 'system'].indexOf(s.font) < 0) s.font = 'sinhala';
+    if (['narrow', 'normal', 'wide'].indexOf(s.measure) < 0) s.measure = 'normal';
+    s.focus = !!s.focus;
+    return s;
+  }
+
+  function writeStore(s) {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(s));
+    } catch (e) {}
+  }
+
+  const state = readStore();
+
+  // ------------------------------------------------------------------ events
+
+  const bus = {};
+  function on(evt, fn) {
+    (bus[evt] = bus[evt] || []).push(fn);
+    return () => {
+      bus[evt] = (bus[evt] || []).filter((f) => f !== fn);
+    };
+  }
+  function emit(evt, payload) {
+    (bus[evt] || []).forEach((fn) => {
+      try {
+        fn(payload);
+      } catch (e) {
+        console.warn('[reader-tools] listener error', e);
+      }
     });
   }
 
-  /* ---------------- apply prefs ---------------- */
-  function apply() {
+  // ------------------------------------------------------------------ icons
+
+  const ICON = {
+    fab: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 015.5 4H10a2 2 0 012 2v13a1.6 1.6 0 00-1.6-1.6H4z"/><path d="M20 5.5A1.5 1.5 0 0018.5 4H14a2 2 0 00-2 2v13a1.6 1.6 0 011.6-1.6H20z"/></svg>',
+    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
+    type: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>',
+    voice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 6a9 9 0 010 12"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>',
+    globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/></svg>',
+    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5.5" width="3.4" height="13" rx="1"/><rect x="13.6" y="5.5" width="3.4" height="13" rx="1"/></svg>',
+    stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg>',
+    up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+    down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
+    reset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1014.6-5.9"/><path d="M19 3v4.5h-4.5"/></svg>',
+  };
+
+  // ------------------------------------------------------------------ styles
+
+  const CSS = [
+    '.rtk-root{--rtk-accent:#01ad9f;--rtk-accent-soft:rgba(1,173,159,.14);--rtk-bg:#0c0d10;--rtk-bg2:#12141a;--rtk-fg:#f8f8ff;--rtk-muted:rgba(248,248,255,.6);--rtk-line:rgba(255,255,255,.09);--rtk-z:99990;font-family:inherit}',
+    '.rtk-root *{box-sizing:border-box}',
+
+    // progress
+    '.rtk-progress{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,#01ad9f,#34d399);z-index:99991;transition:width .12s linear;pointer-events:none;border-bottom-right-radius:3px}',
+
+    // fab
+    '.rtk-fab{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:99992;display:flex;flex-direction:column;align-items:center;gap:4px;padding:11px 8px 12px;border:1px solid rgba(1,173,159,.4);border-right:0;border-radius:14px 0 0 14px;background:rgba(12,13,16,.94);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:#01ad9f;cursor:pointer;box-shadow:-6px 0 22px rgba(0,0,0,.45);transition:background .2s ease,color .2s ease,padding .2s ease}',
+    '.rtk-fab:hover{background:#01ad9f;color:#010203;padding-right:12px}',
+    '.rtk-fab svg{width:20px;height:20px;display:block}',
+    '.rtk-fab-label{font-size:9.5px;font-weight:800;letter-spacing:.06em;writing-mode:vertical-rl;text-orientation:mixed}',
+    '.rtk-root[data-open="1"] .rtk-fab{opacity:0;pointer-events:none}',
+
+    // scrim + panel
+    '.rtk-scrim{position:fixed;inset:0;z-index:99993;background:rgba(1,2,3,.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .28s ease}',
+    '.rtk-root[data-open="1"] .rtk-scrim{opacity:1;pointer-events:auto}',
+    '.rtk-panel{position:fixed;top:0;right:0;height:100%;width:min(92vw,336px);z-index:99994;display:flex;flex-direction:column;background:var(--rtk-bg);border-left:1px solid var(--rtk-line);box-shadow:-18px 0 50px rgba(0,0,0,.6);color:var(--rtk-fg);transform:translateX(102%);transition:transform .3s cubic-bezier(.22,1,.36,1);overscroll-behavior:contain}',
+    '.rtk-root[data-open="1"] .rtk-panel{transform:translateX(0)}',
+    '.rtk-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 14px 12px;border-bottom:1px solid var(--rtk-line);flex:0 0 auto}',
+    '.rtk-title{font-size:13px;font-weight:800;letter-spacing:.02em;margin:0}',
+    '.rtk-sub{font-size:10.5px;font-weight:600;color:var(--rtk-muted);margin:3px 0 0}',
+    '.rtk-x{display:flex;align-items:center;justify-content:center;width:30px;height:30px;flex:0 0 auto;border:1px solid var(--rtk-line);border-radius:999px;background:transparent;color:var(--rtk-fg);cursor:pointer;transition:background .18s ease}',
+    '.rtk-x:hover{background:rgba(239,68,68,.16);border-color:rgba(239,68,68,.45);color:#f87171}',
+    '.rtk-x svg{width:15px;height:15px}',
+
+    // tabs
+    '.rtk-tabs{display:flex;gap:2px;padding:8px 8px 0;border-bottom:1px solid var(--rtk-line);flex:0 0 auto;overflow-x:auto;scrollbar-width:none}',
+    '.rtk-tabs::-webkit-scrollbar{display:none}',
+    '.rtk-tab{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 9px 8px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--rtk-muted);font-size:9.5px;font-weight:700;cursor:pointer;white-space:nowrap;transition:color .18s ease,border-color .18s ease}',
+    '.rtk-tab svg{width:16px;height:16px}',
+    '.rtk-tab[aria-selected="true"]{color:var(--rtk-accent);border-bottom-color:var(--rtk-accent)}',
+
+    // body
+    '.rtk-body{flex:1 1 auto;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}',
+    '.rtk-group{display:flex;flex-direction:column;gap:7px}',
+    '.rtk-label{font-size:10px;font-weight:800;letter-spacing:.07em;color:var(--rtk-muted);margin:0}',
+    '.rtk-row{display:flex;align-items:center;gap:8px}',
+    '.rtk-seg{display:flex;gap:4px;flex-wrap:wrap}',
+    '.rtk-chip{flex:1 1 auto;min-width:56px;padding:8px 6px;border:1px solid var(--rtk-line);border-radius:10px;background:var(--rtk-bg2);color:var(--rtk-fg);font-size:11px;font-weight:700;cursor:pointer;transition:border-color .18s ease,background .18s ease,color .18s ease}',
+    '.rtk-chip:hover{border-color:rgba(1,173,159,.5)}',
+    '.rtk-chip[aria-pressed="true"]{background:var(--rtk-accent-soft);border-color:rgba(1,173,159,.6);color:var(--rtk-accent)}',
+    '.rtk-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 12px;border:1px solid var(--rtk-line);border-radius:10px;background:var(--rtk-bg2);color:var(--rtk-fg);font-size:11.5px;font-weight:700;cursor:pointer;transition:background .18s ease,border-color .18s ease}',
+    '.rtk-btn:hover{border-color:rgba(1,173,159,.5)}',
+    '.rtk-btn[data-primary="1"]{background:var(--rtk-accent);border-color:var(--rtk-accent);color:#010203}',
+    '.rtk-btn svg{width:15px;height:15px}',
+    '.rtk-btn:disabled{opacity:.45;cursor:not-allowed}',
+    '.rtk-range{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:999px;background:rgba(255,255,255,.14);outline:none;touch-action:pan-y}',
+    '.rtk-range::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:999px;background:var(--rtk-accent);border:2px solid #0c0d10;cursor:pointer}',
+    '.rtk-range::-moz-range-thumb{width:14px;height:14px;border:2px solid #0c0d10;border-radius:999px;background:var(--rtk-accent);cursor:pointer}',
+    '.rtk-val{min-width:38px;text-align:right;font-size:10.5px;font-weight:800;color:var(--rtk-accent);font-variant-numeric:tabular-nums}',
+    '.rtk-select{width:100%;padding:9px 10px;border:1px solid var(--rtk-line);border-radius:10px;background:var(--rtk-bg2);color:var(--rtk-fg);font-size:11.5px;font-weight:600}',
+    '.rtk-note{margin:0;padding:9px 10px;border:1px solid rgba(1,173,159,.3);border-radius:10px;background:rgba(1,173,159,.07);color:var(--rtk-accent);font-size:10.5px;line-height:1.65}',
+    '.rtk-warn{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.08);color:#fbbf24}',
+    '.rtk-stats{display:flex;gap:8px}',
+    '.rtk-stat{flex:1;padding:10px 8px;border:1px solid var(--rtk-line);border-radius:12px;background:var(--rtk-bg2);text-align:center}',
+    '.rtk-stat b{display:block;font-size:15px;color:var(--rtk-accent);font-variant-numeric:tabular-nums}',
+    '.rtk-stat span{font-size:9.5px;font-weight:700;color:var(--rtk-muted)}',
+
+    // toc
+    '.rtk-toc{display:flex;flex-direction:column;gap:2px;margin:0;padding:0;list-style:none}',
+    '.rtk-toc a{display:block;padding:7px 9px;border-radius:9px;border-left:2px solid transparent;color:var(--rtk-fg);font-size:11.5px;line-height:1.55;text-decoration:none;transition:background .18s ease}',
+    '.rtk-toc a:hover{background:var(--rtk-accent-soft);border-left-color:var(--rtk-accent)}',
+    '.rtk-toc a[data-active="1"]{background:var(--rtk-accent-soft);border-left-color:var(--rtk-accent);color:var(--rtk-accent);font-weight:700}',
+    '.rtk-toc li[data-lvl="3"] a{padding-left:20px;font-size:11px;color:var(--rtk-muted)}',
+    '.rtk-toc li[data-lvl="4"] a{padding-left:30px;font-size:10.5px;color:var(--rtk-muted)}',
+    '.rtk-empty{font-size:11px;color:var(--rtk-muted);line-height:1.7;margin:0}',
+
+    // reading surfaces (article only — header/footer untouched)
+    '.rtk-surface{--rt-font-scale:1;--rt-line-height:1.85;--rt-letter:0em;font-size:calc(1rem * var(--rt-font-scale));line-height:var(--rt-line-height);letter-spacing:var(--rt-letter);transition:background-color .25s ease,color .25s ease}',
+    '.rtk-surface p,.rtk-surface li,.rtk-surface blockquote{line-height:inherit;letter-spacing:inherit}',
+    'html[data-rt-font="sinhala"] .rtk-surface{font-family:"Noto Sans Sinhala","Iskoola Pota","Abhaya Libre",sans-serif}',
+    'html[data-rt-font="serif"] .rtk-surface{font-family:"Abhaya Libre","Noto Serif Sinhala",Georgia,serif}',
+    'html[data-rt-font="system"] .rtk-surface{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
+    'html[data-rt-page="paper"] .rtk-surface{background:#f6f3ec !important;color:#1f2328 !important;border-radius:14px;padding:16px}',
+    'html[data-rt-page="sepia"] .rtk-surface{background:#f2e4cd !important;color:#4a3826 !important;border-radius:14px;padding:16px}',
+    'html[data-rt-page="contrast"] .rtk-surface{background:#000 !important;color:#fff !important;border-radius:14px;padding:16px}',
+    'html[data-rt-page="paper"] .rtk-surface :is(p,li,h2,h3,h4,blockquote,span,strong,em,div){color:inherit !important;background:transparent !important}',
+    'html[data-rt-page="sepia"] .rtk-surface :is(p,li,h2,h3,h4,blockquote,span,strong,em,div){color:inherit !important;background:transparent !important}',
+    'html[data-rt-page="contrast"] .rtk-surface :is(p,li,h2,h3,h4,blockquote,span,strong,em,div){color:inherit !important;background:transparent !important}',
+    'html[data-rt-measure="narrow"] .rtk-surface{max-width:34rem;margin-left:auto;margin-right:auto}',
+    'html[data-rt-measure="wide"] .rtk-surface{max-width:none}',
+
+    // focus mode
+    'html[data-rt-focus="on"] [data-rt-dim]{opacity:.12;filter:saturate(.4);transition:opacity .3s ease}',
+    'html[data-rt-focus="on"] [data-rt-dim]:hover{opacity:.6}',
+
+    // tts highlight
+    '.rtk-speaking{background:rgba(1,173,159,.16) !important;box-shadow:inset 3px 0 0 #01ad9f;border-radius:6px;transition:background .2s ease}',
+
+    // mobile bottom sheet
+    '@media (max-width:640px){.rtk-panel{top:auto;bottom:0;right:0;left:0;width:100%;height:min(82vh,560px);border-left:0;border-top:1px solid var(--rtk-line);border-radius:18px 18px 0 0;transform:translateY(102%)}.rtk-root[data-open="1"] .rtk-panel{transform:translateY(0)}.rtk-fab{top:auto;bottom:86px;transform:none}}',
+
+    // a11y / print
+    '@media (prefers-reduced-motion:reduce){.rtk-panel,.rtk-scrim,.rtk-progress{transition:none !important}}',
+    '@media print{.rtk-root{display:none !important}}',
+  ].join('\n');
+
+  function injectStyles() {
+    if ($('#rtk-style')) return;
+    document.head.appendChild(el('style', { id: 'rtk-style', html: CSS }));
+  }
+
+  // ------------------------------------------------------------------ article
+
+  let article = null;
+
+  function findArticle() {
+    for (let i = 0; i < ARTICLE_CANDIDATES.length; i++) {
+      const node = $(ARTICLE_CANDIDATES[i]);
+      if (node && (node.textContent || '').trim().length >= MIN_ARTICLE_CHARS) return node;
+    }
+    return null;
+  }
+
+  function markDimTargets() {
+    ['header', 'footer', '#comments', '.related-posts', 'aside'].forEach((sel) => {
+      $$(sel).forEach((n) => {
+        if (!n.closest('.rtk-root')) n.setAttribute('data-rt-dim', '');
+      });
+    });
+  }
+
+  function articleText() {
+    if (!article) return '';
+    return (article.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function wordCount() {
+    const t = articleText();
+    return t ? t.split(/\s+/).length : 0;
+  }
+
+  // ------------------------------------------------------------------ state
+
+  function applyState() {
     const r = document.documentElement;
     r.setAttribute('data-rt-page', state.page);
     r.setAttribute('data-rt-font', state.font);
     r.setAttribute('data-rt-measure', state.measure);
     r.setAttribute('data-rt-focus', state.focus ? 'on' : 'off');
-    r.style.setProperty('--rt-font-scale', state.fontScale);
-    r.style.setProperty('--rt-line-height', state.lineHeight);
+    r.style.setProperty('--rt-font-scale', String(state.fontScale));
+    r.style.setProperty('--rt-line-height', String(state.lineHeight));
     r.style.setProperty('--rt-letter', state.letter + 'em');
+
+    if (article) {
+      article.classList.add('rtk-surface');
+      article.style.setProperty('--rt-font-scale', String(state.fontScale));
+      article.style.setProperty('--rt-line-height', String(state.lineHeight));
+      article.style.setProperty('--rt-letter', state.letter + 'em');
+    }
     if (state.focus) markDimTargets();
   }
 
   function set(patch) {
-    state = Object.assign({}, state, patch);
+    Object.assign(state, patch || {});
+    applyState();
     writeStore(state);
-    apply();
     emit('change', state);
   }
 
-  /* ---------------- tool registry ---------------- */
+  // ------------------------------------------------------------------ ui
+
+  const ui = { root: null, progress: null, fab: null, scrim: null, panel: null, tabsEl: null, bodyEl: null, subEl: null };
+  let isOpen = false;
+  let activeTab = null;
+
+  function buildUI() {
+    let root = $('.rtk-root') || $('.rt-root');
+    if (root) root.innerHTML = '';
+    else {
+      root = el('div', {});
+      document.body.appendChild(root);
+    }
+    root.className = 'rtk-root rt-root';
+    root.setAttribute('data-open', '0');
+    root.setAttribute('data-allow-select', '');
+
+    const progress = el('div', { class: 'rtk-progress', 'aria-hidden': 'true' });
+
+    const fab = el(
+      'button',
+      { class: 'rtk-fab', type: 'button', 'aria-label': 'කියවීමේ මෙවලම්', onclick: open },
+      [el('span', { html: ICON.fab, 'aria-hidden': 'true' }), el('span', { class: 'rtk-fab-label', text: 'මෙවලම්' })]
+    );
+
+    const scrim = el('div', { class: 'rtk-scrim', onclick: close, 'aria-hidden': 'true' });
+
+    const subEl = el('p', { class: 'rtk-sub', text: '' });
+    const head = el('div', { class: 'rtk-head' }, [
+      el('div', {}, [el('h2', { class: 'rtk-title', text: 'කියවීමේ මෙවලම්' }), subEl]),
+      el('button', { class: 'rtk-x', type: 'button', 'aria-label': 'වසන්න', html: ICON.close, onclick: close }),
+    ]);
+
+    const tabsEl = el('div', { class: 'rtk-tabs', role: 'tablist' });
+    const bodyEl = el('div', { class: 'rtk-body' });
+
+    const panel = el(
+      'aside',
+      { class: 'rtk-panel', role: 'dialog', 'aria-modal': 'false', 'aria-label': 'කියවීමේ මෙවලම්', tabindex: '-1' },
+      [head, tabsEl, bodyEl]
+    );
+
+    root.appendChild(progress);
+    root.appendChild(fab);
+    root.appendChild(scrim);
+    root.appendChild(panel);
+
+    ui.root = root;
+    ui.progress = progress;
+    ui.fab = fab;
+    ui.scrim = scrim;
+    ui.panel = panel;
+    ui.tabsEl = tabsEl;
+    ui.bodyEl = bodyEl;
+    ui.subEl = subEl;
+  }
+
+  function open() {
+    if (!ui.root || isOpen) return;
+    if (document.documentElement.classList.contains('age-gate-pending')) return;
+    isOpen = true;
+    ui.root.setAttribute('data-open', '1');
+    if (!activeTab && tools.length) showTab(tools[0].id);
+    setTimeout(() => {
+      try {
+        ui.panel.focus();
+      } catch (e) {}
+    }, 60);
+    emit('open');
+  }
+
+  function close() {
+    if (!ui.root || !isOpen) return;
+    isOpen = false;
+    ui.root.setAttribute('data-open', '0');
+    emit('close');
+  }
+
+  function updateSub() {
+    if (!ui.subEl) return;
+    const w = wordCount();
+    ui.subEl.textContent = w ? w.toLocaleString('en-US') + ' වචන · ' + Math.max(1, Math.round(w / WORDS_PER_MIN)) + ' මිනිත්තු' : '';
+  }
+
+  // ------------------------------------------------------------------ registry
+
   const tools = [];
   let cleanupCurrent = null;
 
@@ -186,661 +446,588 @@
     if (ui.tabsEl) renderTabs();
   }
 
-  /* ---------------- UI shell ---------------- */
-  const ui = {};
-  let docListenersBound = false;
-  let progressBound = false;
-
-  function build() {
-    const root = $('[data-rt-root]');
-    if (!root) return false;
-    if (root.dataset.rtBound === '1') {
-      /* view-transition එකකින් පස්සේ අලුත් DOM එකක් ආවොත් නැවත bind
-         කරන්න ඕන — ඒත් එකම element එකට දෙපාරක් bind නොවෙන්න. */
-      ui.root = root;
-      return true;
-    }
-
-    ui.root = root;
-    ui.progress = $('.rt-progress > i', root);
-    ui.fab = $('.rt-fab', root);
-    ui.scrim = $('.rt-scrim', root);
-    ui.panel = $('.rt-panel', root);
-    ui.title = $('.rt-title', root);
-    ui.tabsEl = $('.rt-tabs', root);
-    ui.body = $('.rt-body', root);
-    ui.closeBtn = $('.rt-close', root);
-
-    if (!ui.fab || !ui.panel || !ui.tabsEl || !ui.body) return false;
-
-    ui.fab.addEventListener('click', () => open());
-    if (ui.closeBtn) ui.closeBtn.addEventListener('click', () => close());
-    if (ui.scrim) ui.scrim.addEventListener('click', () => close());
-
-    if (!docListenersBound) {
-      docListenersBound = true;
-      document.addEventListener('keydown', (e) => {
-        if (!isOpen()) return;
-        if (e.key === 'Escape') { close(); if (ui.fab) ui.fab.focus(); }
-        else if (e.key === 'Tab' && window.innerWidth <= 640) trapFocus(e);
-      });
-    }
-
-    root.dataset.rtBound = '1';
-    return true;
-  }
-
-  function trapFocus(e) {
-    const f = $$('button, [href], select, input, [tabindex]:not([tabindex="-1"])', ui.panel)
-      .filter((n) => !n.disabled && n.offsetParent !== null);
-    if (!f.length) return;
-    const first = f[0];
-    const last = f[f.length - 1];
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  }
-
-  function isOpen() { return !!(ui.panel && ui.panel.dataset.open === '1'); }
-
-  function open(tabId) {
-    if (!ui.panel) return;
-    ui.panel.hidden = false;
-    if (ui.scrim) ui.scrim.hidden = false;
-    requestAnimationFrame(() => {
-      ui.panel.dataset.open = '1';
-      if (ui.scrim) ui.scrim.dataset.show = '1';
-    });
-    ui.fab.setAttribute('aria-expanded', 'true');
-    showTab(tabId || state.tab || (tools[0] && tools[0].id));
-    if (window.innerWidth <= 640) {
-      const t = $('.rt-tab[aria-selected="true"]', ui.panel);
-      if (t) t.focus();
-    }
-    emit('open');
-  }
-
-  function close() {
-    if (!ui.panel) return;
-    ui.panel.dataset.open = '0';
-    if (ui.scrim) ui.scrim.dataset.show = '0';
-    ui.fab.setAttribute('aria-expanded', 'false');
-    setTimeout(() => {
-      if (!isOpen()) {
-        ui.panel.hidden = true;
-        if (ui.scrim) ui.scrim.hidden = true;
-      }
-    }, 300);
-    emit('close');
-  }
-
   function renderTabs() {
+    if (!ui.tabsEl) return;
     ui.tabsEl.innerHTML = '';
     tools.forEach((t) => {
-      const b = el('button', {
-        class: 'rt-tab',
-        type: 'button',
-        role: 'tab',
-        'data-id': t.id,
-        'aria-selected': String(t.id === state.tab),
-      }, (t.icon || '') + '<span>' + t.label + '</span>');
-      b.addEventListener('click', () => showTab(t.id));
-      ui.tabsEl.appendChild(b);
+      const btn = el(
+        'button',
+        {
+          class: 'rtk-tab',
+          type: 'button',
+          role: 'tab',
+          'data-tab': t.id,
+          'aria-selected': activeTab === t.id ? 'true' : 'false',
+          onclick: () => showTab(t.id),
+        },
+        [el('span', { html: t.icon || '', 'aria-hidden': 'true' }), el('span', { text: t.label })]
+      );
+      ui.tabsEl.appendChild(btn);
     });
   }
 
   function showTab(id) {
-    let tool = null;
-    for (let i = 0; i < tools.length; i++) if (tools[i].id === id) { tool = tools[i]; break; }
-    if (!tool) tool = tools[0];
-    if (!tool) return;
+    const tool = tools.filter((t) => t.id === id)[0];
+    if (!tool || !ui.bodyEl) return;
 
     if (typeof cleanupCurrent === 'function') {
-      try { cleanupCurrent(); } catch (e) { console.error('[reader-tools]', e); }
+      try {
+        cleanupCurrent();
+      } catch (e) {}
     }
     cleanupCurrent = null;
 
-    if (state.tab !== tool.id) set({ tab: tool.id });
+    activeTab = id;
+    ui.bodyEl.innerHTML = '';
+    renderTabs();
 
-    $$('.rt-tab', ui.tabsEl).forEach((b) =>
-      b.setAttribute('aria-selected', String(b.dataset.id === tool.id)));
-
-    ui.title.textContent = tool.label;
-    ui.body.innerHTML = '';
-    ui.body.scrollTop = 0;
-
-    const ctx = { state: state, set: set, on: on, emit: emit, el: el, $: $, $$: $$,
-                  article: article, ICON: ICON, open: open, close: close, showTab: showTab };
-    cleanupCurrent = tool.mount(ui.body, ctx) || null;
-  }
-
-  /* ---------------- progress + resume position ---------------- */
-  function initProgress() {
-    if (progressBound) { updateProgress(); return; }
-    progressBound = true;
-    let raf = 0;
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(() => { raf = 0; updateProgress(); });
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
-    updateProgress();
-  }
-
-  function updateProgress() {
-    const a = article();
-    if (!a || !ui.progress) return;
-    const rect = a.getBoundingClientRect();
-    const top = rect.top + window.scrollY;
-    const total = a.offsetHeight - window.innerHeight * 0.6;
-    const pct = clamp(((window.scrollY - top) / Math.max(total, 1)) * 100, 0, 100);
-    ui.progress.style.width = pct + '%';
-    emit('progress', pct);
-    if (window.scrollY > 400) {
-      try { localStorage.setItem(posKey(location.pathname), String(Math.round(window.scrollY))); } catch (e) {}
+    const ctx = { state, set, on, el, $, $$, article, ICON, close, showTab, limits: LIMITS };
+    try {
+      const maybeCleanup = tool.mount(ui.bodyEl, ctx);
+      if (typeof maybeCleanup === 'function') cleanupCurrent = maybeCleanup;
+    } catch (e) {
+      console.warn('[reader-tools] mount failed: ' + id, e);
+      ui.bodyEl.appendChild(el('p', { class: 'rtk-note rtk-warn', text: 'මෙම මෙවලම පූරණය කිරීමේ දෝෂයක්.' }));
     }
   }
 
-  /* ==========================================================================
-     TOOL 1 — අන්තර්ගතය
-     ========================================================================== */
+  // ------------------------------------------------------------------ ui bits
+
+  function segment(label, value, options, onPick) {
+    const seg = el('div', { class: 'rtk-seg' });
+    options.forEach((o) => {
+      const chip = el('button', {
+        class: 'rtk-chip',
+        type: 'button',
+        text: o.label,
+        'aria-pressed': value === o.value ? 'true' : 'false',
+        onclick: () => {
+          $$('.rtk-chip', seg).forEach((c) => c.setAttribute('aria-pressed', 'false'));
+          chip.setAttribute('aria-pressed', 'true');
+          onPick(o.value);
+        },
+      });
+      seg.appendChild(chip);
+    });
+    return el('div', { class: 'rtk-group' }, [el('p', { class: 'rtk-label', text: label }), seg]);
+  }
+
+  function slider(label, key, format) {
+    const lim = LIMITS[key];
+    const out = el('span', { class: 'rtk-val', text: format(state[key]) });
+    const input = el('input', {
+      class: 'rtk-range',
+      type: 'range',
+      min: String(lim[0]),
+      max: String(lim[1]),
+      step: String(lim[2]),
+      value: String(state[key]),
+      'aria-label': label,
+    });
+    input.addEventListener('input', () => {
+      const v = round(clamp(parseFloat(input.value), lim[0], lim[1]), lim[2]);
+      out.textContent = format(v);
+      const patch = {};
+      patch[key] = v;
+      set(patch);
+    });
+    return el('div', { class: 'rtk-group' }, [
+      el('p', { class: 'rtk-label', text: label }),
+      el('div', { class: 'rtk-row' }, [input, out]),
+    ]);
+  }
+
+  // ------------------------------------------------------------------ tool: toc
+
   register({
     id: 'toc',
-    order: 10,
     label: 'අන්තර්ගතය',
     icon: ICON.list,
+    order: 10,
     mount(box) {
-      const a = article();
-      if (!a) {
-        box.appendChild(el('p', { class: 'rt-empty' }, 'මෙම පිටුවේ කියවීමට කතාවක් නැහැ.'));
-        return;
-      }
+      const w = wordCount();
+      box.appendChild(
+        el('div', { class: 'rtk-stats' }, [
+          el('div', { class: 'rtk-stat' }, [
+            el('b', { text: w ? w.toLocaleString('en-US') : '0' }),
+            el('span', { text: 'වචන' }),
+          ]),
+          el('div', { class: 'rtk-stat' }, [
+            el('b', { text: String(Math.max(1, Math.round(w / WORDS_PER_MIN))) }),
+            el('span', { text: 'මිනිත්තු' }),
+          ]),
+        ])
+      );
 
-      const words = (a.textContent || '').trim().split(/\s+/).filter(Boolean).length;
-      const mins = Math.max(1, Math.round(words / 180));
+      const headings = article ? $$(HEADING_SEL, article).filter((h) => (h.textContent || '').trim()) : [];
+      const group = el('div', { class: 'rtk-group' }, [el('p', { class: 'rtk-label', text: 'කොටස්' })]);
 
-      const meta = el('div', { class: 'rt-meta' });
-      meta.appendChild(el('span', {}, '~' + mins + ' මිනිත්තු'));
-      meta.appendChild(el('span', {}, words.toLocaleString('si-LK') + ' වචන'));
-      meta.appendChild(el('span', { 'data-rt-pct': '' }, '0%'));
-      box.appendChild(meta);
-
-      const offPct = on('progress', (p) => {
-        const n = $('[data-rt-pct]', meta);
-        if (n) n.textContent = Math.round(p) + '% කියවා ඇත';
-      });
-
-      const heads = $$(HEADING_SEL, a).filter((h) => (h.textContent || '').trim());
-      heads.forEach((h, i) => { if (!h.id) h.id = 'rt-h-' + i; });
-
-      if (!heads.length) {
-        box.appendChild(el('p', { class: 'rt-empty' }, 'මෙම කතාවේ උපමාතෘකා නැහැ.'));
-        return offPct;
-      }
-
-      const ul = el('ul', { class: 'rt-toc' });
-      heads.forEach((h) => {
-        const li = el('li', { 'data-depth': h.tagName.charAt(1) });
-        const link = el('a', { href: '#' + h.id }, (h.textContent || '').trim());
-        link.addEventListener('click', (e) => {
-          e.preventDefault();
-          h.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          history.replaceState(null, '', '#' + h.id);
-          if (window.innerWidth <= 640) close();
-        });
-        li.appendChild(link);
-        ul.appendChild(li);
-      });
-      box.appendChild(ul);
-
-      let io = null;
-      if ('IntersectionObserver' in window) {
-        io = new IntersectionObserver((entries) => {
-          entries.forEach((en) => {
-            if (!en.isIntersecting) return;
-            $$('.rt-toc a', ul).forEach((x) => x.removeAttribute('data-active'));
-            const link = $('.rt-toc a[href="#' + CSS.escape(en.target.id) + '"]', ul);
-            if (link) {
-              link.dataset.active = '1';
-              link.scrollIntoView({ block: 'nearest' });
-            }
+      if (!headings.length) {
+        group.appendChild(el('p', { class: 'rtk-empty', text: 'මෙම ලිපියේ උපශීර්ෂ නැහැ. පහළ "කියවීම" ටැබ් එකෙන් ස්වයං-අනුචලනය භාවිත කරන්න.' }));
+      } else {
+        const list = el('ul', { class: 'rtk-toc' });
+        const links = [];
+        headings.forEach((h, i) => {
+          if (!h.id) h.id = 'rt-h-' + i;
+          const a = el('a', {
+            href: '#' + h.id,
+            text: (h.textContent || '').trim(),
+            onclick: (ev) => {
+              ev.preventDefault();
+              h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              close();
+            },
           });
-        }, { rootMargin: '-80px 0px -70% 0px', threshold: 0 });
-        heads.forEach((h) => io.observe(h));
-      }
+          links.push({ a: a, h: h });
+          list.appendChild(el('li', { 'data-lvl': h.tagName.slice(1) }, a));
+        });
+        group.appendChild(list);
 
-      return function cleanup() {
-        if (io) io.disconnect();
-        offPct();
-      };
+        const sync = rafThrottle(() => {
+          let current = null;
+          links.forEach((p) => {
+            if (p.h.getBoundingClientRect().top <= 120) current = p;
+          });
+          links.forEach((p) => p.a.setAttribute('data-active', p === current ? '1' : '0'));
+        });
+        sync();
+        window.addEventListener('scroll', sync, { passive: true });
+        box.appendChild(group);
+        return () => window.removeEventListener('scroll', sync);
+      }
+      box.appendChild(group);
     },
   });
 
-  /* ==========================================================================
-     TOOL 2 — පෙනුම
-     ========================================================================== */
+  // ------------------------------------------------------------------ tool: display
+
   register({
     id: 'display',
-    order: 20,
     label: 'පෙනුම',
-    icon: ICON.aa,
+    icon: ICON.type,
+    order: 20,
     mount(box) {
-      function group(label, node, valueText) {
-        const g = el('div', { class: 'rt-group' });
-        g.appendChild(el('div', { class: 'rt-label' },
-          '<span>' + label + '</span>' +
-          (valueText != null ? '<span data-val>' + valueText + '</span>' : '')));
-        g.appendChild(node);
-        return g;
-      }
+      box.appendChild(
+        segment(
+          'පසුබිම',
+          state.page,
+          [
+            { value: 'dark', label: 'අඳුරු' },
+            { value: 'paper', label: 'සුදු' },
+            { value: 'sepia', label: 'සෙපියා' },
+            { value: 'contrast', label: 'තීව්‍ර' },
+          ],
+          (v) => set({ page: v })
+        )
+      );
 
-      function seg(options, current, cb) {
-        const wrap = el('div', { class: 'rt-seg' });
-        options.forEach((opt) => {
-          const b = el('button', { type: 'button', 'aria-pressed': String(opt[0] === current) }, opt[1]);
-          b.addEventListener('click', () => {
-            $$('button', wrap).forEach((x) => x.setAttribute('aria-pressed', 'false'));
-            b.setAttribute('aria-pressed', 'true');
-            cb(opt[0]);
-          });
-          wrap.appendChild(b);
-        });
-        return wrap;
-      }
+      box.appendChild(
+        segment(
+          'අකුරු වර්ගය',
+          state.font,
+          [
+            { value: 'sinhala', label: 'සිංහල' },
+            { value: 'serif', label: 'සෙරිෆ්' },
+            { value: 'system', label: 'පද්ධති' },
+          ],
+          (v) => set({ font: v })
+        )
+      );
 
-      function slider(label, key, min, max, step, fmt) {
-        const input = el('input', {
-          class: 'rt-range', type: 'range',
-          min: String(min), max: String(max), step: String(step),
-          value: String(state[key]), 'aria-label': label,
-        });
-        const g = group(label, input, fmt(Number(state[key])));
-        input.addEventListener('input', () => {
-          const v = Number(input.value);
-          const patch = {}; patch[key] = v; set(patch);
-          const out = $('[data-val]', g);
-          if (out) out.textContent = fmt(v);
-        });
-        return g;
-      }
+      box.appendChild(slider('අකුරු ප්‍රමාණය', 'fontScale', (v) => Math.round(v * 100) + '%'));
+      box.appendChild(slider('පේළි පරතරය', 'lineHeight', (v) => v.toFixed(2)));
+      box.appendChild(slider('අකුරු පරතරය', 'letter', (v) => (v * 1000).toFixed(0)));
 
-      box.appendChild(group('කියවීමේ පසුබිම',
-        seg([['dark', 'කළු'], ['paper', 'කඩදාසි'], ['sepia', 'සෙපියා'], ['contrast', 'දීප්ත']],
-          state.page, (v) => set({ page: v }))));
+      box.appendChild(
+        segment(
+          'පේළි පළල',
+          state.measure,
+          [
+            { value: 'narrow', label: 'පටු' },
+            { value: 'normal', label: 'සාමාන්‍ය' },
+            { value: 'wide', label: 'පළල්' },
+          ],
+          (v) => set({ measure: v })
+        )
+      );
 
-      box.appendChild(group('අකුරු විලාසය',
-        seg([['sinhala', 'සිංහල'], ['serif', 'සෙරිෆ්'], ['system', 'මුල් පිටපත']],
-          state.font, (v) => set({ font: v }))));
-
-      box.appendChild(slider('අකුරු විශාලත්වය', 'fontScale', 0.85, 1.8, 0.05,
-        (v) => Math.round(v * 100) + '%'));
-
-      box.appendChild(slider('පේළි පරතරය', 'lineHeight', 1.4, 2.5, 0.05,
-        (v) => v.toFixed(2)));
-
-      box.appendChild(slider('අකුරු පරතරය', 'letter', 0, 0.08, 0.01,
-        (v) => v.toFixed(2) + 'em'));
-
-      box.appendChild(group('පේළියේ පළල',
-        seg([['narrow', 'පටු'], ['normal', 'සාමාන්‍ය'], ['wide', 'පළල්']],
-          state.measure, (v) => set({ measure: v }))));
-
-      const reset = el('button', { class: 'rt-btn', type: 'button' }, 'මුල් සැකසුම්වලට හරවන්න');
-      reset.addEventListener('click', () => {
-        set({
-          page: DEFAULTS.page, font: DEFAULTS.font, fontScale: DEFAULTS.fontScale,
-          lineHeight: DEFAULTS.lineHeight, letter: DEFAULTS.letter, measure: DEFAULTS.measure,
-        });
-        showTab('display');
-      });
-      const row = el('div', { class: 'rt-row' });
-      row.appendChild(reset);
-      box.appendChild(row);
-
-      box.appendChild(el('p', { class: 'rt-note' },
-        'පසුබිම වෙනස් වෙන්නේ කතාව තියෙන කොටසට පමණයි — සයිට් එකේ ඉතිරි කොටස් dark ලෙසම පවතිනවා.'));
+      box.appendChild(
+        el('button', {
+          class: 'rtk-btn',
+          type: 'button',
+          html: ICON.reset + '<span>මුල් තත්ත්වයට</span>',
+          onclick: () => {
+            set({
+              page: DEFAULTS.page,
+              font: DEFAULTS.font,
+              fontScale: DEFAULTS.fontScale,
+              lineHeight: DEFAULTS.lineHeight,
+              letter: DEFAULTS.letter,
+              measure: DEFAULTS.measure,
+            });
+            showTab('display');
+          },
+        })
+      );
     },
   });
 
-  /* ==========================================================================
-     TOOL 3 — හඬ (Web Speech API; engines plug කරන්න පුළුවන්)
-     ========================================================================== */
-  const engines = {};
+  // ------------------------------------------------------------------ tool: voice
 
-  const webSpeech = {
-    id: 'web-speech',
-    _chunks: [], _i: 0, _opts: {}, _hooks: {}, _stopped: true,
-
-    available() {
-      return ('speechSynthesis' in window) && ('SpeechSynthesisUtterance' in window);
-    },
-    voices() {
-      let all = [];
-      try { all = window.speechSynthesis.getVoices() || []; } catch (e) {}
-      return { all: all, si: all.filter((v) => /^si/i.test(v.lang)) };
-    },
-    speak(chunks, opts, hooks) {
-      this.stop();
-      this._chunks = chunks;
-      this._i = 0;
-      this._opts = opts || {};
-      this._hooks = hooks || {};
-      this._stopped = false;
-      this._next();
-    },
-    _next() {
-      if (this._stopped) return;
-      if (this._i >= this._chunks.length) {
-        this._stopped = true;
-        if (this._hooks.onEnd) this._hooks.onEnd();
-        return;
-      }
-      const self = this;
-      const c = this._chunks[this._i];
-      const u = new SpeechSynthesisUtterance(c.text);
-      const all = this.voices().all;
-      let v = null;
-      for (let i = 0; i < all.length; i++) if (all[i].voiceURI === this._opts.voiceURI) { v = all[i]; break; }
-      if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'si-LK'; }
-      u.rate = this._opts.rate || 1;
-      u.onend = function () { self._i++; self._next(); };
-      u.onerror = function () { self._i++; self._next(); };
-      if (this._hooks.onChunk) this._hooks.onChunk(c, this._i);
-      try { window.speechSynthesis.speak(u); } catch (e) { self._i++; self._next(); }
-    },
-    pause() { try { window.speechSynthesis.pause(); } catch (e) {} },
-    resume() { try { window.speechSynthesis.resume(); } catch (e) {} },
-    stop() {
-      this._stopped = true;
-      this._i = 0;
-      try { window.speechSynthesis.cancel(); } catch (e) {}
-    },
-  };
-  engines['web-speech'] = webSpeech;
+  const voiceEngines = {};
+  function registerVoiceEngine(id, engine) {
+    if (id && engine && typeof engine.speak === 'function') voiceEngines[id] = engine;
+  }
 
   register({
     id: 'voice',
-    order: 30,
     label: 'හඬ',
     icon: ICON.voice,
+    order: 30,
     mount(box) {
-      const engine = engines['web-speech'];
-
-      if (!engine.available()) {
-        box.appendChild(el('p', { class: 'rt-empty' },
-          'ඔබේ බ්‍රව්සරය හඬ කියවීම (text-to-speech) සඳහා සහාය නොදක්වයි.'));
+      const synth = window.speechSynthesis;
+      if (!synth) {
+        box.appendChild(el('p', { class: 'rtk-note rtk-warn', text: 'මෙම බ්‍රව්සරය හඬ කියවීම (TTS) සඳහා සහාය නොදක්වයි.' }));
         return;
       }
 
-      const a = article();
-      const chunks = a
-        ? $$('p, li, h2, h3, h4, blockquote', a)
-            .map((n) => ({ node: n, text: (n.textContent || '').trim() }))
-            .filter((c) => c.text.length > 1)
-        : [];
+      const blocks = article ? $$(BLOCK_SEL, article).filter((n) => (n.textContent || '').trim().length > 1) : [];
+      if (!blocks.length) {
+        box.appendChild(el('p', { class: 'rtk-note rtk-warn', text: 'කියවීමට ලිපි අන්තර්ගතයක් හමු නොවුණි.' }));
+        return;
+      }
 
-      const sel = el('select', { class: 'rt-select', 'aria-label': 'හඬ තෝරන්න' });
-      const voiceGroup = el('div', { class: 'rt-group' });
-      voiceGroup.appendChild(el('div', { class: 'rt-label' }, '<span>හඬ</span>'));
-      voiceGroup.appendChild(sel);
-
-      const note = el('p', { class: 'rt-note rt-note--accent' }, '');
+      const status = el('p', { class: 'rtk-note', text: 'සූදානම්.' });
+      const select = el('select', { class: 'rtk-select', 'aria-label': 'හඬ තෝරන්න' });
+      let idx = 0;
+      let speaking = false;
+      let stopped = true;
 
       function fillVoices() {
-        const v = engine.voices();
-        const list = v.si.length ? v.si : v.all;
-        const prev = sel.value || state.voiceURI;
-        sel.innerHTML = '';
-        list.forEach((voice) => {
-          const o = el('option', { value: voice.voiceURI }, voice.name + ' — ' + voice.lang);
-          if (voice.voiceURI === prev) o.selected = true;
-          sel.appendChild(o);
+        const voices = synth.getVoices() || [];
+        select.innerHTML = '';
+        const si = voices.filter((v) => (v.lang || '').toLowerCase().indexOf('si') === 0);
+        const rest = voices.filter((v) => si.indexOf(v) < 0);
+        si.concat(rest).forEach((v) => {
+          select.appendChild(el('option', { value: v.voiceURI, text: v.name + ' (' + v.lang + ')' }));
         });
-        note.textContent = v.si.length
-          ? 'සිංහල හඬ හමු විය — උච්චාරණය නිවැරදිව ලැබෙනවා.'
-          : 'ඔබේ උපාංගයේ සිංහල හඬක් නැහැ. වෙනත් භාෂා හඬකින් සිංහල අකුරු නිවැරදිව උච්චාරණය නොවෙන්න පුළුවන්. Android: Settings → Language & input → Text-to-speech → සිංහල language pack ස්ථාපනය කරගන්න.';
+        if (state.voiceURI) select.value = state.voiceURI;
+        if (!si.length) {
+          status.className = 'rtk-note rtk-warn';
+          status.textContent = 'සිංහල (si-LK) හඬක් මේ උපාංගයේ නැහැ. Android නම් Settings → Language → Text-to-speech එකෙන් සිංහල pack එක install කරන්න. නැත්නම් වෙනත් හඬක් තෝරන්න — උච්චාරණය නිවැරදි නොවිය හැක.';
+        } else {
+          status.className = 'rtk-note';
+          status.textContent = 'සිංහල හඬ ලබා ගත හැක.';
+        }
       }
       fillVoices();
+      synth.addEventListener('voiceschanged', fillVoices);
 
-      function onVoices() { fillVoices(); }
-      if (window.speechSynthesis.addEventListener) {
-        window.speechSynthesis.addEventListener('voiceschanged', onVoices);
-      } else {
-        window.speechSynthesis.onvoiceschanged = onVoices;
+      select.addEventListener('change', () => set({ voiceURI: select.value }));
+
+      function clearHighlight() {
+        blocks.forEach((b) => b.classList.remove('rtk-speaking'));
       }
-      sel.addEventListener('change', () => set({ voiceURI: sel.value }));
 
-      const rate = el('input', {
-        class: 'rt-range', type: 'range', min: '0.6', max: '1.6', step: '0.05',
-        value: String(state.rate), 'aria-label': 'කියවීමේ වේගය',
-      });
-      const rateGroup = el('div', { class: 'rt-group' });
-      rateGroup.appendChild(el('div', { class: 'rt-label' },
-        '<span>වේගය</span><span data-val>' + Number(state.rate).toFixed(2) + '×</span>'));
-      rateGroup.appendChild(rate);
-      rate.addEventListener('input', () => {
-        const v = Number(rate.value);
-        set({ rate: v });
-        const out = $('[data-val]', rateGroup);
-        if (out) out.textContent = v.toFixed(2) + '×';
-      });
-
-      const playBtn = el('button', { class: 'rt-btn rt-btn--primary', type: 'button' },
-        ICON.play + '<span>කියවන්න</span>');
-      const stopBtn = el('button', { class: 'rt-btn', type: 'button' },
-        ICON.stop + '<span>නවත්වන්න</span>');
-      const row = el('div', { class: 'rt-row' });
-      row.appendChild(playBtn);
-      row.appendChild(stopBtn);
-
-      function clearHl() { $$('.rt-speaking').forEach((n) => n.classList.remove('rt-speaking')); }
-
-      let mode = 'stopped';
-      function paint() {
-        playBtn.innerHTML = (mode === 'playing')
-          ? ICON.pause + '<span>විරාමය</span>'
-          : (mode === 'paused')
-            ? ICON.play + '<span>දිගටම</span>'
-            : ICON.play + '<span>කියවන්න</span>';
-      }
-      paint();
-
-      playBtn.addEventListener('click', () => {
-        if (!chunks.length) return;
-        if (mode === 'playing') {
-          engine.pause();
-          mode = 'paused';
-        } else if (mode === 'paused') {
-          engine.resume();
-          mode = 'playing';
-        } else {
-          engine.speak(chunks, { rate: state.rate, voiceURI: sel.value }, {
-            onChunk: function (c) {
-              clearHl();
-              c.node.classList.add('rt-speaking');
-              c.node.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            },
-            onEnd: function () { clearHl(); mode = 'stopped'; paint(); },
-          });
-          mode = 'playing';
+      function speakFrom(i) {
+        if (i >= blocks.length) {
+          stop();
+          status.textContent = 'කියවීම අවසන්.';
+          return;
         }
-        paint();
-      });
+        idx = i;
+        clearHighlight();
+        const node = blocks[i];
+        node.classList.add('rtk-speaking');
 
-      stopBtn.addEventListener('click', () => {
-        engine.stop();
-        clearHl();
-        mode = 'stopped';
-        paint();
-      });
-
-      box.appendChild(voiceGroup);
-      box.appendChild(rateGroup);
-      box.appendChild(row);
-      box.appendChild(note);
-
-      if (!chunks.length) {
-        box.appendChild(el('p', { class: 'rt-empty' }, 'කියවීමට පෙළක් හමු නොවිය.'));
+        const u = new SpeechSynthesisUtterance((node.textContent || '').trim());
+        const voices = synth.getVoices() || [];
+        const picked = voices.filter((v) => v.voiceURI === select.value)[0];
+        if (picked) {
+          u.voice = picked;
+          u.lang = picked.lang;
+        } else u.lang = 'si-LK';
+        u.rate = state.rate;
+        u.onend = () => {
+          if (!stopped) speakFrom(i + 1);
+        };
+        u.onerror = () => {
+          status.className = 'rtk-note rtk-warn';
+          status.textContent = 'හඬ කියවීමේ දෝෂයක්. වෙනත් හඬක් තෝරා නැවත උත්සාහ කරන්න.';
+          stop();
+        };
+        synth.speak(u);
       }
 
-      return function cleanup() {
-        if (window.speechSynthesis.removeEventListener) {
-          window.speechSynthesis.removeEventListener('voiceschanged', onVoices);
+      function play() {
+        if (synth.paused && speaking) {
+          synth.resume();
+          status.textContent = 'කියවනවා...';
+          return;
         }
+        stopped = false;
+        speaking = true;
+        status.textContent = 'කියවනවා...';
+        synth.cancel();
+        speakFrom(idx);
+      }
+
+      function pause() {
+        if (speaking && !synth.paused) {
+          synth.pause();
+          status.textContent = 'විරාමයේ.';
+        }
+      }
+
+      function stop() {
+        stopped = true;
+        speaking = false;
+        try {
+          synth.cancel();
+        } catch (e) {}
+        clearHighlight();
+        idx = 0;
+        status.textContent = 'නතර කළා.';
+      }
+
+      box.appendChild(el('div', { class: 'rtk-group' }, [el('p', { class: 'rtk-label', text: 'හඬ' }), select]));
+      box.appendChild(slider('වේගය', 'rate', (v) => v.toFixed(2) + 'x'));
+      box.appendChild(
+        el('div', { class: 'rtk-row' }, [
+          el('button', { class: 'rtk-btn', 'data-primary': '1', type: 'button', html: ICON.play + '<span>කියවන්න</span>', onclick: play }),
+          el('button', { class: 'rtk-btn', type: 'button', html: ICON.pause, 'aria-label': 'විරාමය', onclick: pause }),
+          el('button', { class: 'rtk-btn', type: 'button', html: ICON.stop, 'aria-label': 'නතර', onclick: stop }),
+        ])
+      );
+      box.appendChild(status);
+
+      return () => {
+        synth.removeEventListener('voiceschanged', fillVoices);
+        stop();
       };
     },
   });
 
-  /* ==========================================================================
-     TOOL 4 — කියවීම
-     ========================================================================== */
+  // ------------------------------------------------------------------ tool: reading
+
   register({
     id: 'reading',
-    order: 40,
     label: 'කියවීම',
     icon: ICON.eye,
+    order: 40,
     mount(box) {
-      /* focus mode */
-      const focusSw = el('input', { type: 'checkbox', role: 'switch' });
-      focusSw.checked = !!state.focus;
-      const focusRow = el('label', { class: 'rt-switch' });
-      focusRow.appendChild(el('span', {}, 'අවධානය මාදිලිය'));
-      focusRow.appendChild(focusSw);
-      focusSw.addEventListener('change', () => {
-        markDimTargets();
-        set({ focus: focusSw.checked });
-      });
-      const focusGroup = el('div', { class: 'rt-group' });
-      focusGroup.appendChild(focusRow);
-      focusGroup.appendChild(el('p', { class: 'rt-note' },
-        'header, footer, tags, comments button වගේ අවට දේ මැකෙනවා — කතාව විතරක් ඉතිරි වෙනවා.'));
-      box.appendChild(focusGroup);
+      box.appendChild(
+        segment(
+          'නාභි ආකාරය (focus mode)',
+          state.focus ? 'on' : 'off',
+          [
+            { value: 'off', label: 'ක්‍රියාවිරහිත' },
+            { value: 'on', label: 'ක්‍රියාත්මක' },
+          ],
+          (v) => set({ focus: v === 'on' })
+        )
+      );
 
-      /* auto scroll */
-      const asGroup = el('div', { class: 'rt-group' });
-      const asRange = el('input', {
-        class: 'rt-range', type: 'range', min: '0', max: '5', step: '1', value: '0',
-        'aria-label': 'ස්වයංක්‍රීය අනුචලන වේගය',
+      let rafId = null;
+      let carry = 0;
+      const toggle = el('button', {
+        class: 'rtk-btn',
+        type: 'button',
+        html: ICON.down + '<span>ස්වයං-අනුචලනය අරඹන්න</span>',
       });
-      asGroup.appendChild(el('div', { class: 'rt-label' },
-        '<span>ස්වයංක්‍රීය අනුචලනය</span><span data-val>අක්‍රීය</span>'));
-      asGroup.appendChild(asRange);
-      box.appendChild(asGroup);
 
-      let raf = 0, speed = 0, last = 0, carry = 0;
-      function tick(t) {
-        if (!speed) { raf = 0; return; }
-        const dt = last ? (t - last) : 16;
-        last = t;
-        carry += (speed * 14 * dt) / 1000;
-        const px = Math.floor(carry);
-        if (px) { carry -= px; window.scrollBy(0, px); }
-        raf = requestAnimationFrame(tick);
+      function stopScroll() {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+        toggle.innerHTML = ICON.down + '<span>ස්වයං-අනුචලනය අරඹන්න</span>';
+        toggle.removeAttribute('data-primary');
       }
-      asRange.addEventListener('input', () => {
-        speed = Number(asRange.value);
-        const out = $('[data-val]', asGroup);
-        if (out) out.textContent = speed ? ('වේගය ' + speed) : 'අක්‍රීය';
-        last = 0;
-        if (speed && !raf) raf = requestAnimationFrame(tick);
+
+      function step() {
+        carry += state.scrollSpeed * 0.35;
+        const whole = Math.floor(carry);
+        if (whole >= 1) {
+          carry -= whole;
+          window.scrollBy(0, whole);
+        }
+        if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 2) {
+          stopScroll();
+          return;
+        }
+        rafId = requestAnimationFrame(step);
+      }
+
+      toggle.addEventListener('click', () => {
+        if (rafId) stopScroll();
+        else {
+          toggle.innerHTML = ICON.pause + '<span>අනුචලනය නවත්වන්න</span>';
+          toggle.setAttribute('data-primary', '1');
+          rafId = requestAnimationFrame(step);
+        }
       });
 
-      /* resume */
+      box.appendChild(slider('අනුචලන වේගය', 'scrollSpeed', (v) => String(v)));
+      box.appendChild(toggle);
+
       let saved = 0;
-      try { saved = Number(localStorage.getItem(posKey(location.pathname)) || 0); } catch (e) {}
-      if (saved > 600) {
-        const g = el('div', { class: 'rt-group' });
-        const b = el('button', { class: 'rt-btn', type: 'button' }, 'ඔබ නැවතුණ තැනට යන්න');
-        b.addEventListener('click', () => {
-          window.scrollTo({ top: saved, behavior: 'smooth' });
-          if (window.innerWidth <= 640) close();
-        });
-        g.appendChild(el('div', { class: 'rt-label' }, '<span>දිගටම කියවන්න</span>'));
-        g.appendChild(b);
-        box.appendChild(g);
+      try {
+        saved = parseFloat(localStorage.getItem(posKey(location.pathname)) || '0') || 0;
+      } catch (e) {}
+      if (saved > 0.04 && saved < 0.95) {
+        box.appendChild(
+          el('button', {
+            class: 'rtk-btn',
+            type: 'button',
+            html: ICON.up + '<span>ඉස්සර කියවපු තැනට (' + Math.round(saved * 100) + '%)</span>',
+            onclick: () => {
+              const max = document.documentElement.scrollHeight - window.innerHeight;
+              window.scrollTo({ top: max * saved, behavior: 'smooth' });
+              close();
+            },
+          })
+        );
       }
 
-      /* nav */
-      const nav = el('div', { class: 'rt-row' });
-      const toTop = el('button', { class: 'rt-btn', type: 'button' }, '↑ මුලට');
-      const toBottom = el('button', { class: 'rt-btn', type: 'button' }, '↓ අන්තිමට');
-      toTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-      toBottom.addEventListener('click', () =>
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
-      nav.appendChild(toTop);
-      nav.appendChild(toBottom);
-      box.appendChild(nav);
+      box.appendChild(
+        el('div', { class: 'rtk-row' }, [
+          el('button', {
+            class: 'rtk-btn',
+            type: 'button',
+            html: ICON.up + '<span>මුලට</span>',
+            onclick: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
+          }),
+          el('button', {
+            class: 'rtk-btn',
+            type: 'button',
+            html: ICON.down + '<span>අන්තිමට</span>',
+            onclick: () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }),
+          }),
+        ])
+      );
 
-      box.appendChild(el('p', { class: 'rt-note' },
-        'සැකසුම් සහ කියවපු තැන මේ උපාංගයේම සුරැකෙනවා (localStorage) — server එකට කිසිවක් යන්නේ නෑ.'));
-
-      return function cleanup() {
-        speed = 0;
-        if (raf) cancelAnimationFrame(raf);
-      };
+      return stopScroll;
     },
   });
 
-  /* ==========================================================================
-     TOOL 5 — පරිවර්තනය
-     ========================================================================== */
+  // ------------------------------------------------------------------ tool: translate
+
   register({
     id: 'translate',
-    order: 50,
     label: 'පරිවර්තනය',
     icon: ICON.globe,
+    order: 50,
     mount(box) {
       const langs = [
-        ['en', 'English'], ['ta', 'தமிழ்'], ['hi', 'हिन्दी'], ['ar', 'العربية'],
-        ['ja', '日本語'], ['ko', '한국어'], ['zh-CN', '中文'], ['ru', 'Русский'],
-        ['es', 'Español'], ['fr', 'Français'], ['de', 'Deutsch'], ['pt', 'Português'],
+        { code: 'en', label: 'English' },
+        { code: 'ta', label: 'தமிழ்' },
+        { code: 'hi', label: 'हिन्दी' },
+        { code: 'ru', label: 'Русский' },
+        { code: 'zh-CN', label: '中文' },
+        { code: 'ar', label: 'العربية' },
       ];
-
-      const sel = el('select', { class: 'rt-select', 'aria-label': 'භාෂාව තෝරන්න' });
-      langs.forEach((l) => sel.appendChild(el('option', { value: l[0] }, l[1])));
-
-      const g = el('div', { class: 'rt-group' });
-      g.appendChild(el('div', { class: 'rt-label' }, '<span>මෙම පිටුව පරිවර්තනය කරන්න</span>'));
-      g.appendChild(sel);
-      box.appendChild(g);
-
-      const go = el('button', { class: 'rt-btn rt-btn--primary', type: 'button' }, 'පරිවර්තනය කරන්න');
-      go.addEventListener('click', () => {
-        const url = 'https://translate.google.com/translate?sl=si&tl='
-          + encodeURIComponent(sel.value) + '&u=' + encodeURIComponent(location.href);
-        window.open(url, '_blank', 'noopener,noreferrer');
+      const seg = el('div', { class: 'rtk-seg' });
+      langs.forEach((l) => {
+        seg.appendChild(
+          el('button', {
+            class: 'rtk-chip',
+            type: 'button',
+            text: l.label,
+            onclick: () => {
+              const u =
+                'https://translate.google.com/translate?sl=si&tl=' +
+                encodeURIComponent(l.code) +
+                '&u=' +
+                encodeURIComponent(location.href);
+              window.open(u, '_blank', 'noopener,noreferrer');
+            },
+          })
+        );
       });
-      const row = el('div', { class: 'rt-row' });
-      row.appendChild(go);
-      box.appendChild(row);
-
-      box.appendChild(el('p', { class: 'rt-note' },
-        'මෙය Google Translate හි පිටු-පරිවර්තන සේවාව අලුත් කවුළුවක විවෘත කරයි.'));
+      box.appendChild(el('div', { class: 'rtk-group' }, [el('p', { class: 'rtk-label', text: 'භාෂාව තෝරන්න' }), seg]));
+      box.appendChild(el('p', { class: 'rtk-note', text: 'මෙය Google Translate හි පිටු-පරිවර්තන සේවාව අලුත් කවුළුවක විවෘත කරයි.' }));
     },
   });
 
-  /* ---------------- boot ---------------- */
-  function boot() {
-    apply();
-    if (!build()) return;
-    renderTabs();
-    initProgress();
-    if (ui.panel) ui.panel.hidden = true;
-    if (ui.scrim) ui.scrim.hidden = true;
-    emit('ready');
+  // ------------------------------------------------------------------ progress + position
+
+  let scrollHandler = null;
+  let keyHandler = null;
+
+  function bindScroll() {
+    const onScroll = rafThrottle(() => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      const pct = max > 0 ? clamp(window.scrollY / max, 0, 1) : 0;
+      if (ui.progress) ui.progress.style.width = (pct * 100).toFixed(2) + '%';
+      try {
+        if (pct > 0.02) localStorage.setItem(posKey(location.pathname), String(round(pct, 0.01)));
+      } catch (e) {}
+    });
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    onScroll();
+    scrollHandler = onScroll;
   }
 
-  window.ReaderTools = {
-    register: register,
-    get: function (k) { return k ? state[k] : Object.assign({}, state); },
-    set: set,
-    on: on,
-    open: open,
-    close: close,
-    isOpen: isOpen,
-    article: article,
-    registerVoiceEngine: function (id, engine) { engines[id] = engine; },
-    ICON: ICON,
-  };
+  function unbindScroll() {
+    if (!scrollHandler) return;
+    window.removeEventListener('scroll', scrollHandler);
+    window.removeEventListener('resize', scrollHandler);
+    scrollHandler = null;
+  }
+
+  function bindKeys() {
+    keyHandler = (e) => {
+      if (e.key === 'Escape' && isOpen) close();
+    };
+    document.addEventListener('keydown', keyHandler);
+  }
+
+  function unbindKeys() {
+    if (keyHandler) document.removeEventListener('keydown', keyHandler);
+    keyHandler = null;
+  }
+
+  // ------------------------------------------------------------------ boot
+
+  function teardown() {
+    if (typeof cleanupCurrent === 'function') {
+      try {
+        cleanupCurrent();
+      } catch (e) {}
+    }
+    cleanupCurrent = null;
+    activeTab = null;
+    isOpen = false;
+    unbindScroll();
+    unbindKeys();
+    try {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+    } catch (e) {}
+    if (ui.root && ui.root.parentNode) ui.root.parentNode.removeChild(ui.root);
+    ui.root = null;
+    $$('.rtk-speaking').forEach((n) => n.classList.remove('rtk-speaking'));
+  }
+
+  function boot() {
+    injectStyles();
+    article = findArticle();
+
+    if (!article) {
+      // ලිපි පිටුවක් නෙමෙයි — panel එක පෙන්නන්නේ නෑ, ඒත් සුරකින ලද පෙනුම යොදනවා.
+      applyState();
+      if (ui.root && ui.root.parentNode) ui.root.parentNode.removeChild(ui.root);
+      ui.root = null;
+      return;
+    }
+
+    buildUI();
+    applyState();
+    updateSub();
+    renderTabs();
+    bindScroll();
+    bindKeys();
+    emit('boot', { article: article });
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot, { once: true });
@@ -848,16 +1035,27 @@
     boot();
   }
 
-  /* Astro ClientRouter — page swap එකකින් පස්සේ නැවත සකසනවා */
-  document.addEventListener('astro:page-load', function () {
-    _article = null;
-    dimMarked = false;
-    cleanupCurrent = null;
-    boot();
-  });
+  // Astro ClientRouter (view transitions)
+  document.addEventListener('astro:before-swap', teardown);
+  document.addEventListener('astro:page-load', boot);
 
-  /* swap වීමට කලින් TTS නවත්වනවා (වෙනත් පිටුවක කතාව කියවීම වැළැක්වීමට) */
-  document.addEventListener('astro:before-swap', function () {
-    try { engines['web-speech'].stop(); } catch (e) {}
-  });
+  // ------------------------------------------------------------------ public api
+
+  window.ReaderTools = {
+    version: 2,
+    register: register,
+    registerVoiceEngine: registerVoiceEngine,
+    open: open,
+    close: close,
+    showTab: showTab,
+    set: set,
+    get state() {
+      return Object.assign({}, state);
+    },
+    get article() {
+      return article;
+    },
+    on: on,
+    boot: boot,
+  };
 })();
