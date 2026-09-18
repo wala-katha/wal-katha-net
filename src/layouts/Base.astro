@@ -1,6 +1,8 @@
 ---
 import AgeVerificationGate from "@/components/AgeVerificationGate.astro";
 import TwSizeIndicator from "@/components/TwSizeIndicator.astro";
+import ReaderToolsHead from "@/components/ReaderToolsHead.astro";
+import ReaderTools from "@/components/ReaderTools.astro";
 import config from "@/config/config.json";
 import theme from "@/config/theme.json";
 import { plainify } from "@/lib/utils/textConverter";
@@ -864,6 +866,13 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     </script>
 
     <ClientRouter fallback="swap" />
+
+    {/* Reader Tools — blocking head guard. Applies the saved reading
+        preferences (surface colour, font, size, line-height) to <html>
+        BEFORE first paint, exactly like the age-gate guard above. Without
+        it the panel's own script would apply them after paint and every
+        page load would flash the default dark surface for one frame. */}
+    <ReaderToolsHead />
   </head>
 
   <body class="bg-[#050505] text-[#f8fafc] min-h-screen flex flex-col antialiased selection:bg-emerald-500/30 selection:text-[#34d399] overflow-x-hidden" style="touch-action: pan-y; overscroll-behavior-x: none;">
@@ -874,5 +883,10 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
       <slot />
     </main>
     <Footer />
+    {/* Reader Tools — floating panel (TOC, typography, TTS, focus mode,
+        translate). Mounted last so it paints above page content. While
+        the age gate is pending the "body > *:not(#age-gate-overlay)"
+        rule blurs and disables it automatically, which is intended. */}
+    <ReaderTools />
   </body>
 </html>
