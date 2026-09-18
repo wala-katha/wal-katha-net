@@ -1,13 +1,14 @@
 ---
 import AgeVerificationGate from "@/components/AgeVerificationGate.astro";
 import TwSizeIndicator from "@/components/TwSizeIndicator.astro";
-import ReaderToolsHead from "@/components/ReaderToolsHead.astro";
-import ReaderTools from "@/components/ReaderTools.astro";
 import config from "@/config/config.json";
 import theme from "@/config/theme.json";
 import { plainify } from "@/lib/utils/textConverter";
 import Footer from "@/partials/Footer.astro";
 import Header from "@/partials/Header.astro";
+// + Reader Tools — reading panel (TOC, typography, TTS, focus mode, translate)
+import ReaderToolsHead from "@/components/ReaderToolsHead.astro";
+import ReaderTools from "@/components/ReaderTools.astro";
 import "@/styles/main.css";
 import { Font } from "astro:assets";
 import { ClientRouter } from "astro:transitions";
@@ -866,6 +867,14 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     </script>
 
     <ClientRouter fallback="swap" />
+
+    {/* + Reader Tools — blocking inline script that restores the saved
+        reading preferences (surface colour, font, size, line-height)
+        before first paint. Placed last in <head>, mirroring the age-gate
+        guard pattern above: without it the first frame renders with the
+        default dark surface and then repaints to the reader's chosen
+        paper/sepia surface, producing a visible flash on every
+        navigation. Reads localStorage only - no network, no blocking I/O. */}
     <ReaderToolsHead />
   </head>
 
@@ -877,6 +886,11 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
       <slot />
     </main>
     <Footer />
+
+    {/* + Reader Tools — floating reading panel (edge FAB + slide-in
+        drawer). Mounted last so it paints above Footer without needing a
+        stacking-context hack, and stays below #age-gate-overlay
+        (z-index 999999) so an unverified visitor cannot reach it. */}
     <ReaderTools />
   </body>
 </html>
