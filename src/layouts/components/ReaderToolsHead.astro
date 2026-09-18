@@ -1,30 +1,40 @@
 ---
-/**
- * ReaderToolsHead.astro
- * --------------------------------------------------------------------------
- * Base.astro හි </head> ට කලින් තියන්න.
- *
- * WHY: කියවීමේ සැකසුම් (පසුබිම, අකුරු size, line-height) localStorage
- * එකේ තියෙනවා. ඒවා reader-tools.js load වෙනකන් බලා apply කළොත්, පළමු
- * paint එකේදී default පෙනුම එක වර පේනවා (FOUC) — dark → කඩදාසි flash එකක්.
- * මේ blocking inline script එක paint වීමට කලින්ම <html> එකට attributes
- * දානවා, ඒ නිසා flash එකක් කිසිසේත් නෑ. Base.astro හි age-gate guard
- * script එකේම pattern එකයි මේක.
- */
+// ReaderToolsHead.astro
+// Base.astro <head> එකේ අන්තිමට. Blocking inline script.
+// සුරකින ලද පෙනුම first paint එකට කලින් <html> එකට යොදනවා.
+// reader-tools.css එක Astro bundle එකේ head එකට යන නිසා මේ attributes
+// වලට ගැළපෙන rules දැනටමත් parse වෙලා ඉවරයි - flash එකක් නෑ.
 ---
 
 <script is:inline>
   (function () {
+    var r = document.documentElement;
+    var p = {};
     try {
-      var p = JSON.parse(localStorage.getItem("wk:reader:v1") || "{}");
-      var r = document.documentElement;
-      r.setAttribute("data-rt-page", p.page || "dark");
-      r.setAttribute("data-rt-font", p.font || "sinhala");
-      r.setAttribute("data-rt-measure", p.measure || "normal");
-      r.setAttribute("data-rt-focus", p.focus ? "on" : "off");
-      if (p.fontScale) r.style.setProperty("--rt-font-scale", p.fontScale);
-      if (p.lineHeight) r.style.setProperty("--rt-line-height", p.lineHeight);
-      if (p.letter != null) r.style.setProperty("--rt-letter", p.letter + "em");
-    } catch (e) {}
+      var raw = localStorage.getItem("wk:reader:v1");
+      if (raw) p = JSON.parse(raw) || {};
+    } catch (e) {
+      p = {};
+    }
+
+    var PAGES = ["dark", "paper", "sepia", "contrast"];
+    var FONTS = ["sinhala", "serif", "system"];
+    var MEAS = ["narrow", "normal", "wide"];
+
+    function pick(v, list, fb) {
+      return list.indexOf(v) >= 0 ? v : fb;
+    }
+    function nclamp(v, lo, hi, fb) {
+      v = typeof v === "number" && isFinite(v) ? v : fb;
+      return Math.min(hi, Math.max(lo, v));
+    }
+
+    r.setAttribute("data-rt-page", pick(p.page, PAGES, "dark"));
+    r.setAttribute("data-rt-font", pick(p.font, FONTS, "sinhala"));
+    r.setAttribute("data-rt-measure", pick(p.measure, MEAS, "normal"));
+    r.setAttribute("data-rt-focus", p.focus ? "on" : "off");
+    r.style.setProperty("--rt-font-scale", String(nclamp(p.fontScale, 0.85, 1.6, 1)));
+    r.style.setProperty("--rt-line-height", String(nclamp(p.lineHeight, 1.4, 2.4, 1.85)));
+    r.style.setProperty("--rt-letter", nclamp(p.letter, -0.01, 0.06, 0) + "em");
   })();
 </script>
