@@ -1,67 +1,27 @@
 ---
-/**
- * ReaderTools.astro
- * Base.astro හි </body> ට කලින්, <Footer /> එකට පස්සේ.
- *
- * Markup එක server-rendered - JS එන තුරු බලා ඉන්න ඕන නෑ, CLS නෑ.
- * FAB එක පේන්නේ reader-tools.js එකෙන් data-rt-ready="1" දාපු පසුවයි
- * (ලිපියක් නැති පිටුවල පේන්නේ නෑ).
- *
- * data-allow-select: Base.astro හි content-protection script එක
- * selectstart/copy block කරනවා, නමුත් [data-allow-select] ඇතුළත skip
- * වෙනවා - panel එකේ slider/select controls වැඩ කරන්න ඕන ඒකයි.
- *
- * `hidden` attribute පාවිච්චි කරන්නේ නෑ: display:none transition
- * cancel කරන නිසා panel එක slide නොවී pop වුණා. visibility පාවිච්චි කරනවා.
- */
+// ReaderTools.astro
+// Base.astro හි </body> ට කලින්, <Footer /> එකට පස්සේ.
+//
+// වැදගත්: markup එක තවදුරටත් මෙතන ලියන්නේ නෑ.
+// reader-tools.js එකේ buildChrome() එක root එකේ innerHTML මකලා
+// progress bar, FAB, රතු stop-pill, scrim සහ panel ඔක්කොම නැවත හදනවා.
+// කලින් මෙතනත් markup තිබූ නිසා class/attribute නම් දෙපැත්තේ වෙනස් වී
+// stop බොත්තම නොපෙනීම වගේ ප්‍රශ්න ආවා. දැන් source එකක් පමණයි.
+//
+// සියල්ල position:fixed + data-rt-ready="0" නිසා CLS නෑ.
+// data-allow-select: Base.astro හි content-protection script එක
+// selectstart/copy block කරනවා, නමුත් [data-allow-select] ඇතුළත skip
+// වෙනවා - panel එකේ slider/select controls වැඩ කරන්න ඕන ඒකයි.
 import "./reader-tools.css";
 ---
 
-<div class="rt-root" data-rt-root data-rt-ready="0" data-open="0" data-allow-select>
-  <div class="rt-progress" aria-hidden="true"><i></i></div>
-
-  <button
-    class="rt-fab"
-    type="button"
-    aria-expanded="false"
-    aria-controls="rt-panel"
-    aria-label="කියවීමේ මෙවලම් විවෘත කරන්න"
-    title="කියවීමේ මෙවලම්"
-  >
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 0 1 2 2v13a1.6 1.6 0 0 0-1.6-1.6H4z" />
-      <path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v13a1.6 1.6 0 0 1 1.6-1.6H20z" />
-    </svg>
-    <span class="rt-fab-txt">මෙවලම්</span>
-  </button>
-
-  <div class="rt-scrim" data-rt-scrim></div>
-
-  <aside
-    id="rt-panel"
-    class="rt-panel"
-    role="dialog"
-    aria-modal="false"
-    aria-label="කියවීමේ මෙවලම්"
-    tabindex="-1"
-  >
-    <header class="rt-head">
-      <span class="rt-head-dot" aria-hidden="true"></span>
-      <span class="rt-head-txt">
-        <strong class="rt-title">කියවීමේ මෙවලම්</strong>
-        <span class="rt-sub" data-rt-sub></span>
-      </span>
-      <button class="rt-iconbtn rt-close" type="button" aria-label="වසන්න">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <path d="M18 6 6 18M6 6l12 12" />
-        </svg>
-      </button>
-    </header>
-
-    <nav class="rt-tabs" role="tablist" aria-label="කියවීමේ මෙවලම්"></nav>
-    <div class="rt-body" role="tabpanel"></div>
-  </aside>
-</div>
+<div
+  class="rt-root"
+  data-rt-root
+  data-rt-ready="0"
+  data-open="0"
+  data-allow-select
+></div>
 
 <script>
   import "./reader-tools.js";
