@@ -29,7 +29,10 @@
     'main article',
   ];
 
-  const DIM_CANDIDATES = ['header', 'footer', '#comments', '.related-posts'];
+  // 'header' මෙතනින් අයින් කළා. navigation එක මැකෙන එක වැරදියි — focus
+  // mode එකේදීත් header එක සම්පූර්ණයෙන් පෙනෙන්න ඕන.
+  const DIM_CANDIDATES = ['footer', '#comments', '.related-posts'];
+
   const HEADING_SEL = 'h2, h3, h4';
   const BLOCK_SEL = 'p, li, h2, h3, h4, blockquote';
   const MIN_ARTICLE_CHARS = 400;
@@ -144,7 +147,10 @@
       const l = LIMITS[k];
       s[k] = clamp(isNum(s[k]) ? s[k] : DEFAULTS[k], l[0], l[1]);
     });
-    s.focus = !!s.focus;
+    // Focus mode කිසි විටෙක storage එකෙන් ආපහු එන්නේ නෑ. හැම පිටුවක්ම
+    // focus off එකෙන් පටන් ගන්නවා — stale flag එකක් නිසා header/footer
+    // නැති වෙන ගැටලුව මෙයින් මුළුමනින්ම නවතිනවා.
+    s.focus = false;
     s.voiceURI = typeof s.voiceURI === 'string' ? s.voiceURI : '';
     return s;
   }
@@ -159,6 +165,13 @@
 
   const state = load();
 
+  // focus එක session-only. write එකකට කලින් ඒක ඉවත් කරනවා.
+  function persistable() {
+    const out = Object.assign({}, state);
+    delete out.focus;
+    return out;
+  }
+
   // Debounced writes. Slider drag එකේදී pointer move එකකට synchronous
   // localStorage write එකක් = main thread disk I/O.
   let storeTimer = null;
@@ -167,7 +180,7 @@
     storeTimer = setTimeout(() => {
       storeTimer = null;
       try {
-        localStorage.setItem(STORE_KEY, JSON.stringify(state));
+        localStorage.setItem(STORE_KEY, JSON.stringify(persistable()));
       } catch (e) {}
     }, STORE_DEBOUNCE_MS);
   }
@@ -177,7 +190,7 @@
       storeTimer = null;
     }
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      localStorage.setItem(STORE_KEY, JSON.stringify(persistable()));
     } catch (e) {}
   }
 
@@ -381,7 +394,8 @@
     }
 
     // ලිපියක් නැති පිටුවක (home / category / tag) focus mode කිසි විටෙක
-    // ක්‍රියාත්මක නොවේ — header/footer නොපෙනීමේ ගැටලුවට මූලික හේතුව මෙයයි.
+    // ක්‍රියාත්මක නොවේ. focus එක save නොවන නිසා post එකක් ඇතුළේත් ඒක
+    // user එක්ස් විසින් on කරන තුරු off තත්ත්වයේ තියෙනවා.
     const focusOn = !!state.focus && !!article;
     r.setAttribute('data-rt-focus', focusOn ? 'on' : 'off');
     if (focusOn) markDim();
@@ -970,6 +984,11 @@
         { value: 'on', label: 'ක්‍රියාත්මක' },
       ], (v) => set({ focus: v === 'on' }, { immediate: true })));
 
+      box.appendChild(el('p', {
+        class: 'rt-empty',
+        text: 'නාභි ආකාරය මේ පිටුවට පමණක් වලංගුයි. පිටුව මාරු කළ විට ස්වයංක්‍රීයව නිවෙනවා.',
+      }));
+
       let raf = null;
       let carry = 0;
       const btn = el('button', {
@@ -1193,6 +1212,8 @@
       ui.root.setAttribute('data-open', '0');
       ui.root.setAttribute('data-rt-ready', '0');
     }
+    // focus එක පිටුව මාරු වන විටම නිවෙනවා — ඊළඟ පිටුවට කාන්දු වෙන්නේ නෑ.
+    state.focus = false;
     clearDim();
     document.documentElement.setAttribute('data-rt-focus', 'off');
     document.documentElement.removeAttribute('data-rt-has-article');
@@ -1207,6 +1228,10 @@
     curPath = location.pathname;
     if (!buildChrome()) return;
     booted = true;
+
+    // හැම boot එකකටම focus off. Storage එකේ තිබුණු පැරණි flag එකක්
+    // නිසා post එකක් ඇතුළේ header/footer මැකෙන ගැටලුව මෙයින් නවතිනවා.
+    state.focus = false;
 
     article = findArticle();
     apply();
@@ -1246,7 +1271,7 @@
   // ---------------------------------------------------------------- api
 
   window.ReaderTools = {
-    version: 4,
+    version: 5,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
