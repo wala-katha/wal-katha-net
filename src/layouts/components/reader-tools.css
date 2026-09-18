@@ -1,6 +1,6 @@
 /* Reader Tools — panel chrome + reading surface themes.
    Selectors: .rt-* (panel) and [data-rt-*] (surface).
-   z-index: progress 9500, fab 9600, scrim 9700, panel 9800.
+   z-index: progress 9500, fab 9600, stop-fab 9650, scrim 9700, panel 9800.
    age-gate overlay = 999999, so the gate always wins. */
 
 :root {
@@ -22,6 +22,7 @@
 
   --rt-z-progress: 9500;
   --rt-z-fab: 9600;
+  --rt-z-stop: 9650;
   --rt-z-scrim: 9700;
   --rt-z-panel: 9800;
 }
@@ -174,9 +175,12 @@ html.age-gate-pending .rt-root {
   display: none !important;
 }
 
-/* nothing at all until reader-tools.js confirms a real article */
+/* nothing at all until reader-tools.js confirms a real article.
+   .rt-stop-fab is in this list too: without it the auto-scroll pill could
+   paint for one frame on the home page before boot() removed it. */
 .rt-root:not([data-rt-ready="1"]) .rt-progress,
 .rt-root:not([data-rt-ready="1"]) .rt-fab,
+.rt-root:not([data-rt-ready="1"]) .rt-stop-fab,
 .rt-root:not([data-rt-ready="1"]) .rt-scrim,
 .rt-root:not([data-rt-ready="1"]) .rt-panel {
   display: none !important;
@@ -207,6 +211,10 @@ html.age-gate-pending .rt-root {
 }
 
 /* -------------------------------------------------------------------- fab */
+/* Opaque background, NO backdrop-filter. A blurred backdrop on a fixed
+   element forces the browser to re-sample the whole page behind it on
+   every single scroll frame - that is what locked up the phone once
+   auto-scroll started moving the page 60 times a second. */
 
 .rt-fab {
   position: fixed;
@@ -222,9 +230,7 @@ html.age-gate-pending .rt-root {
   border: 1px solid rgba(1, 173, 159, 0.4);
   border-right: 0;
   border-radius: 14px 0 0 14px;
-  background: rgba(12, 13, 16, 0.94);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  background: #0e1013;
   color: var(--rt-accent);
   cursor: pointer;
   box-shadow: -6px 0 22px rgba(0, 0, 0, 0.45);
@@ -254,16 +260,22 @@ html.age-gate-pending .rt-root {
   transform: translateX(110%);
   pointer-events: none;
 }
+/* while auto-scroll runs the settings FAB steps aside so only the red
+   stop pill is on screen and the story stays readable */
+.rt-root[data-autoscroll="1"] .rt-fab {
+  opacity: 0;
+  pointer-events: none;
+}
 
 /* ------------------------------------------------------------------ scrim */
+/* backdrop-filter removed here as well - same repaint problem, and on
+   low-end Android it also delayed the panel close animation. */
 
 .rt-scrim {
   position: fixed;
   inset: 0;
   z-index: var(--rt-z-scrim);
   background: rgba(1, 2, 3, 0.55);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.28s ease, visibility 0s linear 0.28s;
@@ -490,6 +502,11 @@ html.age-gate-pending .rt-root {
   border-color: var(--rt-accent);
   color: #010203;
 }
+.rt-btn[data-danger="1"] {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #f87171;
+}
 .rt-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -688,15 +705,109 @@ html.rt-locked body {
   overflow: hidden !important;
 }
 
+/* -------------------------------------------------------------- stop pill */
+/* Auto-scroll stop button. It only exists while the scroll is running:
+   reader-tools.js closes the panel, sets data-autoscroll="1" on .rt-root
+   and starts its rAF loop, so the reader sees the story plus this one
+   small red pill and nothing else.
+
+   Kept deliberately cheap to paint - flat colour, no blur, no shadow
+   animation - because it sits on top of a page that is moving every
+   frame. `transform: translateZ(0)` puts it on its own layer so the
+   scrolling content underneath never repaints it. */
+
+.rt-stop-fab {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom));
+  z-index: var(--rt-z-stop);
+  display: none;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 9px 15px 9px 12px;
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  border-radius: 999px;
+  background: #b91c1c;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  transform: translateX(-50%) translateZ(0);
+  will-change: transform;
+}
+
+/* shown by the root flag, or by a data-on flag on the button itself -
+   whichever the script sets. `hidden` always wins. */
+.rt-root[data-autoscroll="1"] .rt-stop-fab,
+.rt-stop-fab[data-on="1"] {
+  display: inline-flex;
+}
+.rt-stop-fab[hidden] {
+  display: none !important;
+}
+
+.rt-stop-fab:hover,
+.rt-stop-fab:focus-visible {
+  background: #dc2626;
+  outline: none;
+}
+.rt-stop-fab:active {
+  transform: translateX(-50%) translateZ(0) scale(0.96);
+}
+.rt-stop-fab svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+/* the dot pulses, not the pill - animating opacity on a 10px child is
+   far cheaper than animating the whole button while the page scrolls */
+.rt-stop-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #fff;
+  animation: rt-stop-pulse 1.1s ease-in-out infinite;
+}
+@keyframes rt-stop-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* on phones the pill sits slightly higher so the browser chrome and the
+   comments FAB do not cover it */
+@media (max-width: 640px) {
+  .rt-stop-fab {
+    bottom: calc(4.75rem + env(safe-area-inset-bottom));
+    padding: 10px 16px 10px 13px;
+    font-size: 12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rt-panel,
   .rt-scrim,
   .rt-fab,
+  .rt-stop-fab,
   .rt-progress > i,
   [data-rt-dim],
   [data-rt-article],
   .custom-post-content {
     transition: none !important;
+  }
+  .rt-stop-dot {
+    animation: none !important;
   }
 }
 
