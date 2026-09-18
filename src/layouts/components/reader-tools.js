@@ -1,11 +1,21 @@
 // ==========================================================================
 // Reader Tools — logic only. Chrome + themes = reader-tools.css
 // --------------------------------------------------------------------------
-// මේ ෆයිල් එකේ slash-star block comment පාවිච්චි කරන්නේ නෑ (nested comment
-// නිසා build කැඩෙන ප්‍රශ්නය ආපහු එන්නේ නැති වෙන්නයි).
+// slash-star block comment පාවිච්චි කරන්නේ නෑ (nested comment නිසා build
+// කැඩෙන ප්‍රශ්නය ආපහු එන්නේ නැති වෙන්නයි).
 //
-// Panel markup එක මේ script එකම හදනවා. ReaderTools.astro එකේ
-// <div class="rt-root" data-rt-root></div> එකක් තිබුණත් නැතත් වැඩ කරනවා.
+// v7 හි ප්‍රධාන නිවැරදි කිරීම් තුනක්:
+//  1. රතු "නවත්වන්න" pill එකේ styles මේ ෆයිල් එකම inject කරනවා. එහෙම
+//     නැතිව CSS ෆයිල් එකේ නම (rt-stop-fab / rt-stopfab) වෙනස් වුණාම
+//     බොත්තම කිසිදා පෙනුණේ නෑ.
+//  2. auto-scroll දුවන වෙලාවේ <html> එකේ scroll-behavior එක බලෙන් auto
+//     කරනවා. smooth තිබෙන විට frame එකකට scrollTo() එකක් = browser එකට
+//     එකිනෙක මතට smooth animation 60ක් - ඒකයි Chrome ANR එකට හේතුව.
+//  3. අනුචලනය px/second වලින් (dt මත) - කලින් px/frame නිසා වේගය
+//     උපාංගයෙන් උපාංගයට වෙනස් වුණා.
+//
+// auto-scroll.js වගේ වෙනම ෆයිල් එකක් එකතු කර ඇත්නම් එය මකන්න -
+// rAF loop දෙකක් එකවර දුවනවා නම් උපාංගය ආපහු හිර වෙනවා.
 //
 // අලුත් tool එකක් (මේ ෆයිල් එක වෙනස් නොකර):
 //   ReaderTools.register({ id, label, icon, order, mount(box, ctx) {} });
@@ -41,7 +51,14 @@
   const POS_SAVE_MS = 1500;
   const STORE_DEBOUNCE_MS = 300;
   const MAX_CACHE_MS = 400;
+
+  // auto-scroll tuning
+  const AUTO_PPS = [14, 22, 32, 45, 62, 84, 110, 140, 175, 215];
+  const AUTO_ARM_MS = 420;
+  const AUTO_DRIFT = 120;
+  const AUTO_MAX_DT = 64;
   const STALL_FRAMES = 45;
+  const AUTO_STYLE_ID = 'wk-rt-auto-style';
 
   const DEFAULTS = {
     page: 'dark',
@@ -54,7 +71,7 @@
     rate: 1,
     pitch: 1,
     voiceURI: '',
-    scrollSpeed: 3,
+    scrollSpeed: 4,
   };
 
   const LIMITS = {
@@ -238,6 +255,43 @@
     close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   };
 
+  // ------------------------------------------------- injected auto-scroll css
+
+  // මේවා reader-tools.css එකේ තිබුණත් මෙතන ආපහු inject කරනවා. හේතුව:
+  // class නම වෙනස් වුණාම හෝ පරණ build එකක් cache වුණාම රතු බොත්තම
+  // නොපෙනී යනවා. inject වෙන style එක head එකේ අන්තිමට යන නිසා දිනනවා.
+  function ensureAutoStyle() {
+    if (!document.head || document.getElementById(AUTO_STYLE_ID)) return;
+    const css =
+      'html[data-rt-scrolling="1"]{scroll-behavior:auto !important;}' +
+      '.rt-root .rt-stopfab{display:none;position:fixed;left:50%;' +
+      'bottom:calc(1.25rem + env(safe-area-inset-bottom));' +
+      'transform:translateX(-50%) translateZ(0);z-index:2147480000;' +
+      'align-items:center;gap:8px;margin:0;padding:11px 17px 11px 13px;' +
+      'border:1px solid rgba(239,68,68,.65);border-radius:999px;' +
+      'background:#b91c1c;color:#fff;font-family:inherit;font-size:12px;' +
+      'font-weight:800;line-height:1;white-space:nowrap;cursor:pointer;' +
+      'box-shadow:0 10px 26px rgba(0,0,0,.55);' +
+      '-webkit-tap-highlight-color:transparent;will-change:transform;}' +
+      '.rt-root[data-scrolling="1"] .rt-stopfab,' +
+      '.rt-root[data-autoscroll="1"] .rt-stopfab{display:inline-flex !important;}' +
+      '.rt-root[data-scrolling="1"] .rt-fab,' +
+      '.rt-root[data-autoscroll="1"] .rt-fab{opacity:0 !important;' +
+      'pointer-events:none !important;}' +
+      '.rt-root .rt-stopfab:active{transform:translateX(-50%) translateZ(0) scale(.96);}' +
+      '.rt-root .rt-stopfab svg{display:block;width:15px;height:15px;flex:0 0 auto;}' +
+      '.rt-root .rt-stopfab i{width:9px;height:9px;flex:0 0 auto;border-radius:999px;' +
+      'background:#fff;animation:wk-rt-pulse 1.1s ease-in-out infinite;}' +
+      '@keyframes wk-rt-pulse{0%,100%{opacity:1}50%{opacity:.25}}' +
+      '@media (max-width:640px){.rt-root .rt-stopfab{' +
+      'bottom:calc(5rem + env(safe-area-inset-bottom));font-size:12.5px;}}' +
+      '@media (prefers-reduced-motion:reduce){.rt-root .rt-stopfab i{animation:none;}}';
+    const s = document.createElement('style');
+    s.id = AUTO_STYLE_ID;
+    s.textContent = css;
+    document.head.appendChild(s);
+  }
+
   // --------------------------------------------------------------- elements
 
   const ui = {
@@ -279,6 +333,7 @@
     root.setAttribute('data-open', '0');
     root.setAttribute('data-rt-ready', '0');
     root.removeAttribute('data-scrolling');
+    root.removeAttribute('data-autoscroll');
     // Base.astro එකේ copy-protection selectstart blocker එකෙන් බේරෙන්න
     root.setAttribute('data-allow-select', '');
 
@@ -292,6 +347,7 @@
       'aria-controls': 'rt-panel',
       'aria-expanded': 'false',
       'aria-label': 'කියවීමේ මෙවලම්',
+      title: 'කියවීමේ මෙවලම් (Alt+R)',
     }, [
       el('span', { class: 'rt-fab-ico', html: ICON.type, 'aria-hidden': 'true' }),
       el('span', { class: 'rt-fab-txt', text: 'මෙවලම්' }),
@@ -302,7 +358,8 @@
       class: 'rt-stopfab',
       type: 'button',
       'aria-label': 'ස්වයං-අනුචලනය නවත්වන්න',
-      html: ICON.pause + '<span>නවත්වන්න</span>',
+      title: 'නවත්වන්න',
+      html: '<i aria-hidden="true"></i>' + ICON.stop + '<span>නවත්වන්න</span>',
     });
 
     const scrim = el('div', { class: 'rt-scrim', 'data-rt-scrim': '', 'aria-hidden': 'true' });
@@ -429,58 +486,125 @@
 
   // Module මට්ටමේ තියෙන නිසා tab එක unmount වුණත් හෝ panel වැහුණත්
   // නවතින්නේ නෑ; නමුත් පිටුව මාරු වෙනවිට teardown එකෙන් නවතිනවා.
-  const auto = { raf: null, carry: 0, lastY: -1, stall: 0 };
+  const auto = {
+    raf: 0, last: 0, carry: 0, expect: -1, stall: 0, armed: false, armTimer: 0,
+  };
 
-  function autoStep() {
+  function autoPps() {
+    return AUTO_PPS[clamp(Math.round(state.scrollSpeed), 1, 10) - 1];
+  }
+
+  // smooth hijack එකෙන් බේරෙන්න. data-rt-scrolling එකෙන් scroll-behavior
+  // auto වුණත්, behavior:'instant' එකෙන් inline style/plugin එකකුත් පරදිනවා.
+  function setY(y) {
+    try {
+      window.scrollTo({ top: y, left: 0, behavior: 'instant' });
+    } catch (e) {
+      window.scrollTo(0, y);
+    }
+  }
+
+  function autoStep(ts) {
     if (!auto.raf) return;
+    auto.raf = requestAnimationFrame(autoStep);
 
-    auto.carry += state.scrollSpeed * 0.35;
-    const whole = Math.floor(auto.carry);
-    if (whole >= 1) {
-      auto.carry -= whole;
-      window.scrollTo(0, window.scrollY + whole);
+    if (!auto.last) {
+      auto.last = ts;
+      return;
+    }
+    let dt = ts - auto.last;
+    auto.last = ts;
+    if (dt <= 0) return;
+    // tab throttle එකකින් හෝ jank එකකින් පිම්මක් නොපනින්න
+    if (dt > AUTO_MAX_DT) dt = AUTO_MAX_DT;
 
-      // Stall guard: overflow:hidden (panel lock) වගේ තත්ත්වයක scroll
-      // නොවෙනවා. කලින් ඒක අනන්ත rAF loop එකක් වී browser එක හිර වුණා.
-      const y = window.scrollY;
-      if (Math.abs(y - auto.lastY) < 0.5) auto.stall++;
-      else auto.stall = 0;
-      auto.lastY = y;
+    const y = window.scrollY;
+
+    // පරිශීලකයා අතින් අනුචලනය කළා නම් (scrollbar drag ඇතුළුව) නවතිනවා
+    if (auto.armed && auto.expect >= 0 && Math.abs(y - auto.expect) > AUTO_DRIFT) {
+      stopAuto();
+      return;
+    }
+
+    const max = scrollMax();
+    if (max <= 4 || y >= max - 1) {
+      stopAuto();
+      return;
+    }
+
+    auto.carry += (autoPps() * dt) / 1000;
+    const step = Math.floor(auto.carry);
+    if (step < 1) return;
+    auto.carry -= step;
+
+    setY(Math.min(max, y + step));
+
+    const after = window.scrollY;
+    auto.expect = after;
+
+    // Stall guard: overflow:hidden (panel lock) වගේ තත්ත්වයක scroll
+    // නොවෙනවා. කලින් ඒක අනන්ත rAF loop එකක් වී browser එක හිර වුණා.
+    if (after <= y + 0.5) {
+      auto.stall++;
       if (auto.stall > STALL_FRAMES) {
         stopAuto();
         return;
       }
+    } else {
+      auto.stall = 0;
     }
-
-    if (window.scrollY >= scrollMax() - 2) {
-      stopAuto();
-      return;
-    }
-    auto.raf = requestAnimationFrame(autoStep);
   }
 
   function startAuto() {
     if (auto.raf || !article) return;
-    // panel එක වැහෙනවා: scroll lock සහ scrim blur දෙකම ඉවත් වෙනවා,
-    // කතාව කියවෙනවා, සහ ANR එකට හේතු වුණ full-screen repaint නවතිනවා.
+    if (scrollMax(true) <= 8) return;
+
+    // panel එක වැහෙනවා: scroll lock සහ scrim දෙකම ඉවත් වෙනවා, කතාව
+    // කියවෙනවා, සහ ANR එකට හේතු වුණ full-screen repaint නවතිනවා.
     close();
     document.documentElement.classList.remove('rt-locked');
-    if (ui.root) ui.root.setAttribute('data-scrolling', '1');
+    ensureAutoStyle();
+    document.documentElement.setAttribute('data-rt-scrolling', '1');
+    if (ui.root) {
+      ui.root.setAttribute('data-scrolling', '1');
+      ui.root.setAttribute('data-autoscroll', '1');
+    }
+
+    auto.last = 0;
     auto.carry = 0;
     auto.stall = 0;
-    auto.lastY = window.scrollY;
-    scrollMax(true);
+    auto.expect = -1;
+    auto.armed = false;
+    if (auto.armTimer) clearTimeout(auto.armTimer);
+    // ආරම්භ කළ tap එකේම touchend/click එකෙන් ආපහු නවතින්නේ නැති වෙන්න
+    auto.armTimer = setTimeout(() => {
+      auto.armTimer = 0;
+      auto.armed = true;
+    }, AUTO_ARM_MS);
+
     auto.raf = requestAnimationFrame(autoStep);
     emit('autoscroll', true);
   }
 
   function stopAuto() {
+    const was = !!auto.raf;
     if (auto.raf) cancelAnimationFrame(auto.raf);
-    auto.raf = null;
+    auto.raf = 0;
+    if (auto.armTimer) {
+      clearTimeout(auto.armTimer);
+      auto.armTimer = 0;
+    }
+    auto.armed = false;
+    auto.last = 0;
     auto.carry = 0;
     auto.stall = 0;
-    if (ui.root) ui.root.removeAttribute('data-scrolling');
-    emit('autoscroll', false);
+    auto.expect = -1;
+    document.documentElement.removeAttribute('data-rt-scrolling');
+    if (ui.root) {
+      ui.root.removeAttribute('data-scrolling');
+      ui.root.removeAttribute('data-autoscroll');
+    }
+    if (was) emit('autoscroll', false);
   }
 
   function toggleAuto() {
@@ -644,7 +768,7 @@
     ]);
   }
 
-  function slider(label, key, fmt) {
+  function slider(label, key, fmt, onLive) {
     const l = LIMITS[key];
     const out = el('span', { class: 'rt-val', text: fmt(state[key]) });
     const input = el('input', {
@@ -662,6 +786,7 @@
       const patch = {};
       patch[key] = v;
       set(patch);
+      if (typeof onLive === 'function') onLive(v);
     });
     input.addEventListener('change', saveNow);
     input.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
@@ -1010,7 +1135,7 @@
         }
       }
 
-      function stop() {
+      function stopVoice() {
         ttsStopHard();
         if (tts) tts.i = 0;
         label('කියවන්න');
@@ -1020,7 +1145,7 @@
 
       btnPlay.addEventListener('click', play);
       btnPause.addEventListener('click', pause);
-      btnStop.addEventListener('click', stop);
+      btnStop.addEventListener('click', stopVoice);
 
       box.appendChild(el('div', { class: 'rt-group' }, [
         el('p', { class: 'rt-label', text: 'හඬ' }),
@@ -1062,17 +1187,25 @@
         text: 'නාභි ආකාරය මේ පිටුවට පමණක් වලංගුයි. පිටුව මාරු කළ විට ස්වයංක්‍රීයව නිවෙනවා.',
       }));
 
-      box.appendChild(slider('අනුචලන වේගය', 'scrollSpeed', (v) => String(v)));
+      // වේගය දුවන අතරතුරත් වෙනස් කළ හැක — autoStep එක state එකෙන්
+      // හැම frame එකකම වේගය කියවනවා.
+      box.appendChild(slider(
+        'අනුචලන වේගය',
+        'scrollSpeed',
+        (v) => String(Math.round(v)) + ' · ' + AUTO_PPS[clamp(Math.round(v), 1, 10) - 1] + 'px/s'
+      ));
 
       const btn = el('button', { class: 'rt-btn', type: 'button' });
 
       function paint() {
         const running = !!auto.raf;
         btn.innerHTML =
-          (running ? ICON.pause : ICON.down) +
+          (running ? ICON.stop : ICON.down) +
           '<span>' + (running ? 'අනුචලනය නවත්වන්න' : 'ස්වයං-අනුචලනය අරඹන්න') + '</span>';
-        if (running) btn.setAttribute('data-primary', '1');
-        else btn.removeAttribute('data-primary');
+        if (running) btn.setAttribute('data-danger', '1');
+        else btn.setAttribute('data-primary', '1');
+        if (running) btn.removeAttribute('data-primary');
+        else btn.removeAttribute('data-danger');
       }
       paint();
       const offAuto = on('autoscroll', paint);
@@ -1081,7 +1214,7 @@
       box.appendChild(btn);
       box.appendChild(el('p', {
         class: 'rt-empty',
-        text: 'අරඹන විට මේ මෙනුව ස්වයංක්‍රීයව වැසෙනවා. නවත්වන්න පහළ මැදින් පෙනෙන රතු බොත්තම ඔබන්න, නැතිනම් තිරය අතින් අනුචලනය කරන්න.',
+        text: 'අරඹන විට මේ මෙනුව ස්වයංක්‍රීයව වැසෙනවා. නවත්වන්න පහළ මැදින් පෙනෙන රතු බොත්තම ඔබන්න, නැතිනම් තිරය අතින් අනුචලනය කරන්න. පිටුව අවසානයේ තනිවම නවතිනවා.',
       }));
 
       let saved = 0;
@@ -1204,9 +1337,17 @@
 
   function bindGlobal() {
     listen(ui.fab, 'click', toggle);
-    listen(ui.stop, 'click', stopAuto);
     listen(ui.close, 'click', close);
     listen(ui.scrim, 'click', close);
+
+    // රතු බොත්තම: stopPropagation නිසා පහළ abortAuto/document handler
+    // වලට මේ click එක යන්නේ නෑ.
+    listen(ui.stop, 'click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      stopAuto();
+    });
+
     listen(window, 'scroll', onScroll, { passive: true });
     listen(window, 'resize', () => {
       scrollMax(true);
@@ -1215,13 +1356,15 @@
 
     // Manual input එකකින් auto-scroll නවතිනවා. panel/pill ඇතුළේ සිදු වන
     // event නොසලකනවා (නැතිනම් නවත්වන බොත්තමම ආපහු start කරනවා).
+    // armed වෙන්නේ 420ms පසුවයි — ආරම්භ කළ tap එකෙන්ම නොනවතින්න.
     const abortAuto = (ev) => {
-      if (!auto.raf) return;
+      if (!auto.raf || !auto.armed) return;
       if (ui.root && ev && ev.target && ev.target.nodeType && ui.root.contains(ev.target)) return;
       stopAuto();
     };
     listen(window, 'wheel', abortAuto, { passive: true });
     listen(window, 'touchmove', abortAuto, { passive: true });
+    listen(window, 'mousedown', abortAuto, true);
 
     listen(document, 'keydown', (e) => {
       if (e.key === 'Escape') {
@@ -1237,7 +1380,14 @@
         toggle();
         return;
       }
-      if (auto.raf && !e.altKey && !e.ctrlKey && !e.metaKey) stopAuto();
+      // අනුචලන යතුරු පමණක් auto-scroll නවත්වනවා
+      if (auto.raf && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        const k = e.key;
+        if (k === ' ' || k === 'Spacebar' || k === 'ArrowUp' || k === 'ArrowDown' ||
+            k === 'PageUp' || k === 'PageDown' || k === 'Home' || k === 'End') {
+          stopAuto();
+        }
+      }
       trap(e);
     });
 
@@ -1280,11 +1430,13 @@
       ui.root.setAttribute('data-open', '0');
       ui.root.setAttribute('data-rt-ready', '0');
       ui.root.removeAttribute('data-scrolling');
+      ui.root.removeAttribute('data-autoscroll');
     }
     state.focus = false;
     clearDim();
     document.documentElement.setAttribute('data-rt-focus', 'off');
     document.documentElement.removeAttribute('data-rt-has-article');
+    document.documentElement.removeAttribute('data-rt-scrolling');
     Object.keys(ui).forEach((k) => { ui[k] = null; });
     article = null;
     booted = false;
@@ -1297,6 +1449,7 @@
     if (!buildChrome()) return;
     booted = true;
 
+    ensureAutoStyle();
     state.focus = false;
     maxCache = -1;
 
@@ -1333,7 +1486,7 @@
   // ---------------------------------------------------------------- api
 
   window.ReaderTools = {
-    version: 6,
+    version: 7,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
@@ -1346,6 +1499,7 @@
     teardown: teardown,
     startAutoScroll: startAuto,
     stopAutoScroll: stopAuto,
+    toggleAutoScroll: toggleAuto,
     get scrolling() { return !!auto.raf; },
     get state() { return Object.assign({}, state); },
     get article() { return article; },
