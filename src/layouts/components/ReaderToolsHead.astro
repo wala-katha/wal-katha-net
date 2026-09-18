@@ -4,14 +4,20 @@
 // සුරකින ලද පෙනුම first paint එකට කලින් <html> එකට යොදනවා.
 // reader-tools.css එක Astro bundle එකේ head එකට යන නිසා මේ attributes
 // වලට ගැළපෙන rules දැනටමත් parse වෙලා ඉවරයි - flash එකක් නෑ.
+//
+// වැදගත්: focus mode එක මෙතනින් කිසි විටෙක "on" ලෙස paint කරන්නේ නෑ.
+// පැරණි save එකක තිබුණු focus:true flag එකක් නිසා header/footer මැකී
+// පේළිය කැඩුණු බවක් පෙනුණා - ඒ නිසා ඒක load එකේදීම storage එකෙන්
+// ඉවත් කරනවා.
 ---
 
 <script is:inline>
   (function () {
     var r = document.documentElement;
     var p = {};
+    var raw = null;
     try {
-      var raw = localStorage.getItem("wk:reader:v1");
+      raw = localStorage.getItem("wk:reader:v1");
       if (raw) p = JSON.parse(raw) || {};
     } catch (e) {
       p = {};
@@ -32,9 +38,28 @@
     r.setAttribute("data-rt-page", pick(p.page, PAGES, "dark"));
     r.setAttribute("data-rt-font", pick(p.font, FONTS, "sinhala"));
     r.setAttribute("data-rt-measure", pick(p.measure, MEAS, "normal"));
-    r.setAttribute("data-rt-focus", p.focus ? "on" : "off");
     r.style.setProperty("--rt-font-scale", String(nclamp(p.fontScale, 0.85, 1.6, 1)));
     r.style.setProperty("--rt-line-height", String(nclamp(p.lineHeight, 1.4, 2.4, 1.85)));
     r.style.setProperty("--rt-letter", nclamp(p.letter, -0.01, 0.06, 0) + "em");
+
+    // focus mode එක හැම පිටුවක්ම "off" එකෙන් පටන් ගන්නවා.
+    // has-article එකත් reader-tools.js විසින්ම පමණක් තියෙන්න ඕන.
+    r.setAttribute("data-rt-focus", "off");
+    r.removeAttribute("data-rt-has-article");
+
+    // පැරණි save එකේ focus flag එක තිබුණොත් දැන්ම මකනවා (එක් වාරයක්).
+    try {
+      if (p && Object.prototype.hasOwnProperty.call(p, "focus")) {
+        delete p.focus;
+        localStorage.setItem("wk:reader:v1", JSON.stringify(p));
+      }
+    } catch (e) {}
+
+    // Astro ClientRouter: swap එකේදී <html> attributes රැඳෙන නිසා
+    // අලුත් පිටුවකට focus="on" එකක් කාන්දු වෙන්න පුළුවන්. මෙයින් නවතිනවා.
+    document.addEventListener("astro:after-swap", function () {
+      document.documentElement.setAttribute("data-rt-focus", "off");
+      document.documentElement.removeAttribute("data-rt-has-article");
+    });
   })();
 </script>
