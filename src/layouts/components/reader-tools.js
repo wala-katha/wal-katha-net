@@ -29,8 +29,8 @@
     'main article',
   ];
 
-  // 'header' මෙතනින් අයින් කළා. navigation එක මැකෙන එක වැරදියි — focus
-  // mode එකේදීත් header එක සම්පූර්ණයෙන් පෙනෙන්න ඕන.
+  // 'header' මෙතන නෑ. navigation එක මැකෙන එක වැරදියි — focus mode
+  // එකේදීත් header එක සම්පූර්ණයෙන් පෙනෙන්න ඕන.
   const DIM_CANDIDATES = ['footer', '#comments', '.related-posts'];
 
   const HEADING_SEL = 'h2, h3, h4';
@@ -40,6 +40,8 @@
   const TTS_CHUNK = 170;
   const POS_SAVE_MS = 1500;
   const STORE_DEBOUNCE_MS = 300;
+  const MAX_CACHE_MS = 400;
+  const STALL_FRAMES = 45;
 
   const DEFAULTS = {
     page: 'dark',
@@ -105,8 +107,7 @@
     return n;
   }
 
-  // frame එකකට rAF එකයි. scroll consumer හැමෝම එකම handler එකක් බෙදාගන්නවා;
-  // navigation එකකට එකක් බැඳුණු නිසා තමයි කලින් tab එක හිර වුණේ.
+  // frame එකකට rAF එකයි. scroll consumer හැමෝම එකම handler එකක් බෙදාගන්නවා.
   function rafOnce(fn) {
     let queued = false;
     return function () {
@@ -119,8 +120,20 @@
     };
   }
 
-  // Tracked listeners: එකතු කරන හැම එකක්ම මෙතනින් යනවා, ඒ නිසා teardown
-  // එකේදී එකක්වත් ඉතුරු වෙන්නේ නෑ.
+  // scrollHeight කියවීම = forced layout. frame එකකට කියවපු එක ANR එකට
+  // දායක වුණා; 400ms cache එකකින් ඒක නවතිනවා.
+  let maxCache = -1;
+  let maxCacheAt = 0;
+  function scrollMax(force) {
+    const now = Date.now();
+    if (force || maxCache < 0 || now - maxCacheAt > MAX_CACHE_MS) {
+      maxCacheAt = now;
+      maxCache = document.documentElement.scrollHeight - window.innerHeight;
+    }
+    return maxCache;
+  }
+
+  // Tracked listeners: teardown එකේදී එකක්වත් ඉතුරු වෙන්නේ නෑ.
   const bound = [];
   function listen(target, type, fn, opts) {
     if (!target) return;
@@ -147,9 +160,7 @@
       const l = LIMITS[k];
       s[k] = clamp(isNum(s[k]) ? s[k] : DEFAULTS[k], l[0], l[1]);
     });
-    // Focus mode කිසි විටෙක storage එකෙන් ආපහු එන්නේ නෑ. හැම පිටුවක්ම
-    // focus off එකෙන් පටන් ගන්නවා — stale flag එකක් නිසා header/footer
-    // නැති වෙන ගැටලුව මෙයින් මුළුමනින්ම නවතිනවා.
+    // Focus mode කිසි විටෙක storage එකෙන් ආපහු එන්නේ නෑ.
     s.focus = false;
     s.voiceURI = typeof s.voiceURI === 'string' ? s.voiceURI : '';
     return s;
@@ -165,15 +176,12 @@
 
   const state = load();
 
-  // focus එක session-only. write එකකට කලින් ඒක ඉවත් කරනවා.
   function persistable() {
     const out = Object.assign({}, state);
     delete out.focus;
     return out;
   }
 
-  // Debounced writes. Slider drag එකේදී pointer move එකකට synchronous
-  // localStorage write එකක් = main thread disk I/O.
   let storeTimer = null;
   function save() {
     if (storeTimer) clearTimeout(storeTimer);
@@ -233,7 +241,7 @@
   // --------------------------------------------------------------- elements
 
   const ui = {
-    root: null, bar: null, fab: null, scrim: null, panel: null,
+    root: null, bar: null, fab: null, stop: null, scrim: null, panel: null,
     tabs: null, body: null, sub: null, close: null,
   };
 
@@ -254,7 +262,6 @@
       document.body.appendChild(r);
       return r;
     }
-    // duplicate root (Astro markup + JS) එකක් නොතිබෙන බව තහවුරු කරනවා
     for (let i = 1; i < found.length; i++) {
       try { found[i].remove(); } catch (e) {}
     }
@@ -268,10 +275,10 @@
     if (!document.body) return false;
     const root = ensureRoot();
 
-    // හැම boot එකකටම fresh rebuild -> stale node හෝ duplicate නෑ.
     root.textContent = '';
     root.setAttribute('data-open', '0');
     root.setAttribute('data-rt-ready', '0');
+    root.removeAttribute('data-scrolling');
     // Base.astro එකේ copy-protection selectstart blocker එකෙන් බේරෙන්න
     root.setAttribute('data-allow-select', '');
 
@@ -289,6 +296,14 @@
       el('span', { class: 'rt-fab-ico', html: ICON.type, 'aria-hidden': 'true' }),
       el('span', { class: 'rt-fab-txt', text: 'මෙවලම්' }),
     ]);
+
+    // auto-scroll දුවන වෙලාවේ පමණක් පෙනෙන කුඩා රතු නවත්වන බොත්තම.
+    const stopFab = el('button', {
+      class: 'rt-stopfab',
+      type: 'button',
+      'aria-label': 'ස්වයං-අනුචලනය නවත්වන්න',
+      html: ICON.pause + '<span>නවත්වන්න</span>',
+    });
 
     const scrim = el('div', { class: 'rt-scrim', 'data-rt-scrim': '', 'aria-hidden': 'true' });
 
@@ -322,12 +337,14 @@
 
     root.appendChild(progress);
     root.appendChild(fab);
+    root.appendChild(stopFab);
     root.appendChild(scrim);
     root.appendChild(panel);
 
     ui.root = root;
     ui.bar = bar;
     ui.fab = fab;
+    ui.stop = stopFab;
     ui.scrim = scrim;
     ui.panel = panel;
     ui.tabs = tabs;
@@ -349,8 +366,6 @@
     return null;
   }
 
-  // Panel එක <aside> එකක්; blanket `aside` selector එකක් panel එකම dim කළා.
-  // ඒ නිසා explicit list + containment guard.
   function markDim() {
     DIM_CANDIDATES.forEach((sel) => {
       $$(sel).forEach((n) => {
@@ -393,13 +408,13 @@
       r.removeAttribute('data-rt-has-article');
     }
 
-    // ලිපියක් නැති පිටුවක (home / category / tag) focus mode කිසි විටෙක
-    // ක්‍රියාත්මක නොවේ. focus එක save නොවන නිසා post එකක් ඇතුළේත් ඒක
-    // user එක්ස් විසින් on කරන තුරු off තත්ත්වයේ තියෙනවා.
     const focusOn = !!state.focus && !!article;
     r.setAttribute('data-rt-focus', focusOn ? 'on' : 'off');
     if (focusOn) markDim();
     else clearDim();
+
+    // font/line-height වෙනස් වුණාම document උස වෙනස් වෙනවා.
+    scrollMax(true);
   }
 
   function set(patch, opts) {
@@ -408,6 +423,69 @@
     if (opts && opts.immediate) saveNow();
     else save();
     emit('change', state);
+  }
+
+  // -------------------------------------------------------- auto scroll
+
+  // Module මට්ටමේ තියෙන නිසා tab එක unmount වුණත් හෝ panel වැහුණත්
+  // නවතින්නේ නෑ; නමුත් පිටුව මාරු වෙනවිට teardown එකෙන් නවතිනවා.
+  const auto = { raf: null, carry: 0, lastY: -1, stall: 0 };
+
+  function autoStep() {
+    if (!auto.raf) return;
+
+    auto.carry += state.scrollSpeed * 0.35;
+    const whole = Math.floor(auto.carry);
+    if (whole >= 1) {
+      auto.carry -= whole;
+      window.scrollTo(0, window.scrollY + whole);
+
+      // Stall guard: overflow:hidden (panel lock) වගේ තත්ත්වයක scroll
+      // නොවෙනවා. කලින් ඒක අනන්ත rAF loop එකක් වී browser එක හිර වුණා.
+      const y = window.scrollY;
+      if (Math.abs(y - auto.lastY) < 0.5) auto.stall++;
+      else auto.stall = 0;
+      auto.lastY = y;
+      if (auto.stall > STALL_FRAMES) {
+        stopAuto();
+        return;
+      }
+    }
+
+    if (window.scrollY >= scrollMax() - 2) {
+      stopAuto();
+      return;
+    }
+    auto.raf = requestAnimationFrame(autoStep);
+  }
+
+  function startAuto() {
+    if (auto.raf || !article) return;
+    // panel එක වැහෙනවා: scroll lock සහ scrim blur දෙකම ඉවත් වෙනවා,
+    // කතාව කියවෙනවා, සහ ANR එකට හේතු වුණ full-screen repaint නවතිනවා.
+    close();
+    document.documentElement.classList.remove('rt-locked');
+    if (ui.root) ui.root.setAttribute('data-scrolling', '1');
+    auto.carry = 0;
+    auto.stall = 0;
+    auto.lastY = window.scrollY;
+    scrollMax(true);
+    auto.raf = requestAnimationFrame(autoStep);
+    emit('autoscroll', true);
+  }
+
+  function stopAuto() {
+    if (auto.raf) cancelAnimationFrame(auto.raf);
+    auto.raf = null;
+    auto.carry = 0;
+    auto.stall = 0;
+    if (ui.root) ui.root.removeAttribute('data-scrolling');
+    emit('autoscroll', false);
+  }
+
+  function toggleAuto() {
+    if (auto.raf) stopAuto();
+    else startAuto();
   }
 
   // ------------------------------------------------------------ open/close
@@ -442,6 +520,8 @@
   function open() {
     if (!ui.root || isOpen || !article) return;
     if (document.documentElement.classList.contains('age-gate-pending')) return;
+    // panel එක විවෘත වෙනවිට scroll lock යොදන නිසා auto-scroll නවත්වනවා.
+    stopAuto();
     isOpen = true;
     lastFocus = document.activeElement;
     ui.root.setAttribute('data-open', '1');
@@ -584,7 +664,6 @@
       set(patch);
     });
     input.addEventListener('change', saveNow);
-    // touch drag එක page scroll එකට යන්නේ නැති බව තහවුරු කරනවා
     input.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
     return el('div', { class: 'rt-group' }, [
       el('p', { class: 'rt-label', text: label }),
@@ -618,7 +697,6 @@
         ]),
       ]));
 
-      // per-frame querySelector එකක් වෙනුවට cache
       pctEl = $('[data-rt-pct]', box);
       if (pctEl) pctEl.textContent = Math.round(lastPct * 100) + '%';
 
@@ -648,6 +726,7 @@
           text: (h.textContent || '').trim(),
           onclick: (ev) => {
             ev.preventDefault();
+            stopAuto();
             h.scrollIntoView({ behavior: behavior(), block: 'start' });
             if (isMobile()) close();
           },
@@ -658,7 +737,6 @@
       group.appendChild(list);
       box.appendChild(group);
 
-      // තමන්ගේ scroll listener එකක් නෑ — shared handler එක මේක call කරනවා.
       tocSync = () => {
         let cur = null;
         for (let i = 0; i < pairs.length; i++) {
@@ -732,8 +810,6 @@
     if (id && engine && typeof engine.speak === 'function') engines[id] = engine;
   }
 
-  // Chrome එක තනි utterance එකක් ~15s ට වැඩි වුණාම කපනවා, ඒ නිසා දිග
-  // ඡේද මැදින් නැවතුණා. වාක්‍ය මායිම්වලින් කඩනවා.
   function chunk(text) {
     const out = [];
     let rest = (text || '').replace(/\s+/g, ' ').trim();
@@ -845,8 +921,6 @@
       }
 
       fillVoices();
-      // Chrome list එක async විදිහට පුරවනවා; event එක එකකට වඩා වාරයක්
-      // වෙඩි වෙන්න පුළුවන් නිසා fillVoices idempotent.
       synth.addEventListener('voiceschanged', fillVoices);
       const poll = setTimeout(() => { if (!voicesFilled) fillVoices(); }, 400);
 
@@ -919,7 +993,6 @@
         note.removeAttribute('data-warn');
         note.textContent = 'කියවනවා...';
         label('කියවනවා');
-        // Safari එක cancel() එකම tick එකේ speak() එකක් අත් හරිනවා.
         try { synth.cancel(); } catch (e) {}
         tts.kick = setTimeout(() => {
           if (!tts) return;
@@ -989,56 +1062,27 @@
         text: 'නාභි ආකාරය මේ පිටුවට පමණක් වලංගුයි. පිටුව මාරු කළ විට ස්වයංක්‍රීයව නිවෙනවා.',
       }));
 
-      let raf = null;
-      let carry = 0;
-      const btn = el('button', {
-        class: 'rt-btn', type: 'button',
-        html: ICON.down + '<span>ස්වයං-අනුචලනය</span>',
-      });
-
-      function stopScroll() {
-        if (raf) cancelAnimationFrame(raf);
-        raf = null;
-        btn.innerHTML = ICON.down + '<span>ස්වයං-අනුචලනය</span>';
-        btn.removeAttribute('data-primary');
-      }
-
-      function step() {
-        carry += state.scrollSpeed * 0.35;
-        const whole = Math.floor(carry);
-        if (whole >= 1) {
-          carry -= whole;
-          window.scrollBy(0, whole);
-        }
-        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
-          stopScroll();
-          return;
-        }
-        raf = requestAnimationFrame(step);
-      }
-
-      btn.addEventListener('click', () => {
-        if (raf) { stopScroll(); return; }
-        carry = 0;
-        btn.innerHTML = ICON.pause + '<span>අනුචලනය නවත්වන්න</span>';
-        btn.setAttribute('data-primary', '1');
-        raf = requestAnimationFrame(step);
-      });
-
-      // Manual input එකකින් නවතිනවා. නමුත් panel එක ඇතුළේ සිදු වන
-      // touch/wheel එකකින් නවතුනොත් ඒ click එකම ආපහු start කරනවා —
-      // ඒ නිසා root එක ඇතුළේ event නොසලකනවා.
-      const abort = (ev) => {
-        if (!raf) return;
-        if (ui.root && ev && ev.target && ui.root.contains(ev.target)) return;
-        stopScroll();
-      };
-      ['wheel', 'touchstart', 'keydown'].forEach((t) =>
-        window.addEventListener(t, abort, { passive: true })
-      );
-
       box.appendChild(slider('අනුචලන වේගය', 'scrollSpeed', (v) => String(v)));
+
+      const btn = el('button', { class: 'rt-btn', type: 'button' });
+
+      function paint() {
+        const running = !!auto.raf;
+        btn.innerHTML =
+          (running ? ICON.pause : ICON.down) +
+          '<span>' + (running ? 'අනුචලනය නවත්වන්න' : 'ස්වයං-අනුචලනය අරඹන්න') + '</span>';
+        if (running) btn.setAttribute('data-primary', '1');
+        else btn.removeAttribute('data-primary');
+      }
+      paint();
+      const offAuto = on('autoscroll', paint);
+      btn.addEventListener('click', toggleAuto);
+
       box.appendChild(btn);
+      box.appendChild(el('p', {
+        class: 'rt-empty',
+        text: 'අරඹන විට මේ මෙනුව ස්වයංක්‍රීයව වැසෙනවා. නවත්වන්න පහළ මැදින් පෙනෙන රතු බොත්තම ඔබන්න, නැතිනම් තිරය අතින් අනුචලනය කරන්න.',
+      }));
 
       let saved = 0;
       try {
@@ -1050,8 +1094,8 @@
           type: 'button',
           html: ICON.up + '<span>කලින් නැවතුණ තැනට (' + Math.round(saved * 100) + '%)</span>',
           onclick: () => {
-            const max = document.documentElement.scrollHeight - window.innerHeight;
-            window.scrollTo({ top: max * saved, behavior: behavior() });
+            stopAuto();
+            window.scrollTo({ top: scrollMax(true) * saved, behavior: behavior() });
             if (isMobile()) close();
           },
         }));
@@ -1060,20 +1104,23 @@
       box.appendChild(el('div', { class: 'rt-row' }, [
         el('button', {
           class: 'rt-btn', type: 'button', html: ICON.up + '<span>මුලට</span>',
-          onclick: () => window.scrollTo({ top: 0, behavior: behavior() }),
+          onclick: () => {
+            stopAuto();
+            window.scrollTo({ top: 0, behavior: behavior() });
+          },
         }),
         el('button', {
           class: 'rt-btn', type: 'button', html: ICON.down + '<span>අන්තිමට</span>',
-          onclick: () => window.scrollTo({
-            top: document.documentElement.scrollHeight, behavior: behavior(),
-          }),
+          onclick: () => {
+            stopAuto();
+            window.scrollTo({ top: scrollMax(true), behavior: behavior() });
+          },
         }),
       ]));
 
-      return () => {
-        stopScroll();
-        ['wheel', 'touchstart', 'keydown'].forEach((t) => window.removeEventListener(t, abort));
-      };
+      // cleanup එකෙන් auto-scroll නවත්වන්නේ නෑ — panel එක වැහුණත්
+      // දිගටම යන්න ඕන. teardown එකෙන් පමණක් නවතිනවා.
+      return () => { offAuto(); };
     },
   });
 
@@ -1122,21 +1169,17 @@
   let lastPct = 0;
 
   const onScroll = rafOnce(() => {
-    const max = document.documentElement.scrollHeight - window.innerHeight;
+    const max = scrollMax();
     const pct = max > 4 ? clamp(window.scrollY / max, 0, 1) : 0;
     lastPct = pct;
 
-    // width නෙවෙයි transform: compositor එකේ රැඳෙනවා, frame එකකට layout නෑ.
     if (ui.bar) ui.bar.style.transform = 'scaleX(' + pct.toFixed(4) + ')';
 
-    // panel එක වැහුණු විට DOM වැඩක් නෑ.
     if (isOpen) {
       if (pctEl) pctEl.textContent = Math.round(pct * 100) + '%';
       if (tocSync) tocSync();
     }
 
-    // localStorage = synchronous disk I/O. frame එකකට ලියපු එක තමයි
-    // scroll freeze එකේ ප්‍රධාන හේතුව; 1.5s එකකට එකක් ඇති.
     const now = Date.now();
     if (pct > 0.02 && now - lastSave > POS_SAVE_MS) {
       lastSave = now;
@@ -1161,14 +1204,32 @@
 
   function bindGlobal() {
     listen(ui.fab, 'click', toggle);
+    listen(ui.stop, 'click', stopAuto);
     listen(ui.close, 'click', close);
     listen(ui.scrim, 'click', close);
     listen(window, 'scroll', onScroll, { passive: true });
-    listen(window, 'resize', onScroll, { passive: true });
+    listen(window, 'resize', () => {
+      scrollMax(true);
+      onScroll();
+    }, { passive: true });
+
+    // Manual input එකකින් auto-scroll නවතිනවා. panel/pill ඇතුළේ සිදු වන
+    // event නොසලකනවා (නැතිනම් නවත්වන බොත්තමම ආපහු start කරනවා).
+    const abortAuto = (ev) => {
+      if (!auto.raf) return;
+      if (ui.root && ev && ev.target && ev.target.nodeType && ui.root.contains(ev.target)) return;
+      stopAuto();
+    };
+    listen(window, 'wheel', abortAuto, { passive: true });
+    listen(window, 'touchmove', abortAuto, { passive: true });
+
     listen(document, 'keydown', (e) => {
-      if (e.key === 'Escape' && isOpen) {
-        e.stopPropagation();
-        close();
+      if (e.key === 'Escape') {
+        if (auto.raf) stopAuto();
+        if (isOpen) {
+          e.stopPropagation();
+          close();
+        }
         return;
       }
       if (e.altKey && (e.key === 'r' || e.key === 'R')) {
@@ -1176,11 +1237,17 @@
         toggle();
         return;
       }
+      if (auto.raf && !e.altKey && !e.ctrlKey && !e.metaKey) stopAuto();
       trap(e);
     });
-    listen(window, 'pagehide', flushPos);
+
+    listen(window, 'pagehide', () => {
+      stopAuto();
+      flushPos();
+    });
     listen(document, 'visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
+        stopAuto();
         flushPos();
         if (window.speechSynthesis && tts && tts.playing && !window.speechSynthesis.paused) {
           try { window.speechSynthesis.pause(); } catch (e) {}
@@ -1189,13 +1256,13 @@
         try { window.speechSynthesis.resume(); } catch (e) {}
       }
     });
-    // age gate එක verify වුණාම class එක අයින් කරනවා; එවිට ආපහු බලනවා.
     listen(document, 'wk:age-verified', () => {
       if (ui.root && article) ui.root.setAttribute('data-rt-ready', '1');
     });
   }
 
   function teardown() {
+    stopAuto();
     runCleanup();
     ttsStopHard();
     tts = null;
@@ -1208,11 +1275,12 @@
     activeTab = null;
     lastFocus = null;
     lastPct = 0;
+    maxCache = -1;
     if (ui.root) {
       ui.root.setAttribute('data-open', '0');
       ui.root.setAttribute('data-rt-ready', '0');
+      ui.root.removeAttribute('data-scrolling');
     }
-    // focus එක පිටුව මාරු වන විටම නිවෙනවා — ඊළඟ පිටුවට කාන්දු වෙන්නේ නෑ.
     state.focus = false;
     clearDim();
     document.documentElement.setAttribute('data-rt-focus', 'off');
@@ -1229,16 +1297,13 @@
     if (!buildChrome()) return;
     booted = true;
 
-    // හැම boot එකකටම focus off. Storage එකේ තිබුණු පැරණි flag එකක්
-    // නිසා post එකක් ඇතුළේ header/footer මැකෙන ගැටලුව මෙයින් නවතිනවා.
     state.focus = false;
+    maxCache = -1;
 
     article = findArticle();
     apply();
 
     if (!article) {
-      // ලිපියක් නෙමෙයි (home / category / tag): FAB, progress, panel නෑ.
-      // dim එකත් apply() එකෙන් පිරිසිදු වුණා, ඒ නිසා header/footer නොපෙනීම නෑ.
       ui.root.setAttribute('data-rt-ready', '0');
       if (ui.bar) ui.bar.style.transform = 'scaleX(0)';
       emit('boot', { article: null });
@@ -1262,16 +1327,13 @@
     boot();
   }
 
-  // ClientRouter: before-swap එකෙන් සියල්ල teardown වෙනවා, ඒ නිසා handler,
-  // rAF හෝ utterance එකක් ඊළඟ පිටුවට යන්නේ නෑ. page-load එකෙන් නැවත හදනවා.
-  // `booted` flag එකෙන් DOMContentLoaded + page-load double-fire නිරුපද්‍රිතයි.
   document.addEventListener('astro:before-swap', teardown);
   document.addEventListener('astro:page-load', boot);
 
   // ---------------------------------------------------------------- api
 
   window.ReaderTools = {
-    version: 5,
+    version: 6,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
@@ -1282,6 +1344,9 @@
     on: on,
     boot: boot,
     teardown: teardown,
+    startAutoScroll: startAuto,
+    stopAutoScroll: stopAuto,
+    get scrolling() { return !!auto.raf; },
     get state() { return Object.assign({}, state); },
     get article() { return article; },
     get tools() { return tools.map((t) => t.id); },
