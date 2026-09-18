@@ -1,26 +1,28 @@
-/* ==========================================================================
-   Reader Tools — core + built-in tools
-   --------------------------------------------------------------------------
-   Dependency නැහැ. Astro ClientRouter (view transitions) safe.
-
-   අලුත් tool එකක් එකතු කරන්න (මේ ෆයිල් එක වෙනස් කරන්න ඕන නෑ):
-
-     ReaderTools.register({
-       id: 'bookmarks',
-       label: 'සලකුණු',
-       icon: '<svg ... </svg>',
-       order: 60,
-       mount(container, ctx) {
-         // container = panel body element
-         // ctx = { state, set, on, el, $, $$, article, ICON, close, showTab }
-         // cleanup function එකක් return කරන්න පුළුවන් (අවශ්‍ය නම් විතරක්)
-         return function () {};
-       }
-     });
-
-   NOTE: මේ comment එක ඇතුළේ තවත් block comment එකක් ලියන්න එපා —
-   JS වල block comments nest වෙන්නේ නෑ, ඒ නිසා build එක කැඩෙනවා.
-   ========================================================================== */
+// ==========================================================================
+// Reader Tools — core + built-in tools
+// --------------------------------------------------------------------------
+// Dependency නැහැ. Astro ClientRouter (view transitions) safe.
+//
+// NOTE: මේ header එක // comments වලින් ලියලා තියෙන්නේ හිතාමතා.
+// /* */ block comment එකක් ඇතුළේ තව /* */ එකක් දැම්මොත් JavaScript
+// එකේ ඒවා nest වෙන්නේ නෑ — ඇතුළේ තියෙන */ එකෙන් පිටත comment එක
+// වැහෙනවා, ඊට පස්සේ තියෙන දේ code විදිහට parse වෙලා build එක
+// කැඩෙනවා. පහළ උදාහරණයේ /* cleanup */ එකක් තියෙන නිසා මේක වැදගත්.
+//
+// අලුත් tool එකක් එකතු කරන්න (මේ ෆයිල් එක වෙනස් කරන්න ඕන නෑ):
+//
+//   ReaderTools.register({
+//     id: 'bookmarks',
+//     label: 'සලකුණු',
+//     icon: '<svg ... </svg>',
+//     order: 60,
+//     mount(container, ctx) {
+//       // container = panel body element
+//       // ctx = { state, set, on, el, $, $$, article, ICON, close, showTab }
+//       return () => { /* cleanup */ };
+//     }
+//   });
+// ==========================================================================
 (() => {
   'use strict';
 
@@ -69,7 +71,7 @@
   let state = readStore();
 
   // ---------------- helpers ----------------
-  const $ = (s, c) => (c || document).querySelector(s);
+  const $  = (s, c) => (c || document).querySelector(s);
   const $$ = (s, c) => Array.prototype.slice.call((c || document).querySelectorAll(s));
   const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 
@@ -204,8 +206,6 @@
     const root = $('[data-rt-root]');
     if (!root) return false;
 
-    // view-transition එකකින් පස්සේ අලුත් DOM එකක් ආවොත් නැවත bind කරන්න
-    // ඕන — ඒත් එකම element එකට දෙපාරක් bind නොවෙන්න.
     if (root.dataset.rtBound === '1') {
       ui.root = root;
       return true;
@@ -356,9 +356,9 @@
     }
   }
 
-  /* ==========================================================================
-     TOOL 1 — අන්තර්ගතය
-     ========================================================================== */
+  // ==========================================================================
+  // TOOL 1 — අන්තර්ගතය
+  // ==========================================================================
   register({
     id: 'toc',
     order: 10,
@@ -431,9 +431,9 @@
     },
   });
 
-  /* ==========================================================================
-     TOOL 2 — පෙනුම
-     ========================================================================== */
+  // ==========================================================================
+  // TOOL 2 — පෙනුම
+  // ==========================================================================
   register({
     id: 'display',
     order: 20,
@@ -523,9 +523,9 @@
     },
   });
 
-  /* ==========================================================================
-     TOOL 3 — හඬ (Web Speech API; engines plug කරන්න පුළුවන්)
-     ========================================================================== */
+  // ==========================================================================
+  // TOOL 3 — හඬ (Web Speech API; engines plug කරන්න පුළුවන්)
+  // ==========================================================================
   const engines = {};
 
   const webSpeech = {
@@ -576,12 +576,7 @@
       u.onend = function () { self._i++; self._next(); };
       u.onerror = function () { self._i++; self._next(); };
       if (this._hooks.onChunk) this._hooks.onChunk(c, this._i);
-      try {
-        window.speechSynthesis.speak(u);
-      } catch (e) {
-        self._i++;
-        self._next();
-      }
+      try { window.speechSynthesis.speak(u); } catch (e) { self._i++; self._next(); }
     },
 
     pause() { try { window.speechSynthesis.pause(); } catch (e) {} },
@@ -731,9 +726,9 @@
     },
   });
 
-  /* ==========================================================================
-     TOOL 4 — කියවීම
-     ========================================================================== */
+  // ==========================================================================
+  // TOOL 4 — කියවීම
+  // ==========================================================================
   register({
     id: 'reading',
     order: 40,
@@ -767,7 +762,10 @@
       asGroup.appendChild(asRange);
       box.appendChild(asGroup);
 
-      let raf = 0, speed = 0, last = 0, carry = 0;
+      let raf = 0;
+      let speed = 0;
+      let last = 0;
+      let carry = 0;
 
       function tick(t) {
         if (!speed) { raf = 0; return; }
@@ -787,7 +785,7 @@
         if (speed && !raf) raf = requestAnimationFrame(tick);
       });
 
-      // resume reading
+      // resume
       let saved = 0;
       try { saved = Number(localStorage.getItem(posKey(location.pathname)) || 0); } catch (e) {}
       if (saved > 600) {
@@ -802,7 +800,7 @@
         box.appendChild(g);
       }
 
-      // top / bottom
+      // nav
       const nav = el('div', { class: 'rt-row' });
       const toTop = el('button', { class: 'rt-btn', type: 'button' }, '↑ මුලට');
       const toBottom = el('button', { class: 'rt-btn', type: 'button' }, '↓ අන්තිමට');
@@ -823,9 +821,9 @@
     },
   });
 
-  /* ==========================================================================
-     TOOL 5 — පරිවර්තනය
-     ========================================================================== */
+  // ==========================================================================
+  // TOOL 5 — පරිවර්තනය
+  // ==========================================================================
   register({
     id: 'translate',
     order: 50,
