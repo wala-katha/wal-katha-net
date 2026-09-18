@@ -117,13 +117,18 @@ html[data-rt-page="sepia"] :is([data-rt-article], .custom-post-content) blockquo
   border-left-color: #8a5a1c !important;
 }
 
-/* focus mode. opacity only - `filter` promotes a compositing layer on
+/* focus mode.
+   [data-rt-has-article="1"] guard: reader-tools.js only sets it when a real
+   article exists. Without it a stored focus=on flag dimmed the header and
+   footer on the home / category pages and they looked like they had
+   vanished. opacity only - `filter` promotes a compositing layer on
    header/footer and turned every scroll frame into a repaint. */
-html[data-rt-focus="on"] [data-rt-dim] {
-  opacity: 0.1;
+html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim] {
+  opacity: 0.28;
   transition: opacity 0.3s ease;
 }
-html[data-rt-focus="on"] [data-rt-dim]:focus-within {
+html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim]:hover,
+html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim]:focus-within {
   opacity: 1;
 }
 
@@ -142,10 +147,25 @@ html[data-rt-focus="on"] [data-rt-dim]:focus-within {
 .rt-root * {
   box-sizing: border-box;
 }
+/* the global copy-protection rules must not kill the panel's own controls */
+.rt-root,
+.rt-root * {
+  -webkit-user-select: auto !important;
+  user-select: auto !important;
+  -webkit-touch-callout: default;
+}
 
 /* The age gate blurs and disables every body child, but it does not stop
    a keyboard user reaching the FAB. Hard-hide it instead. */
 html.age-gate-pending .rt-root {
+  display: none !important;
+}
+
+/* nothing at all until reader-tools.js confirms a real article */
+.rt-root:not([data-rt-ready="1"]) .rt-progress,
+.rt-root:not([data-rt-ready="1"]) .rt-fab,
+.rt-root:not([data-rt-ready="1"]) .rt-scrim,
+.rt-root:not([data-rt-ready="1"]) .rt-panel {
   display: none !important;
 }
 
@@ -221,11 +241,6 @@ html.age-gate-pending .rt-root {
   transform: translateX(110%);
   pointer-events: none;
 }
-/* hidden until reader-tools.js confirms the page has a real article */
-.rt-root:not([data-rt-ready="1"]) .rt-fab,
-.rt-root:not([data-rt-ready="1"]) .rt-progress {
-  display: none;
-}
 
 /* ------------------------------------------------------------------ scrim */
 
@@ -238,16 +253,18 @@ html.age-gate-pending .rt-root {
   backdrop-filter: blur(3px);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.28s ease, visibility 0.28s ease;
+  transition: opacity 0.28s ease, visibility 0s linear 0.28s;
 }
 .rt-root[data-open="1"] .rt-scrim {
   opacity: 1;
   visibility: visible;
+  transition: opacity 0.28s ease, visibility 0s;
 }
 
 /* ------------------------------------------------------------------ panel */
 /* visibility (not the `hidden` attribute) so the slide can actually
-   transition - display:none cancels transitions outright. */
+   transition - display:none cancels transitions outright. The 0s-delayed
+   visibility keeps the element reachable for the whole slide-out. */
 
 .rt-panel {
   position: fixed;
@@ -265,12 +282,16 @@ html.age-gate-pending .rt-root {
   transform: translateX(102%);
   visibility: hidden;
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-    visibility 0.3s ease;
+    visibility 0s linear 0.3s;
   overscroll-behavior: contain;
+}
+.rt-panel:focus {
+  outline: none;
 }
 .rt-root[data-open="1"] .rt-panel {
   transform: translateX(0);
   visibility: visible;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s;
 }
 
 .rt-head {
@@ -343,6 +364,7 @@ html.age-gate-pending .rt-root {
   border-bottom: 1px solid var(--rt-border);
   overflow-x: auto;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 .rt-tabs::-webkit-scrollbar {
   display: none;
@@ -379,10 +401,13 @@ html.age-gate-pending .rt-root {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 14px;
+  padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+}
+.rt-body:focus {
+  outline: none;
 }
 .rt-group {
   display: flex;
@@ -464,35 +489,39 @@ html.age-gate-pending .rt-root {
 
 /* touch-action: none is required. Base.astro sets `touch-action: pan-y`
    on <body>, which swallowed the horizontal drag and made every slider
-   unusable on phones. */
+   unusable on phones. The padded hit area keeps the thumb tappable. */
 .rt-range {
   -webkit-appearance: none;
   appearance: none;
   flex: 1 1 auto;
   width: 100%;
   height: 4px;
-  margin: 8px 0;
+  margin: 12px 0;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.14);
   outline: none;
   touch-action: none;
+  cursor: pointer;
 }
 .rt-range::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 17px;
-  height: 17px;
+  width: 20px;
+  height: 20px;
   border: 2px solid var(--rt-bg);
   border-radius: 999px;
   background: var(--rt-accent);
   cursor: pointer;
 }
 .rt-range::-moz-range-thumb {
-  width: 15px;
-  height: 15px;
+  width: 18px;
+  height: 18px;
   border: 2px solid var(--rt-bg);
   border-radius: 999px;
   background: var(--rt-accent);
   cursor: pointer;
+}
+.rt-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgba(1, 173, 159, 0.28);
 }
 .rt-val {
   min-width: 42px;
@@ -621,7 +650,7 @@ html.age-gate-pending .rt-root {
   }
   .rt-fab {
     top: auto;
-    bottom: 1.5rem;
+    bottom: calc(1.5rem + env(safe-area-inset-bottom));
     right: auto;
     left: 0;
     flex-direction: row;
