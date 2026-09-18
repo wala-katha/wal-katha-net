@@ -1,0 +1,863 @@
+/* ==========================================================================
+   Reader Tools — core + built-in tools
+   --------------------------------------------------------------------------
+   Dependency නැහැ. Astro ClientRouter (view transitions) safe.
+
+   අලුත් tool එකක් එකතු කරන්න (මේ ෆයිල් එක වෙනස් කරන්න ඕන නෑ):
+
+     ReaderTools.register({
+       id: 'bookmarks',
+       label: 'සලකුණු',
+       icon: '<svg ... </svg>',
+       order: 60,
+       mount(container, ctx) {
+         // container = panel body element
+         // ctx = { state, set, on, el, $, $$, article, ICON, close, showTab }
+         return () => { /* cleanup */ };
+       }
+     });
+   ========================================================================== */
+(() => {
+  'use strict';
+
+  const STORE_KEY = 'wk:reader:v1';
+  const posKey = (p) => 'wk:reader:pos:' + p;
+
+  /* මේ සයිට් එකේ article wrapper = .custom-post-content (PostSingle.astro).
+     ඉතිරි ඒවා fallback. */
+  const ARTICLE_CANDIDATES = [
+    '[data-rt-article]',
+    '.custom-post-content',
+    '#main-content article .content',
+    '#main-content .content',
+    '#main-content article',
+  ];
+
+  const HEADING_SEL = 'h2, h3, h4';
+  const MIN_ARTICLE_CHARS = 400;
+
+  const DEFAULTS = {
+    page: 'dark',        // dark | paper | sepia | contrast
+    font: 'sinhala',     // sinhala | serif | system
+    fontScale: 1,
+    lineHeight: 1.85,
+    letter: 0,
+    measure: 'normal',   // narrow | normal | wide
+    focus: false,
+    rate: 1,
+    voiceURI: '',
+    tab: 'toc',
+  };
+
+  /* ---------------- storage ---------------- */
+  function readStore() {
+    try {
+      return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(STORE_KEY) || '{}'));
+    } catch (e) {
+      return Object.assign({}, DEFAULTS);
+    }
+  }
+  function writeStore(s) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch (e) {}
+  }
+
+  let state = readStore();
+
+  /* ---------------- helpers ---------------- */
+  const $  = (s, c) => (c || document).querySelector(s);
+  const $$ = (s, c) => Array.prototype.slice.call((c || document).querySelectorAll(s));
+  const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+
+  function el(tag, attrs, html) {
+    const n = document.createElement(tag);
+    if (attrs) {
+      Object.keys(attrs).forEach((k) => {
+        const v = attrs[k];
+        if (v === false || v == null) return;
+        n.setAttribute(k, v === true ? '' : String(v));
+      });
+    }
+    if (html) n.innerHTML = html;
+    return n;
+  }
+
+  let _article = null;
+  function article() {
+    if (_article && _article.isConnected) return _article;
+    _article = null;
+    for (let i = 0; i < ARTICLE_CANDIDATES.length; i++) {
+      const sel = ARTICLE_CANDIDATES[i];
+      const n = $(sel);
+      if (!n) continue;
+      const len = (n.textContent || '').trim().length;
+      if (sel === '[data-rt-article]' || len >= MIN_ARTICLE_CHARS) { _article = n; break; }
+    }
+    if (_article && !_article.hasAttribute('data-rt-article')) {
+      _article.setAttribute('data-rt-article', '');
+    }
+    return _article;
+  }
+
+  /* focus mode එකේදී මැකෙන්න ඕන කොටස් auto-mark.
+     article එකේ ancestor chain එකේ sibling ඔක්කොම = "අවට දේ". */
+  let dimMarked = false;
+  function markDimTargets() {
+    if (dimMarked) return;
+    const a = article();
+    if (!a) return;
+    let node = a;
+    while (node && node !== document.body) {
+      const parent = node.parentElement;
+      if (!parent) break;
+      Array.prototype.slice.call(parent.children).forEach((sib) => {
+        if (sib === node) return;
+        if (sib.closest && sib.closest('.rt-root')) return;
+        if (sib.id === 'age-gate-overlay') return;
+        const t = sib.tagName;
+        if (t === 'SCRIPT' || t === 'STYLE' || t === 'LINK' || t === 'NOSCRIPT') return;
+        sib.setAttribute('data-rt-dim', '');
+      });
+      node = parent;
+    }
+    dimMarked = true;
+  }
+
+  const ICON = {
+    panel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
+    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+    list:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+    aa:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 18 7.5 6l4.5 12M4.6 14h5.8M14 18l3.5-9L21 18m-6.2-3h4.9"/></svg>',
+    voice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
+    eye:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',
+    globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/></svg>',
+    play:  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>',
+    stop:  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>',
+  };
+
+  /* ---------------- event bus ---------------- */
+  const bus = {};
+  function on(ev, fn) {
+    (bus[ev] = bus[ev] || []).push(fn);
+    return function off() {
+      const arr = bus[ev] || [];
+      const i = arr.indexOf(fn);
+      if (i > -1) arr.splice(i, 1);
+    };
+  }
+  function emit(ev, data) {
+    (bus[ev] || []).slice().forEach((f) => {
+      try { f(data); } catch (e) { console.error('[reader-tools]', e); }
+    });
+  }
+
+  /* ---------------- apply prefs ---------------- */
+  function apply() {
+    const r = document.documentElement;
+    r.setAttribute('data-rt-page', state.page);
+    r.setAttribute('data-rt-font', state.font);
+    r.setAttribute('data-rt-measure', state.measure);
+    r.setAttribute('data-rt-focus', state.focus ? 'on' : 'off');
+    r.style.setProperty('--rt-font-scale', state.fontScale);
+    r.style.setProperty('--rt-line-height', state.lineHeight);
+    r.style.setProperty('--rt-letter', state.letter + 'em');
+    if (state.focus) markDimTargets();
+  }
+
+  function set(patch) {
+    state = Object.assign({}, state, patch);
+    writeStore(state);
+    apply();
+    emit('change', state);
+  }
+
+  /* ---------------- tool registry ---------------- */
+  const tools = [];
+  let cleanupCurrent = null;
+
+  function register(tool) {
+    if (!tool || !tool.id || typeof tool.mount !== 'function') {
+      console.warn('[reader-tools] invalid tool', tool);
+      return;
+    }
+    for (let i = 0; i < tools.length; i++) if (tools[i].id === tool.id) return;
+    tools.push(Object.assign({ order: 100, label: tool.id, icon: '' }, tool));
+    tools.sort((a, b) => a.order - b.order);
+    if (ui.tabsEl) renderTabs();
+  }
+
+  /* ---------------- UI shell ---------------- */
+  const ui = {};
+  let docListenersBound = false;
+  let progressBound = false;
+
+  function build() {
+    const root = $('[data-rt-root]');
+    if (!root) return false;
+    if (root.dataset.rtBound === '1') {
+      /* view-transition එකකින් පස්සේ අලුත් DOM එකක් ආවොත් නැවත bind
+         කරන්න ඕන — ඒත් එකම element එකට දෙපාරක් bind නොවෙන්න. */
+      ui.root = root;
+      return true;
+    }
+
+    ui.root = root;
+    ui.progress = $('.rt-progress > i', root);
+    ui.fab = $('.rt-fab', root);
+    ui.scrim = $('.rt-scrim', root);
+    ui.panel = $('.rt-panel', root);
+    ui.title = $('.rt-title', root);
+    ui.tabsEl = $('.rt-tabs', root);
+    ui.body = $('.rt-body', root);
+    ui.closeBtn = $('.rt-close', root);
+
+    if (!ui.fab || !ui.panel || !ui.tabsEl || !ui.body) return false;
+
+    ui.fab.addEventListener('click', () => open());
+    if (ui.closeBtn) ui.closeBtn.addEventListener('click', () => close());
+    if (ui.scrim) ui.scrim.addEventListener('click', () => close());
+
+    if (!docListenersBound) {
+      docListenersBound = true;
+      document.addEventListener('keydown', (e) => {
+        if (!isOpen()) return;
+        if (e.key === 'Escape') { close(); if (ui.fab) ui.fab.focus(); }
+        else if (e.key === 'Tab' && window.innerWidth <= 640) trapFocus(e);
+      });
+    }
+
+    root.dataset.rtBound = '1';
+    return true;
+  }
+
+  function trapFocus(e) {
+    const f = $$('button, [href], select, input, [tabindex]:not([tabindex="-1"])', ui.panel)
+      .filter((n) => !n.disabled && n.offsetParent !== null);
+    if (!f.length) return;
+    const first = f[0];
+    const last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+
+  function isOpen() { return !!(ui.panel && ui.panel.dataset.open === '1'); }
+
+  function open(tabId) {
+    if (!ui.panel) return;
+    ui.panel.hidden = false;
+    if (ui.scrim) ui.scrim.hidden = false;
+    requestAnimationFrame(() => {
+      ui.panel.dataset.open = '1';
+      if (ui.scrim) ui.scrim.dataset.show = '1';
+    });
+    ui.fab.setAttribute('aria-expanded', 'true');
+    showTab(tabId || state.tab || (tools[0] && tools[0].id));
+    if (window.innerWidth <= 640) {
+      const t = $('.rt-tab[aria-selected="true"]', ui.panel);
+      if (t) t.focus();
+    }
+    emit('open');
+  }
+
+  function close() {
+    if (!ui.panel) return;
+    ui.panel.dataset.open = '0';
+    if (ui.scrim) ui.scrim.dataset.show = '0';
+    ui.fab.setAttribute('aria-expanded', 'false');
+    setTimeout(() => {
+      if (!isOpen()) {
+        ui.panel.hidden = true;
+        if (ui.scrim) ui.scrim.hidden = true;
+      }
+    }, 300);
+    emit('close');
+  }
+
+  function renderTabs() {
+    ui.tabsEl.innerHTML = '';
+    tools.forEach((t) => {
+      const b = el('button', {
+        class: 'rt-tab',
+        type: 'button',
+        role: 'tab',
+        'data-id': t.id,
+        'aria-selected': String(t.id === state.tab),
+      }, (t.icon || '') + '<span>' + t.label + '</span>');
+      b.addEventListener('click', () => showTab(t.id));
+      ui.tabsEl.appendChild(b);
+    });
+  }
+
+  function showTab(id) {
+    let tool = null;
+    for (let i = 0; i < tools.length; i++) if (tools[i].id === id) { tool = tools[i]; break; }
+    if (!tool) tool = tools[0];
+    if (!tool) return;
+
+    if (typeof cleanupCurrent === 'function') {
+      try { cleanupCurrent(); } catch (e) { console.error('[reader-tools]', e); }
+    }
+    cleanupCurrent = null;
+
+    if (state.tab !== tool.id) set({ tab: tool.id });
+
+    $$('.rt-tab', ui.tabsEl).forEach((b) =>
+      b.setAttribute('aria-selected', String(b.dataset.id === tool.id)));
+
+    ui.title.textContent = tool.label;
+    ui.body.innerHTML = '';
+    ui.body.scrollTop = 0;
+
+    const ctx = { state: state, set: set, on: on, emit: emit, el: el, $: $, $$: $$,
+                  article: article, ICON: ICON, open: open, close: close, showTab: showTab };
+    cleanupCurrent = tool.mount(ui.body, ctx) || null;
+  }
+
+  /* ---------------- progress + resume position ---------------- */
+  function initProgress() {
+    if (progressBound) { updateProgress(); return; }
+    progressBound = true;
+    let raf = 0;
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; updateProgress(); });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    updateProgress();
+  }
+
+  function updateProgress() {
+    const a = article();
+    if (!a || !ui.progress) return;
+    const rect = a.getBoundingClientRect();
+    const top = rect.top + window.scrollY;
+    const total = a.offsetHeight - window.innerHeight * 0.6;
+    const pct = clamp(((window.scrollY - top) / Math.max(total, 1)) * 100, 0, 100);
+    ui.progress.style.width = pct + '%';
+    emit('progress', pct);
+    if (window.scrollY > 400) {
+      try { localStorage.setItem(posKey(location.pathname), String(Math.round(window.scrollY))); } catch (e) {}
+    }
+  }
+
+  /* ==========================================================================
+     TOOL 1 — අන්තර්ගතය
+     ========================================================================== */
+  register({
+    id: 'toc',
+    order: 10,
+    label: 'අන්තර්ගතය',
+    icon: ICON.list,
+    mount(box) {
+      const a = article();
+      if (!a) {
+        box.appendChild(el('p', { class: 'rt-empty' }, 'මෙම පිටුවේ කියවීමට කතාවක් නැහැ.'));
+        return;
+      }
+
+      const words = (a.textContent || '').trim().split(/\s+/).filter(Boolean).length;
+      const mins = Math.max(1, Math.round(words / 180));
+
+      const meta = el('div', { class: 'rt-meta' });
+      meta.appendChild(el('span', {}, '~' + mins + ' මිනිත්තු'));
+      meta.appendChild(el('span', {}, words.toLocaleString('si-LK') + ' වචන'));
+      meta.appendChild(el('span', { 'data-rt-pct': '' }, '0%'));
+      box.appendChild(meta);
+
+      const offPct = on('progress', (p) => {
+        const n = $('[data-rt-pct]', meta);
+        if (n) n.textContent = Math.round(p) + '% කියවා ඇත';
+      });
+
+      const heads = $$(HEADING_SEL, a).filter((h) => (h.textContent || '').trim());
+      heads.forEach((h, i) => { if (!h.id) h.id = 'rt-h-' + i; });
+
+      if (!heads.length) {
+        box.appendChild(el('p', { class: 'rt-empty' }, 'මෙම කතාවේ උපමාතෘකා නැහැ.'));
+        return offPct;
+      }
+
+      const ul = el('ul', { class: 'rt-toc' });
+      heads.forEach((h) => {
+        const li = el('li', { 'data-depth': h.tagName.charAt(1) });
+        const link = el('a', { href: '#' + h.id }, (h.textContent || '').trim());
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          history.replaceState(null, '', '#' + h.id);
+          if (window.innerWidth <= 640) close();
+        });
+        li.appendChild(link);
+        ul.appendChild(li);
+      });
+      box.appendChild(ul);
+
+      let io = null;
+      if ('IntersectionObserver' in window) {
+        io = new IntersectionObserver((entries) => {
+          entries.forEach((en) => {
+            if (!en.isIntersecting) return;
+            $$('.rt-toc a', ul).forEach((x) => x.removeAttribute('data-active'));
+            const link = $('.rt-toc a[href="#' + CSS.escape(en.target.id) + '"]', ul);
+            if (link) {
+              link.dataset.active = '1';
+              link.scrollIntoView({ block: 'nearest' });
+            }
+          });
+        }, { rootMargin: '-80px 0px -70% 0px', threshold: 0 });
+        heads.forEach((h) => io.observe(h));
+      }
+
+      return function cleanup() {
+        if (io) io.disconnect();
+        offPct();
+      };
+    },
+  });
+
+  /* ==========================================================================
+     TOOL 2 — පෙනුම
+     ========================================================================== */
+  register({
+    id: 'display',
+    order: 20,
+    label: 'පෙනුම',
+    icon: ICON.aa,
+    mount(box) {
+      function group(label, node, valueText) {
+        const g = el('div', { class: 'rt-group' });
+        g.appendChild(el('div', { class: 'rt-label' },
+          '<span>' + label + '</span>' +
+          (valueText != null ? '<span data-val>' + valueText + '</span>' : '')));
+        g.appendChild(node);
+        return g;
+      }
+
+      function seg(options, current, cb) {
+        const wrap = el('div', { class: 'rt-seg' });
+        options.forEach((opt) => {
+          const b = el('button', { type: 'button', 'aria-pressed': String(opt[0] === current) }, opt[1]);
+          b.addEventListener('click', () => {
+            $$('button', wrap).forEach((x) => x.setAttribute('aria-pressed', 'false'));
+            b.setAttribute('aria-pressed', 'true');
+            cb(opt[0]);
+          });
+          wrap.appendChild(b);
+        });
+        return wrap;
+      }
+
+      function slider(label, key, min, max, step, fmt) {
+        const input = el('input', {
+          class: 'rt-range', type: 'range',
+          min: String(min), max: String(max), step: String(step),
+          value: String(state[key]), 'aria-label': label,
+        });
+        const g = group(label, input, fmt(Number(state[key])));
+        input.addEventListener('input', () => {
+          const v = Number(input.value);
+          const patch = {}; patch[key] = v; set(patch);
+          const out = $('[data-val]', g);
+          if (out) out.textContent = fmt(v);
+        });
+        return g;
+      }
+
+      box.appendChild(group('කියවීමේ පසුබිම',
+        seg([['dark', 'කළු'], ['paper', 'කඩදාසි'], ['sepia', 'සෙපියා'], ['contrast', 'දීප්ත']],
+          state.page, (v) => set({ page: v }))));
+
+      box.appendChild(group('අකුරු විලාසය',
+        seg([['sinhala', 'සිංහල'], ['serif', 'සෙරිෆ්'], ['system', 'මුල් පිටපත']],
+          state.font, (v) => set({ font: v }))));
+
+      box.appendChild(slider('අකුරු විශාලත්වය', 'fontScale', 0.85, 1.8, 0.05,
+        (v) => Math.round(v * 100) + '%'));
+
+      box.appendChild(slider('පේළි පරතරය', 'lineHeight', 1.4, 2.5, 0.05,
+        (v) => v.toFixed(2)));
+
+      box.appendChild(slider('අකුරු පරතරය', 'letter', 0, 0.08, 0.01,
+        (v) => v.toFixed(2) + 'em'));
+
+      box.appendChild(group('පේළියේ පළල',
+        seg([['narrow', 'පටු'], ['normal', 'සාමාන්‍ය'], ['wide', 'පළල්']],
+          state.measure, (v) => set({ measure: v }))));
+
+      const reset = el('button', { class: 'rt-btn', type: 'button' }, 'මුල් සැකසුම්වලට හරවන්න');
+      reset.addEventListener('click', () => {
+        set({
+          page: DEFAULTS.page, font: DEFAULTS.font, fontScale: DEFAULTS.fontScale,
+          lineHeight: DEFAULTS.lineHeight, letter: DEFAULTS.letter, measure: DEFAULTS.measure,
+        });
+        showTab('display');
+      });
+      const row = el('div', { class: 'rt-row' });
+      row.appendChild(reset);
+      box.appendChild(row);
+
+      box.appendChild(el('p', { class: 'rt-note' },
+        'පසුබිම වෙනස් වෙන්නේ කතාව තියෙන කොටසට පමණයි — සයිට් එකේ ඉතිරි කොටස් dark ලෙසම පවතිනවා.'));
+    },
+  });
+
+  /* ==========================================================================
+     TOOL 3 — හඬ (Web Speech API; engines plug කරන්න පුළුවන්)
+     ========================================================================== */
+  const engines = {};
+
+  const webSpeech = {
+    id: 'web-speech',
+    _chunks: [], _i: 0, _opts: {}, _hooks: {}, _stopped: true,
+
+    available() {
+      return ('speechSynthesis' in window) && ('SpeechSynthesisUtterance' in window);
+    },
+    voices() {
+      let all = [];
+      try { all = window.speechSynthesis.getVoices() || []; } catch (e) {}
+      return { all: all, si: all.filter((v) => /^si/i.test(v.lang)) };
+    },
+    speak(chunks, opts, hooks) {
+      this.stop();
+      this._chunks = chunks;
+      this._i = 0;
+      this._opts = opts || {};
+      this._hooks = hooks || {};
+      this._stopped = false;
+      this._next();
+    },
+    _next() {
+      if (this._stopped) return;
+      if (this._i >= this._chunks.length) {
+        this._stopped = true;
+        if (this._hooks.onEnd) this._hooks.onEnd();
+        return;
+      }
+      const self = this;
+      const c = this._chunks[this._i];
+      const u = new SpeechSynthesisUtterance(c.text);
+      const all = this.voices().all;
+      let v = null;
+      for (let i = 0; i < all.length; i++) if (all[i].voiceURI === this._opts.voiceURI) { v = all[i]; break; }
+      if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'si-LK'; }
+      u.rate = this._opts.rate || 1;
+      u.onend = function () { self._i++; self._next(); };
+      u.onerror = function () { self._i++; self._next(); };
+      if (this._hooks.onChunk) this._hooks.onChunk(c, this._i);
+      try { window.speechSynthesis.speak(u); } catch (e) { self._i++; self._next(); }
+    },
+    pause() { try { window.speechSynthesis.pause(); } catch (e) {} },
+    resume() { try { window.speechSynthesis.resume(); } catch (e) {} },
+    stop() {
+      this._stopped = true;
+      this._i = 0;
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    },
+  };
+  engines['web-speech'] = webSpeech;
+
+  register({
+    id: 'voice',
+    order: 30,
+    label: 'හඬ',
+    icon: ICON.voice,
+    mount(box) {
+      const engine = engines['web-speech'];
+
+      if (!engine.available()) {
+        box.appendChild(el('p', { class: 'rt-empty' },
+          'ඔබේ බ්‍රව්සරය හඬ කියවීම (text-to-speech) සඳහා සහාය නොදක්වයි.'));
+        return;
+      }
+
+      const a = article();
+      const chunks = a
+        ? $$('p, li, h2, h3, h4, blockquote', a)
+            .map((n) => ({ node: n, text: (n.textContent || '').trim() }))
+            .filter((c) => c.text.length > 1)
+        : [];
+
+      const sel = el('select', { class: 'rt-select', 'aria-label': 'හඬ තෝරන්න' });
+      const voiceGroup = el('div', { class: 'rt-group' });
+      voiceGroup.appendChild(el('div', { class: 'rt-label' }, '<span>හඬ</span>'));
+      voiceGroup.appendChild(sel);
+
+      const note = el('p', { class: 'rt-note rt-note--accent' }, '');
+
+      function fillVoices() {
+        const v = engine.voices();
+        const list = v.si.length ? v.si : v.all;
+        const prev = sel.value || state.voiceURI;
+        sel.innerHTML = '';
+        list.forEach((voice) => {
+          const o = el('option', { value: voice.voiceURI }, voice.name + ' — ' + voice.lang);
+          if (voice.voiceURI === prev) o.selected = true;
+          sel.appendChild(o);
+        });
+        note.textContent = v.si.length
+          ? 'සිංහල හඬ හමු විය — උච්චාරණය නිවැරදිව ලැබෙනවා.'
+          : 'ඔබේ උපාංගයේ සිංහල හඬක් නැහැ. වෙනත් භාෂා හඬකින් සිංහල අකුරු නිවැරදිව උච්චාරණය නොවෙන්න පුළුවන්. Android: Settings → Language & input → Text-to-speech → සිංහල language pack ස්ථාපනය කරගන්න.';
+      }
+      fillVoices();
+
+      function onVoices() { fillVoices(); }
+      if (window.speechSynthesis.addEventListener) {
+        window.speechSynthesis.addEventListener('voiceschanged', onVoices);
+      } else {
+        window.speechSynthesis.onvoiceschanged = onVoices;
+      }
+      sel.addEventListener('change', () => set({ voiceURI: sel.value }));
+
+      const rate = el('input', {
+        class: 'rt-range', type: 'range', min: '0.6', max: '1.6', step: '0.05',
+        value: String(state.rate), 'aria-label': 'කියවීමේ වේගය',
+      });
+      const rateGroup = el('div', { class: 'rt-group' });
+      rateGroup.appendChild(el('div', { class: 'rt-label' },
+        '<span>වේගය</span><span data-val>' + Number(state.rate).toFixed(2) + '×</span>'));
+      rateGroup.appendChild(rate);
+      rate.addEventListener('input', () => {
+        const v = Number(rate.value);
+        set({ rate: v });
+        const out = $('[data-val]', rateGroup);
+        if (out) out.textContent = v.toFixed(2) + '×';
+      });
+
+      const playBtn = el('button', { class: 'rt-btn rt-btn--primary', type: 'button' },
+        ICON.play + '<span>කියවන්න</span>');
+      const stopBtn = el('button', { class: 'rt-btn', type: 'button' },
+        ICON.stop + '<span>නවත්වන්න</span>');
+      const row = el('div', { class: 'rt-row' });
+      row.appendChild(playBtn);
+      row.appendChild(stopBtn);
+
+      function clearHl() { $$('.rt-speaking').forEach((n) => n.classList.remove('rt-speaking')); }
+
+      let mode = 'stopped';
+      function paint() {
+        playBtn.innerHTML = (mode === 'playing')
+          ? ICON.pause + '<span>විරාමය</span>'
+          : (mode === 'paused')
+            ? ICON.play + '<span>දිගටම</span>'
+            : ICON.play + '<span>කියවන්න</span>';
+      }
+      paint();
+
+      playBtn.addEventListener('click', () => {
+        if (!chunks.length) return;
+        if (mode === 'playing') {
+          engine.pause();
+          mode = 'paused';
+        } else if (mode === 'paused') {
+          engine.resume();
+          mode = 'playing';
+        } else {
+          engine.speak(chunks, { rate: state.rate, voiceURI: sel.value }, {
+            onChunk: function (c) {
+              clearHl();
+              c.node.classList.add('rt-speaking');
+              c.node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            },
+            onEnd: function () { clearHl(); mode = 'stopped'; paint(); },
+          });
+          mode = 'playing';
+        }
+        paint();
+      });
+
+      stopBtn.addEventListener('click', () => {
+        engine.stop();
+        clearHl();
+        mode = 'stopped';
+        paint();
+      });
+
+      box.appendChild(voiceGroup);
+      box.appendChild(rateGroup);
+      box.appendChild(row);
+      box.appendChild(note);
+
+      if (!chunks.length) {
+        box.appendChild(el('p', { class: 'rt-empty' }, 'කියවීමට පෙළක් හමු නොවිය.'));
+      }
+
+      return function cleanup() {
+        if (window.speechSynthesis.removeEventListener) {
+          window.speechSynthesis.removeEventListener('voiceschanged', onVoices);
+        }
+      };
+    },
+  });
+
+  /* ==========================================================================
+     TOOL 4 — කියවීම
+     ========================================================================== */
+  register({
+    id: 'reading',
+    order: 40,
+    label: 'කියවීම',
+    icon: ICON.eye,
+    mount(box) {
+      /* focus mode */
+      const focusSw = el('input', { type: 'checkbox', role: 'switch' });
+      focusSw.checked = !!state.focus;
+      const focusRow = el('label', { class: 'rt-switch' });
+      focusRow.appendChild(el('span', {}, 'අවධානය මාදිලිය'));
+      focusRow.appendChild(focusSw);
+      focusSw.addEventListener('change', () => {
+        markDimTargets();
+        set({ focus: focusSw.checked });
+      });
+      const focusGroup = el('div', { class: 'rt-group' });
+      focusGroup.appendChild(focusRow);
+      focusGroup.appendChild(el('p', { class: 'rt-note' },
+        'header, footer, tags, comments button වගේ අවට දේ මැකෙනවා — කතාව විතරක් ඉතිරි වෙනවා.'));
+      box.appendChild(focusGroup);
+
+      /* auto scroll */
+      const asGroup = el('div', { class: 'rt-group' });
+      const asRange = el('input', {
+        class: 'rt-range', type: 'range', min: '0', max: '5', step: '1', value: '0',
+        'aria-label': 'ස්වයංක්‍රීය අනුචලන වේගය',
+      });
+      asGroup.appendChild(el('div', { class: 'rt-label' },
+        '<span>ස්වයංක්‍රීය අනුචලනය</span><span data-val>අක්‍රීය</span>'));
+      asGroup.appendChild(asRange);
+      box.appendChild(asGroup);
+
+      let raf = 0, speed = 0, last = 0, carry = 0;
+      function tick(t) {
+        if (!speed) { raf = 0; return; }
+        const dt = last ? (t - last) : 16;
+        last = t;
+        carry += (speed * 14 * dt) / 1000;
+        const px = Math.floor(carry);
+        if (px) { carry -= px; window.scrollBy(0, px); }
+        raf = requestAnimationFrame(tick);
+      }
+      asRange.addEventListener('input', () => {
+        speed = Number(asRange.value);
+        const out = $('[data-val]', asGroup);
+        if (out) out.textContent = speed ? ('වේගය ' + speed) : 'අක්‍රීය';
+        last = 0;
+        if (speed && !raf) raf = requestAnimationFrame(tick);
+      });
+
+      /* resume */
+      let saved = 0;
+      try { saved = Number(localStorage.getItem(posKey(location.pathname)) || 0); } catch (e) {}
+      if (saved > 600) {
+        const g = el('div', { class: 'rt-group' });
+        const b = el('button', { class: 'rt-btn', type: 'button' }, 'ඔබ නැවතුණ තැනට යන්න');
+        b.addEventListener('click', () => {
+          window.scrollTo({ top: saved, behavior: 'smooth' });
+          if (window.innerWidth <= 640) close();
+        });
+        g.appendChild(el('div', { class: 'rt-label' }, '<span>දිගටම කියවන්න</span>'));
+        g.appendChild(b);
+        box.appendChild(g);
+      }
+
+      /* nav */
+      const nav = el('div', { class: 'rt-row' });
+      const toTop = el('button', { class: 'rt-btn', type: 'button' }, '↑ මුලට');
+      const toBottom = el('button', { class: 'rt-btn', type: 'button' }, '↓ අන්තිමට');
+      toTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      toBottom.addEventListener('click', () =>
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
+      nav.appendChild(toTop);
+      nav.appendChild(toBottom);
+      box.appendChild(nav);
+
+      box.appendChild(el('p', { class: 'rt-note' },
+        'සැකසුම් සහ කියවපු තැන මේ උපාංගයේම සුරැකෙනවා (localStorage) — server එකට කිසිවක් යන්නේ නෑ.'));
+
+      return function cleanup() {
+        speed = 0;
+        if (raf) cancelAnimationFrame(raf);
+      };
+    },
+  });
+
+  /* ==========================================================================
+     TOOL 5 — පරිවර්තනය
+     ========================================================================== */
+  register({
+    id: 'translate',
+    order: 50,
+    label: 'පරිවර්තනය',
+    icon: ICON.globe,
+    mount(box) {
+      const langs = [
+        ['en', 'English'], ['ta', 'தமிழ்'], ['hi', 'हिन्दी'], ['ar', 'العربية'],
+        ['ja', '日本語'], ['ko', '한국어'], ['zh-CN', '中文'], ['ru', 'Русский'],
+        ['es', 'Español'], ['fr', 'Français'], ['de', 'Deutsch'], ['pt', 'Português'],
+      ];
+
+      const sel = el('select', { class: 'rt-select', 'aria-label': 'භාෂාව තෝරන්න' });
+      langs.forEach((l) => sel.appendChild(el('option', { value: l[0] }, l[1])));
+
+      const g = el('div', { class: 'rt-group' });
+      g.appendChild(el('div', { class: 'rt-label' }, '<span>මෙම පිටුව පරිවර්තනය කරන්න</span>'));
+      g.appendChild(sel);
+      box.appendChild(g);
+
+      const go = el('button', { class: 'rt-btn rt-btn--primary', type: 'button' }, 'පරිවර්තනය කරන්න');
+      go.addEventListener('click', () => {
+        const url = 'https://translate.google.com/translate?sl=si&tl='
+          + encodeURIComponent(sel.value) + '&u=' + encodeURIComponent(location.href);
+        window.open(url, '_blank', 'noopener,noreferrer');
+      });
+      const row = el('div', { class: 'rt-row' });
+      row.appendChild(go);
+      box.appendChild(row);
+
+      box.appendChild(el('p', { class: 'rt-note' },
+        'මෙය Google Translate හි පිටු-පරිවර්තන සේවාව අලුත් කවුළුවක විවෘත කරයි.'));
+    },
+  });
+
+  /* ---------------- boot ---------------- */
+  function boot() {
+    apply();
+    if (!build()) return;
+    renderTabs();
+    initProgress();
+    if (ui.panel) ui.panel.hidden = true;
+    if (ui.scrim) ui.scrim.hidden = true;
+    emit('ready');
+  }
+
+  window.ReaderTools = {
+    register: register,
+    get: function (k) { return k ? state[k] : Object.assign({}, state); },
+    set: set,
+    on: on,
+    open: open,
+    close: close,
+    isOpen: isOpen,
+    article: article,
+    registerVoiceEngine: function (id, engine) { engines[id] = engine; },
+    ICON: ICON,
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
+  }
+
+  /* Astro ClientRouter — page swap එකකින් පස්සේ නැවත සකසනවා */
+  document.addEventListener('astro:page-load', function () {
+    _article = null;
+    dimMarked = false;
+    cleanupCurrent = null;
+    boot();
+  });
+
+  /* swap වීමට කලින් TTS නවත්වනවා (වෙනත් පිටුවක කතාව කියවීම වැළැක්වීමට) */
+  document.addEventListener('astro:before-swap', function () {
+    try { engines['web-speech'].stop(); } catch (e) {}
+  });
+})();
