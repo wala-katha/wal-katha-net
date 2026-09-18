@@ -1,0 +1,30 @@
+---
+/**
+ * ReaderToolsHead.astro
+ * --------------------------------------------------------------------------
+ * Base.astro හි </head> ට කලින් තියන්න.
+ *
+ * WHY: කියවීමේ සැකසුම් (පසුබිම, අකුරු size, line-height) localStorage
+ * එකේ තියෙනවා. ඒවා reader-tools.js load වෙනකන් බලා apply කළොත්, පළමු
+ * paint එකේදී default පෙනුම එක වර පේනවා (FOUC) — dark → කඩදාසි flash එකක්.
+ * මේ blocking inline script එක paint වීමට කලින්ම <html> එකට attributes
+ * දානවා, ඒ නිසා flash එකක් කිසිසේත් නෑ. Base.astro හි age-gate guard
+ * script එකේම pattern එකයි මේක.
+ */
+---
+
+<script is:inline>
+  (function () {
+    try {
+      var p = JSON.parse(localStorage.getItem("wk:reader:v1") || "{}");
+      var r = document.documentElement;
+      r.setAttribute("data-rt-page", p.page || "dark");
+      r.setAttribute("data-rt-font", p.font || "sinhala");
+      r.setAttribute("data-rt-measure", p.measure || "normal");
+      r.setAttribute("data-rt-focus", p.focus ? "on" : "off");
+      if (p.fontScale) r.style.setProperty("--rt-font-scale", p.fontScale);
+      if (p.lineHeight) r.style.setProperty("--rt-line-height", p.lineHeight);
+      if (p.letter != null) r.style.setProperty("--rt-letter", p.letter + "em");
+    } catch (e) {}
+  })();
+</script>
