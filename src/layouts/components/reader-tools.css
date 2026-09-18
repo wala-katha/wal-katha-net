@@ -1,529 +1,668 @@
-/* ==========================================================================
-   Reader Tools — floating reading panel
-   --------------------------------------------------------------------------
-   මේ ෆයිල් එක සයිට් එකේ දැනට තියෙන කිසිම style එකක් override කරන්නේ නෑ.
-   සියලු selectors "rt-" හෝ [data-rt-*] වලින් scoped.
-
-   z-index map (Base.astro එකට ගැළපෙන විදිහට):
-     comment FAB / modal .......... 40 / 50   (Tailwind)
-     rt-progress .................. 9500
-     rt-fab ....................... 9600
-     rt-scrim ..................... 9700
-     rt-panel ..................... 9800
-     age-gate overlay ............. 999999   ← මේකට ඉහළින් යන්නේ නෑ (හිතාමතා)
-   ========================================================================== */
+/* Reader Tools — panel chrome + reading surface themes.
+   Selectors: .rt-* (panel) and [data-rt-*] (surface).
+   z-index: progress 9500, fab 9600, scrim 9700, panel 9800.
+   age-gate overlay = 999999, so the gate always wins. */
 
 :root {
   --rt-font-scale: 1;
   --rt-line-height: 1.85;
   --rt-letter: 0em;
 
-  /* panel chrome — සයිට් එකේ palette එකම */
-  --rt-bg:      #0c0d10;
-  --rt-bg-2:    #14161b;
-  --rt-bg-3:    #1d2026;
-  --rt-fg:      #f8f8ff;
-  --rt-muted:   rgba(248, 248, 255, 0.55);
-  --rt-accent:  #01ad9f;
-  --rt-border:  rgba(255, 255, 255, 0.08);
-  --rt-shadow:  0 24px 64px rgba(0, 0, 0, 0.8);
+  --rt-bg: #0c0d10;
+  --rt-bg2: #14161b;
+  --rt-bg3: #1d2026;
+  --rt-fg: #f8f8ff;
+  --rt-muted: rgba(248, 248, 255, 0.58);
+  --rt-accent: #01ad9f;
+  --rt-border: rgba(255, 255, 255, 0.09);
+  --rt-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
 
-  --rt-panel-w: min(360px, 92vw);
-  --rt-radius: 1.25rem;
+  --rt-panel-w: min(352px, 92vw);
+  --rt-radius: 1.1rem;
 
   --rt-z-progress: 9500;
-  --rt-z-fab:      9600;
-  --rt-z-scrim:    9700;
-  --rt-z-panel:    9800;
+  --rt-z-fab: 9600;
+  --rt-z-scrim: 9700;
+  --rt-z-panel: 9800;
 }
 
-/* ==========================================================================
-   1. READING SURFACE THEMES
-   --------------------------------------------------------------------------
-   මුළු සයිට් එකේ පාට හරවන්නේ නෑ — කතාව තියෙන container එක විතරක්.
-   Tailwind arbitrary colour classes (text-[#F8F8FF] වගේ) ජය ගන්න
-   !important අවශ්‍ය — ඒත් ඒ scope එක [data-rt-article] ඇතුළට සීමිතයි.
-   ========================================================================== */
+/* ---------------------------------------------------------------- surface */
+/* .custom-post-content = PostSingle.astro wrapper. It is listed alongside
+   [data-rt-article] so the saved theme paints on the FIRST frame, before
+   reader-tools.js has run and tagged the element. */
 
-[data-rt-article] {
+[data-rt-article],
+.custom-post-content {
   font-size: calc(1rem * var(--rt-font-scale));
   line-height: var(--rt-line-height);
   letter-spacing: var(--rt-letter);
-  transition: background-color .25s ease, color .25s ease;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-/* ---- paper (සුදු) ---- */
-html[data-rt-page="paper"] [data-rt-article] {
-  background: #fdfcf9;
-  color: #1b1d22;
-  padding: clamp(1rem, 4vw, 2rem);
-  border-radius: 14px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, .5);
+[data-rt-article] :is(p, li, blockquote, dd),
+.custom-post-content :is(p, li, blockquote, dd) {
+  line-height: inherit;
+  letter-spacing: inherit;
 }
-html[data-rt-page="paper"] [data-rt-article],
-html[data-rt-page="paper"] [data-rt-article] :is(p, li, span, div, h1, h2, h3, h4, h5, h6,
-  strong, b, em, i, u, small, td, th, figcaption, blockquote, dt, dd) {
+
+/* font families */
+html[data-rt-font="sinhala"] :is([data-rt-article], .custom-post-content) {
+  font-family: "Noto Sans Sinhala", "Iskoola Pota", system-ui, sans-serif;
+}
+html[data-rt-font="serif"] :is([data-rt-article], .custom-post-content) {
+  font-family: "Abhaya Libre", "Noto Serif Sinhala", Georgia, serif;
+}
+html[data-rt-font="system"] :is([data-rt-article], .custom-post-content) {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* measure */
+html[data-rt-measure="narrow"] :is([data-rt-article], .custom-post-content) {
+  max-width: 34rem;
+  margin-inline: auto;
+}
+html[data-rt-measure="wide"] :is([data-rt-article], .custom-post-content) {
+  max-width: none;
+}
+
+/* light surfaces.
+   The site is dark-only and uses Tailwind arbitrary colour classes on the
+   text nodes, so a container-level colour is not inherited - the child
+   override below is required. It runs once per theme switch, not per
+   frame, so the style recalc cost is a one-off. */
+html[data-rt-page="paper"] :is([data-rt-article], .custom-post-content),
+html[data-rt-page="sepia"] :is([data-rt-article], .custom-post-content),
+html[data-rt-page="contrast"] :is([data-rt-article], .custom-post-content) {
+  padding: clamp(1rem, 4vw, 1.75rem);
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+
+html[data-rt-page="paper"] :is([data-rt-article], .custom-post-content) {
+  background: #fdfcf9 !important;
   color: #1b1d22 !important;
 }
-html[data-rt-page="paper"] [data-rt-article] a {
-  color: #0b6f66 !important;
-  text-decoration-color: rgba(11, 111, 102, .45);
+html[data-rt-page="sepia"] :is([data-rt-article], .custom-post-content) {
+  background: #f3e6cf !important;
+  color: #47341f !important;
 }
-html[data-rt-page="paper"] [data-rt-article] blockquote {
+html[data-rt-page="contrast"] :is([data-rt-article], .custom-post-content) {
+  background: #000 !important;
+  color: #fff !important;
+}
+
+html[data-rt-page="paper"] :is([data-rt-article], .custom-post-content) :is(p, li, span, div, h1, h2, h3, h4, h5, h6, strong, b, em, i, u, small, td, th, dt, dd, figcaption, blockquote),
+html[data-rt-page="sepia"] :is([data-rt-article], .custom-post-content) :is(p, li, span, div, h1, h2, h3, h4, h5, h6, strong, b, em, i, u, small, td, th, dt, dd, figcaption, blockquote),
+html[data-rt-page="contrast"] :is([data-rt-article], .custom-post-content) :is(p, li, span, div, h1, h2, h3, h4, h5, h6, strong, b, em, i, u, small, td, th, dt, dd, figcaption, blockquote) {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+html[data-rt-page="paper"] :is([data-rt-article], .custom-post-content) a {
+  color: #0b6f66 !important;
+}
+html[data-rt-page="sepia"] :is([data-rt-article], .custom-post-content) a {
+  color: #8a5a1c !important;
+}
+html[data-rt-page="contrast"] :is([data-rt-article], .custom-post-content) a {
+  color: #7dd3fc !important;
+}
+
+html[data-rt-page="paper"] :is([data-rt-article], .custom-post-content) blockquote {
   background: #f1efe7 !important;
   border-left-color: #0b6f66 !important;
 }
-html[data-rt-page="paper"] [data-rt-article] :is(code, pre, kbd) {
-  background: #ecebe4 !important;
-  color: #1b1d22 !important;
-}
-html[data-rt-page="paper"] [data-rt-article] :is(hr, table, td, th) {
-  border-color: rgba(0, 0, 0, .14) !important;
+html[data-rt-page="sepia"] :is([data-rt-article], .custom-post-content) blockquote {
+  background: #ead9bd !important;
+  border-left-color: #8a5a1c !important;
 }
 
-/* ---- sepia ---- */
-html[data-rt-page="sepia"] [data-rt-article] {
-  background: #f6ecd9;
-  color: #3b2f1e;
-  padding: clamp(1rem, 4vw, 2rem);
-  border-radius: 14px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, .5);
+/* focus mode. opacity only - `filter` promotes a compositing layer on
+   header/footer and turned every scroll frame into a repaint. */
+html[data-rt-focus="on"] [data-rt-dim] {
+  opacity: 0.1;
+  transition: opacity 0.3s ease;
 }
-html[data-rt-page="sepia"] [data-rt-article],
-html[data-rt-page="sepia"] [data-rt-article] :is(p, li, span, div, h1, h2, h3, h4, h5, h6,
-  strong, b, em, i, u, small, td, th, figcaption, blockquote, dt, dd) {
-  color: #3b2f1e !important;
-}
-html[data-rt-page="sepia"] [data-rt-article] a {
-  color: #8a5a1a !important;
-}
-html[data-rt-page="sepia"] [data-rt-article] blockquote {
-  background: #eee0c6 !important;
-  border-left-color: #8a5a1a !important;
-}
-html[data-rt-page="sepia"] [data-rt-article] :is(code, pre, kbd) {
-  background: #eadfc6 !important;
-  color: #3b2f1e !important;
-}
-html[data-rt-page="sepia"] [data-rt-article] :is(hr, table, td, th) {
-  border-color: rgba(90, 70, 40, .22) !important;
+html[data-rt-focus="on"] [data-rt-dim]:focus-within {
+  opacity: 1;
 }
 
-/* ---- high contrast (dark, ඒත් වඩා දීප්ත) ---- */
-html[data-rt-page="contrast"] [data-rt-article],
-html[data-rt-page="contrast"] [data-rt-article] :is(p, li, span, div, h1, h2, h3, h4, h5, h6,
-  strong, b, em, i, td, th, blockquote) {
-  color: #ffffff !important;
+/* tts highlight */
+.rt-speaking {
+  background: rgba(1, 173, 159, 0.16) !important;
+  box-shadow: inset 3px 0 0 var(--rt-accent);
+  border-radius: 6px;
 }
 
-/* ---- fonts ---- */
-html[data-rt-font="sinhala"] [data-rt-article] {
-  font-family: "Noto Sans Sinhala", "Iskoola Pota", "Abhaya Libre", system-ui, sans-serif;
-}
-html[data-rt-font="serif"] [data-rt-article] {
-  font-family: "Abhaya Libre", "Noto Serif Sinhala", "Iskoola Pota", Georgia, serif;
-}
-html[data-rt-font="system"] [data-rt-article] {
+/* ------------------------------------------------------------------ root */
+
+.rt-root {
   font-family: inherit;
 }
-
-/* ---- line width ---- */
-html[data-rt-measure="narrow"] [data-rt-article] > *,
-html[data-rt-measure="wide"] [data-rt-article] > * {
-  margin-inline: auto;
-}
-html[data-rt-measure="narrow"] [data-rt-article] > * { max-width: 34em; }
-html[data-rt-measure="wide"]   [data-rt-article] > * { max-width: 52em; }
-
-/* ==========================================================================
-   2. FOCUS MODE
-   ========================================================================== */
-[data-rt-dim] { transition: opacity .3s ease, filter .3s ease; }
-
-html[data-rt-focus="on"] [data-rt-dim] {
-  opacity: .07;
-  filter: saturate(.15);
-  pointer-events: none;
+.rt-root * {
+  box-sizing: border-box;
 }
 
-/* ==========================================================================
-   3. TTS highlight
-   ========================================================================== */
-.rt-speaking {
-  background: rgba(1, 173, 159, .22);
-  border-radius: 6px;
-  box-shadow: 0 0 0 4px rgba(1, 173, 159, .1);
-}
-html[data-rt-page="paper"] .rt-speaking,
-html[data-rt-page="sepia"] .rt-speaking {
-  background: rgba(1, 173, 159, .3);
+/* The age gate blurs and disables every body child, but it does not stop
+   a keyboard user reaching the FAB. Hard-hide it instead. */
+html.age-gate-pending .rt-root {
+  display: none !important;
 }
 
-/* ==========================================================================
-   4. progress bar
-   ========================================================================== */
+/* ---------------------------------------------------------------- progress */
+
 .rt-progress {
   position: fixed;
-  inset: 0 0 auto 0;
+  top: 0;
+  left: 0;
+  width: 100%;
   height: 3px;
   z-index: var(--rt-z-progress);
   pointer-events: none;
   background: transparent;
 }
+/* scaleX on a child: compositor-only, so scroll never triggers layout.
+   Animating `width` here was the main cause of scroll jank. */
 .rt-progress > i {
   display: block;
+  width: 100%;
   height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, var(--rt-accent), #4ff0e2);
-  box-shadow: 0 0 10px rgba(1, 173, 159, .6);
-  transition: width .08s linear;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #01ad9f, #34d399);
+  will-change: transform;
 }
 
-/* ==========================================================================
-   5. FAB — දකුණු දාරයේ, මැද උසින්.
-   (comment FAB එක bottom-right නිසා hitaamatha ඉහළින් තියෙනවා)
-   ========================================================================== */
+/* -------------------------------------------------------------------- fab */
+
 .rt-fab {
   position: fixed;
   right: 0;
-  top: 40%;
+  top: 42%;
   z-index: var(--rt-z-fab);
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 4px;
-  width: 42px;
-  padding: 12px 0;
-  border: 1px solid rgba(1, 173, 159, .3);
+  margin: 0;
+  padding: 11px 7px 12px;
+  border: 1px solid rgba(1, 173, 159, 0.4);
   border-right: 0;
   border-radius: 14px 0 0 14px;
-  background: var(--rt-bg);
+  background: rgba(12, 13, 16, 0.94);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   color: var(--rt-accent);
-  box-shadow: var(--rt-shadow);
   cursor: pointer;
-  transition: transform .2s ease, background-color .2s ease, opacity .2s ease;
+  box-shadow: -6px 0 22px rgba(0, 0, 0, 0.45);
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.25s ease,
+    opacity 0.2s ease;
 }
-.rt-fab:hover {
-  background: var(--rt-bg-2);
-  transform: translateX(-2px);
+.rt-fab:hover,
+.rt-fab:focus-visible {
+  background: var(--rt-accent);
+  color: #010203;
+  outline: none;
 }
-.rt-fab:focus-visible { outline: 2px solid var(--rt-accent); outline-offset: 2px; }
-.rt-fab svg { width: 20px; height: 20px; display: block; }
-.rt-fab[aria-expanded="true"] { opacity: 0; pointer-events: none; }
+.rt-fab svg {
+  display: block;
+  width: 19px;
+  height: 19px;
+}
+.rt-fab-txt {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+.rt-root[data-open="1"] .rt-fab {
+  opacity: 0;
+  transform: translateX(110%);
+  pointer-events: none;
+}
+/* hidden until reader-tools.js confirms the page has a real article */
+.rt-root:not([data-rt-ready="1"]) .rt-fab,
+.rt-root:not([data-rt-ready="1"]) .rt-progress {
+  display: none;
+}
 
-/* ==========================================================================
-   6. scrim + panel
-   ========================================================================== */
+/* ------------------------------------------------------------------ scrim */
+
 .rt-scrim {
   position: fixed;
   inset: 0;
   z-index: var(--rt-z-scrim);
-  background: rgba(1, 2, 3, .55);
+  background: rgba(1, 2, 3, 0.55);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   opacity: 0;
-  transition: opacity .25s ease;
+  visibility: hidden;
+  transition: opacity 0.28s ease, visibility 0.28s ease;
 }
-.rt-scrim[data-show="1"] { opacity: 1; }
+.rt-root[data-open="1"] .rt-scrim {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ------------------------------------------------------------------ panel */
+/* visibility (not the `hidden` attribute) so the slide can actually
+   transition - display:none cancels transitions outright. */
 
 .rt-panel {
   position: fixed;
   top: 0;
   right: 0;
-  height: 100dvh;
+  height: 100%;
   width: var(--rt-panel-w);
   z-index: var(--rt-z-panel);
   display: flex;
   flex-direction: column;
   background: var(--rt-bg);
-  color: var(--rt-fg);
-  border-left: 1px solid rgba(1, 173, 159, .2);
+  border-left: 1px solid var(--rt-border);
   box-shadow: var(--rt-shadow);
-  transform: translateX(100%);
-  transition: transform .28s cubic-bezier(.32, .72, 0, 1);
+  color: var(--rt-fg);
+  transform: translateX(102%);
+  visibility: hidden;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0.3s ease;
+  overscroll-behavior: contain;
 }
-.rt-panel[data-open="1"] { transform: none; }
+.rt-root[data-open="1"] .rt-panel {
+  transform: translateX(0);
+  visibility: visible;
+}
 
 .rt-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 14px 10px;
+  gap: 9px;
+  flex: 0 0 auto;
+  padding: 14px 14px 12px;
   border-bottom: 1px solid var(--rt-border);
 }
 .rt-head-dot {
-  width: .6rem;
-  height: .6rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  flex: 0 0 auto;
   border-radius: 999px;
   background: var(--rt-accent);
-  flex: 0 0 auto;
+  box-shadow: 0 0 10px rgba(1, 173, 159, 0.6);
+}
+.rt-head-txt {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .rt-title {
-  font-size: .95rem;
+  display: block;
+  font-size: 13px;
   font-weight: 800;
-  flex: 1;
-  margin: 0;
-  color: var(--rt-fg);
+}
+.rt-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--rt-muted);
+  font-variant-numeric: tabular-nums;
 }
 .rt-iconbtn {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
   flex: 0 0 auto;
   border: 1px solid var(--rt-border);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .02);
-  color: var(--rt-muted);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--rt-fg);
   cursor: pointer;
-  transition: color .2s ease, background-color .2s ease;
+  transition: background-color 0.18s ease, border-color 0.18s ease,
+    color 0.18s ease;
 }
-.rt-iconbtn:hover { background: rgba(255, 255, 255, .08); color: #f87171; }
-.rt-iconbtn svg { width: 18px; height: 18px; display: block; }
+.rt-iconbtn svg {
+  width: 15px;
+  height: 15px;
+}
+.rt-close:hover,
+.rt-close:focus-visible {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #f87171;
+  outline: none;
+}
+
+/* ------------------------------------------------------------------- tabs */
 
 .rt-tabs {
   display: flex;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 2px;
+  flex: 0 0 auto;
+  padding: 8px 8px 0;
+  border-bottom: 1px solid var(--rt-border);
   overflow-x: auto;
   scrollbar-width: none;
-  border-bottom: 1px solid var(--rt-border);
 }
-.rt-tabs::-webkit-scrollbar { display: none; }
-
+.rt-tabs::-webkit-scrollbar {
+  display: none;
+}
 .rt-tab {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 7px 11px;
-  white-space: nowrap;
-  font-size: .8rem;
-  font-weight: 700;
-  border-radius: 999px;
-  cursor: pointer;
-  border: 1px solid var(--rt-border);
-  background: rgba(255, 255, 255, .03);
+  gap: 3px;
+  padding: 7px 9px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
   color: var(--rt-muted);
-  transition: color .2s ease, background-color .2s ease, border-color .2s ease;
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease;
 }
-.rt-tab svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.rt-tab svg {
+  width: 16px;
+  height: 16px;
+}
 .rt-tab[aria-selected="true"] {
-  background: rgba(1, 173, 159, .14);
-  border-color: rgba(1, 173, 159, .45);
   color: var(--rt-accent);
+  border-bottom-color: var(--rt-accent);
 }
+
+/* ------------------------------------------------------------------- body */
 
 .rt-body {
-  flex: 1;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 14px;
-  font-size: .88rem;
 }
-.rt-body::-webkit-scrollbar { width: 8px; }
-.rt-body::-webkit-scrollbar-track { background: transparent; }
-.rt-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, .1);
-  border-radius: 8px;
-}
-
-/* ==========================================================================
-   7. controls
-   ========================================================================== */
-.rt-group { margin-bottom: 18px; }
-
-.rt-label {
+.rt-group {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 7px;
+}
+.rt-label {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--rt-muted);
+}
+.rt-row {
+  display: flex;
   align-items: center;
   gap: 8px;
-  font-size: .72rem;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--rt-muted);
-  margin-bottom: 8px;
 }
-.rt-label [data-val] {
-  color: var(--rt-accent);
-  text-transform: none;
-  letter-spacing: normal;
+.rt-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
-
-.rt-seg { display: flex; gap: 6px; flex-wrap: wrap; }
-.rt-seg > button {
+.rt-chip {
   flex: 1 1 auto;
-  min-width: 56px;
-  padding: 9px 8px;
-  font-size: .82rem;
+  min-width: 58px;
+  padding: 8px 6px;
+  border: 1px solid var(--rt-border);
+  border-radius: 10px;
+  background: var(--rt-bg2);
+  color: var(--rt-fg);
+  font-size: 11px;
   font-weight: 700;
   cursor: pointer;
-  border: 1px solid var(--rt-border);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .03);
-  color: var(--rt-fg);
-  transition: border-color .2s ease, background-color .2s ease;
+  transition: background-color 0.18s ease, border-color 0.18s ease,
+    color 0.18s ease;
 }
-.rt-seg > button:hover { background: rgba(255, 255, 255, .07); }
-.rt-seg > button[aria-pressed="true"] {
-  border-color: rgba(1, 173, 159, .6);
-  background: rgba(1, 173, 159, .16);
+.rt-chip:hover {
+  border-color: rgba(1, 173, 159, 0.5);
+}
+.rt-chip[aria-pressed="true"] {
+  background: rgba(1, 173, 159, 0.14);
+  border-color: rgba(1, 173, 159, 0.6);
   color: var(--rt-accent);
 }
-
-.rt-range {
-  width: 100%;
-  accent-color: var(--rt-accent);
-  cursor: pointer;
-}
-
-.rt-select {
-  width: 100%;
-  padding: 10px;
-  font-size: .84rem;
-  border: 1px solid var(--rt-border);
-  border-radius: 12px;
-  background: var(--rt-bg-2);
-  color: var(--rt-fg);
-  cursor: pointer;
-}
-
-.rt-row { display: flex; gap: 8px; margin-bottom: 12px; }
-
 .rt-btn {
-  flex: 1;
-  padding: 10px;
-  font-size: .84rem;
-  font-weight: 700;
-  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  flex: 1 1 auto;
+  padding: 9px 12px;
   border: 1px solid var(--rt-border);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .03);
+  border-radius: 10px;
+  background: var(--rt-bg2);
   color: var(--rt-fg);
-  transition: background-color .2s ease;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
 }
-.rt-btn:hover { background: rgba(255, 255, 255, .08); }
-.rt-btn svg { width: 16px; height: 16px; flex: 0 0 auto; }
-
-.rt-btn--primary {
-  border-color: transparent;
+.rt-btn:hover {
+  border-color: rgba(1, 173, 159, 0.5);
+}
+.rt-btn[data-primary="1"] {
   background: var(--rt-accent);
+  border-color: var(--rt-accent);
   color: #010203;
 }
-.rt-btn--primary:hover { background: #01c4b4; }
-
-.rt-switch {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--rt-border);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .03);
-  cursor: pointer;
-  font-size: .84rem;
-  font-weight: 700;
+.rt-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
-.rt-switch input {
-  width: 42px;
-  height: 24px;
-  accent-color: var(--rt-accent);
+.rt-btn svg {
+  width: 15px;
+  height: 15px;
   flex: 0 0 auto;
+}
+
+/* touch-action: none is required. Base.astro sets `touch-action: pan-y`
+   on <body>, which swallowed the horizontal drag and made every slider
+   unusable on phones. */
+.rt-range {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 4px;
+  margin: 8px 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  outline: none;
+  touch-action: none;
+}
+.rt-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 17px;
+  height: 17px;
+  border: 2px solid var(--rt-bg);
+  border-radius: 999px;
+  background: var(--rt-accent);
   cursor: pointer;
 }
-
-.rt-note {
-  font-size: .76rem;
-  line-height: 1.65;
-  color: var(--rt-muted);
-  margin: 8px 0 0;
+.rt-range::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--rt-bg);
+  border-radius: 999px;
+  background: var(--rt-accent);
+  cursor: pointer;
 }
-.rt-note--accent {
+.rt-val {
+  min-width: 42px;
+  text-align: right;
+  font-size: 10.5px;
+  font-weight: 800;
   color: var(--rt-accent);
-  background: rgba(1, 173, 159, .08);
-  border: 1px solid rgba(1, 173, 159, .3);
-  padding: 10px 12px;
-  border-radius: 12px;
+  font-variant-numeric: tabular-nums;
 }
-.rt-empty { color: var(--rt-muted); font-size: .84rem; }
-
-/* ==========================================================================
-   8. TOC
-   ========================================================================== */
-.rt-meta {
+.rt-select {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--rt-border);
+  border-radius: 10px;
+  background: var(--rt-bg2);
+  color: var(--rt-fg);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.rt-note {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(1, 173, 159, 0.3);
+  border-radius: 10px;
+  background: rgba(1, 173, 159, 0.07);
+  color: var(--rt-accent);
+  font-size: 10.5px;
+  line-height: 1.65;
+}
+.rt-note[data-warn="1"] {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+  color: #fbbf24;
+}
+.rt-stats {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  font-size: .74rem;
+  gap: 8px;
+}
+.rt-stat {
+  flex: 1;
+  padding: 10px 8px;
+  border: 1px solid var(--rt-border);
+  border-radius: 12px;
+  background: var(--rt-bg2);
+  text-align: center;
+}
+.rt-stat b {
+  display: block;
+  font-size: 15px;
+  color: var(--rt-accent);
+  font-variant-numeric: tabular-nums;
+}
+.rt-stat span {
+  font-size: 9.5px;
   font-weight: 700;
   color: var(--rt-muted);
-  padding-bottom: 12px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--rt-border);
-}
-.rt-meta > span {
-  background: rgba(255, 255, 255, .04);
-  border: 1px solid var(--rt-border);
-  border-radius: 999px;
-  padding: 4px 10px;
 }
 
-.rt-toc { list-style: none; margin: 0; padding: 0; }
-.rt-toc li { margin: 0; list-style: none; }
+/* -------------------------------------------------------------------- toc */
+
+.rt-toc {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .rt-toc a {
   display: block;
-  padding: 8px 10px;
-  border-radius: 10px;
-  color: var(--rt-muted);
-  text-decoration: none;
-  font-size: .85rem;
-  line-height: 1.5;
+  padding: 7px 9px;
   border-left: 2px solid transparent;
-  transition: color .2s ease, background-color .2s ease;
+  border-radius: 9px;
+  color: var(--rt-fg);
+  font-size: 11.5px;
+  line-height: 1.55;
+  text-decoration: none;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
 }
-.rt-toc a:hover { background: rgba(255, 255, 255, .05); color: var(--rt-fg); }
+.rt-toc a:hover {
+  background: rgba(1, 173, 159, 0.12);
+}
 .rt-toc a[data-active="1"] {
-  color: var(--rt-accent);
+  background: rgba(1, 173, 159, 0.14);
   border-left-color: var(--rt-accent);
-  background: rgba(1, 173, 159, .1);
+  color: var(--rt-accent);
   font-weight: 700;
 }
-.rt-toc [data-depth="3"] a { padding-left: 22px; font-size: .81rem; }
-.rt-toc [data-depth="4"] a { padding-left: 34px; font-size: .79rem; }
+.rt-toc li[data-lvl="3"] a {
+  padding-left: 20px;
+  font-size: 11px;
+  color: var(--rt-muted);
+}
+.rt-toc li[data-lvl="4"] a {
+  padding-left: 30px;
+  font-size: 10.5px;
+  color: var(--rt-muted);
+}
+.rt-empty {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--rt-muted);
+}
 
-/* ==========================================================================
-   9. mobile — bottom sheet
-   ========================================================================== */
+/* ------------------------------------------------------------------ mobile */
+/* Bottom sheet, and the FAB moves to the LEFT edge: the comments FAB
+   already owns bottom-right (Tailwind bottom-6 right-6) and the two
+   were stacking on top of each other. */
+
 @media (max-width: 640px) {
   .rt-panel {
     top: auto;
     bottom: 0;
-    right: 0;
     left: 0;
+    right: 0;
     width: 100%;
-    height: min(80dvh, 620px);
+    height: min(84vh, 580px);
     border-left: 0;
-    border-top: 1px solid rgba(1, 173, 159, .25);
-    border-radius: var(--rt-radius) var(--rt-radius) 0 0;
-    transform: translateY(100%);
+    border-top: 1px solid var(--rt-border);
+    border-radius: 18px 18px 0 0;
+    transform: translateY(102%);
   }
-  .rt-panel[data-open="1"] { transform: none; }
-  .rt-fab { top: 34%; }
+  .rt-root[data-open="1"] .rt-panel {
+    transform: translateY(0);
+  }
+  .rt-fab {
+    top: auto;
+    bottom: 1.5rem;
+    right: auto;
+    left: 0;
+    flex-direction: row;
+    padding: 10px 12px 10px 9px;
+    border: 1px solid rgba(1, 173, 159, 0.4);
+    border-left: 0;
+    border-radius: 0 14px 14px 0;
+    box-shadow: 6px 0 22px rgba(0, 0, 0, 0.45);
+  }
+  .rt-fab-txt {
+    writing-mode: horizontal-tb;
+    font-size: 10px;
+  }
+  .rt-root[data-open="1"] .rt-fab {
+    transform: translateX(-110%);
+  }
+}
+
+/* body scroll lock while the sheet is open */
+html.rt-locked,
+html.rt-locked body {
+  overflow: hidden !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rt-panel, .rt-scrim, .rt-fab, .rt-progress > i,
-  [data-rt-dim], [data-rt-article] {
+  .rt-panel,
+  .rt-scrim,
+  .rt-fab,
+  .rt-progress > i,
+  [data-rt-dim],
+  [data-rt-article],
+  .custom-post-content {
     transition: none !important;
   }
 }
 
 @media print {
-  .rt-root { display: none !important; }
-  html[data-rt-page] [data-rt-article] { box-shadow: none !important; }
+  .rt-root {
+    display: none !important;
+  }
+  html[data-rt-focus="on"] [data-rt-dim] {
+    opacity: 1;
+  }
 }
