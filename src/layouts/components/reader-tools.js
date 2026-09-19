@@ -53,7 +53,7 @@
   const MAX_CACHE_MS = 400;
 
   // auto-scroll tuning
-  const AUTO_PPS = [14, 22, 32, 45, 62, 84, 110, 140, 175, 215];
+  const AUTO_PPS = [12, 20, 30, 42, 58, 78, 100, 124, 150, 178];
   const AUTO_ARM_MS = 420;
   const AUTO_DRIFT = 120;
   const AUTO_MAX_DT = 64;
@@ -64,7 +64,13 @@
   const AUTO_WATCHDOG_MS = 1500;
   const AUTO_WD_POLL_MS = 400;
   const AUTO_WRITE_EPS = 0.5;
-  const AUTO_MIN_WRITE_PX = 3;
+  const AUTO_MIN_WRITE_PX = 2;
+  // Main-thread ayawya: phone ekak hira kanne px pramanaya nowei, ththparayakata
+  // siduwana programmatic scroll liweem gananai. ~18/s upper bound.
+  const AUTO_WRITE_MS = 55;
+  const AUTO_JANK_MS = 50;
+  const AUTO_GOV_MIN = 0.4;
+  const AUTO_GOV_UP = 0.02;
 
   const DEFAULTS = {
     page: 'dark',
@@ -272,28 +278,31 @@
       'html[data-rt-scrolling="1"],html[data-rt-scrolling="1"] body{' +
       'scroll-behavior:auto !important;}' +
       '.rt-root .rt-stopfab{display:none;position:fixed;left:50%;' +
-      'bottom:calc(1.25rem + env(safe-area-inset-bottom));' +
+      'bottom:calc(1.35rem + env(safe-area-inset-bottom));' +
       'transform:translateX(-50%) translateZ(0);z-index:9750;' +
-      'align-items:center;gap:8px;margin:0;padding:11px 17px 11px 13px;' +
-      'border:1px solid rgba(239,68,68,.65);border-radius:999px;' +
-      'background:#b91c1c;color:#fff;font-family:inherit;font-size:12px;' +
+      'align-items:center;gap:9px;margin:0;padding:6px 15px 6px 6px;' +
+      'border:1px solid rgba(248,113,113,.5);border-radius:999px;' +
+      'background:#7f1d1d;color:#fff;font-family:inherit;font-size:12.5px;' +
       'font-weight:800;line-height:1;white-space:nowrap;cursor:pointer;' +
       'pointer-events:auto;-webkit-tap-highlight-color:transparent;' +
-      'box-shadow:0 10px 26px rgba(0,0,0,.55);will-change:transform;}' +
+      'box-shadow:0 10px 26px rgba(0,0,0,.55);}' +
       '.rt-root[data-scrolling="1"] .rt-stopfab,' +
-      '.rt-root[data-autoscroll="1"] .rt-stopfab{display:inline-flex !important;}' +
-      '.rt-root .rt-stopfab[hidden]{display:none !important;}' +
+      '.rt-root[data-autoscroll="1"] .rt-stopfab,' +
+      '.rt-root .rt-stopfab[data-on="1"]{display:inline-flex !important;}' +
       '.rt-root[data-scrolling="1"] .rt-fab,' +
       '.rt-root[data-autoscroll="1"] .rt-fab{opacity:0 !important;' +
       'pointer-events:none !important;visibility:hidden !important;}' +
-      '.rt-root .rt-stopfab:active{transform:translateX(-50%) translateZ(0) scale(.96);}' +
-      '.rt-root .rt-stopfab svg{display:block;width:15px;height:15px;flex:0 0 auto;}' +
-      '.rt-root .rt-stopfab i{width:9px;height:9px;flex:0 0 auto;border-radius:999px;' +
-      'background:#fff;animation:wk-rt-pulse 1.1s ease-in-out infinite;}' +
-      '@keyframes wk-rt-pulse{0%,100%{opacity:1}50%{opacity:.25}}' +
+      '.rt-root .rt-stopfab-badge{display:grid;place-items:center;width:28px;' +
+      'height:28px;flex:0 0 auto;border-radius:999px;background:#fff;color:#b91c1c;}' +
+      '.rt-root .rt-stopfab-badge svg{display:block;width:13px;height:13px;}' +
+      '.rt-root .rt-stopfab-pct{min-width:36px;padding:3px 7px;border-radius:999px;' +
+      'background:rgba(255,255,255,.14);font-size:10.5px;text-align:center;' +
+      'font-variant-numeric:tabular-nums;}' +
+      '.rt-root .rt-stopfab:active{transform:translateX(-50%) translateZ(0) scale(.95);}' +
       '@media (max-width:640px){.rt-root .rt-stopfab{' +
-      'bottom:calc(4.75rem + env(safe-area-inset-bottom));font-size:12px;}}' +
-      '@media (prefers-reduced-motion:reduce){.rt-root .rt-stopfab i{animation:none;}}' +
+      'bottom:calc(4.9rem + env(safe-area-inset-bottom));padding:6px 14px 6px 6px;' +
+      'font-size:12px;}.rt-root .rt-stopfab-pct{display:none;}}' +
+      '@media (max-width:380px){.rt-root .rt-stopfab-txt{display:none;}}' +
       '@media print{.rt-root .rt-stopfab{display:none !important;}}';
     const s = document.createElement('style');
     s.id = AUTO_STYLE_ID;
@@ -304,7 +313,7 @@
   // --------------------------------------------------------------- elements
 
   const ui = {
-    root: null, bar: null, fab: null, stop: null, scrim: null, panel: null,
+    root: null, bar: null, fab: null, stop: null, stopPct: null, scrim: null, panel: null,
     tabs: null, body: null, sub: null, close: null,
   };
 
@@ -363,12 +372,19 @@
     ]);
 
     // auto-scroll දුවන වෙලාවේ පමණක් පෙනෙන කුඩා රතු නවත්වන බොත්තම.
+    // auto-scroll duwana welawa pamanakin penena raghu nawathvana boththama.
+    // Hadaawa: capsule ekak + wana waththuru badge ekak (stop glyph) + label
+    // ekak + live % chip ekak. Script ekakin 500ms walata wadhaa update wenne nae.
     const stopFab = el('button', {
       class: 'rt-stopfab',
       type: 'button',
+      'data-on': '0',
       'aria-label': 'ස්වයං-අනුචලනය නවත්වන්න',
-      title: 'නවත්වන්න',
-      html: '<i aria-hidden="true"></i>' + ICON.stop + '<span>නවත්වන්න</span>',
+      title: 'නවත්වන්න (Esc)',
+      html:
+        '<span class="rt-stopfab-badge" aria-hidden="true">' + ICON.stop + '</span>' +
+        '<span class="rt-stopfab-txt">නවත්වන්න</span>' +
+        '<span class="rt-stopfab-pct" data-rt-stop-pct>0%</span>',
     });
 
     const scrim = el('div', { class: 'rt-scrim', 'data-rt-scrim': '', 'aria-hidden': 'true' });
@@ -411,6 +427,7 @@
     ui.bar = bar;
     ui.fab = fab;
     ui.stop = stopFab;
+    ui.stopPct = $('[data-rt-stop-pct]', stopFab);
     ui.scrim = scrim;
     ui.panel = panel;
     ui.tabs = tabs;
@@ -498,18 +515,23 @@
   const auto = {
     raf: 0, last: 0, carry: 0, expect: -1, stall: 0, armed: false, armTimer: 0,
     prevY: 0, watchdog: 0, wdY: -1, wdAt: 0,
+    ms: 0, gov: 1, paused: false, stopFlag: false, pctAt: 0, pctShow: -1,
   };
 
   // watchdog: rAF loop එක reschedule නොවී නැවතුණොත් engine එක තනිවම
   // නවත්වනවා - ඉතිරි වූ loop එකක් දිගටම නොදුවන්න.
   function autoWatchdog() {
     if (!auto.raf) return;
-    const y = window.scrollY;
     const now = Date.now();
+    if (auto.paused) {
+      auto.wdAt = now;
+      return;
+    }
     if (now - auto.wdAt > AUTO_WATCHDOG_MS) {
       stopAuto();
       return;
     }
+    const y = window.scrollY;
     if (y !== auto.wdY) {
       auto.wdY = y;
       auto.wdAt = now;
@@ -517,11 +539,16 @@
   }
 
   function autoPps() {
-    return AUTO_PPS[clamp(Math.round(state.scrollSpeed), 1, 10) - 1];
+    return AUTO_PPS[clamp(Math.round(state.scrollSpeed), 1, 10) - 1] * auto.gov;
   }
 
-  // smooth hijack එකෙන් බේරෙන්න. data-rt-scrolling එකෙන් scroll-behavior
-  // auto වුණත්, behavior:'instant' එකෙන් inline style/plugin එකකුත් පරදිනවා.
+  // Jank governor: frame ekak diga una nam vega pahala. Manndagaami durakanayaka
+  // ANR eka valakvana pradhana aarakshakaya mekai.
+  function autoGovern(dt) {
+    if (dt > AUTO_JANK_MS) auto.gov = Math.max(AUTO_GOV_MIN, auto.gov - 0.08);
+    else if (auto.gov < 1) auto.gov = Math.min(1, auto.gov + AUTO_GOV_UP);
+  }
+
   function setY(y) {
     try {
       window.scrollTo({ top: y, left: 0, behavior: 'instant' });
@@ -542,15 +569,17 @@
     let dt = ts - auto.last;
     auto.last = ts;
     if (dt <= 0) return;
-    // tab throttle එකකින් හෝ jank එකකින් පිම්මක් නොපනින්න
     if (dt > AUTO_MAX_DT) dt = AUTO_MAX_DT;
 
-    // watchdog heartbeat: loop එක ජීවත්ව දුවනවා නම් wdAt යාවත්කාලීන වෙනවා
-    if (auto.watchdog) auto.wdAt = Date.now();
+    // watchdog heartbeat: loop eka jeewathwa duwanawa nam wdAt update wenawa
+    auto.wdAt = Date.now();
+    if (auto.paused) return;
+
+    autoGovern(dt);
 
     const y = window.scrollY;
 
-    // පරිශීලකයා අතින් අනුචලනය කළා නම් (scrollbar drag ඇතුළුව) නවතිනවා
+    // user athin anuchalanaya kaloth (scrollbar drag athuluwa) nawatinawa
     if (auto.armed && auto.expect >= 0 && Math.abs(y - auto.expect) > AUTO_DRIFT) {
       stopAuto();
       return;
@@ -562,33 +591,42 @@
       return;
     }
 
-    // Stall guard: පිටුව ඇත්තටම අප ලිව්ව අගයට (auto.expect) ආවාද කියා පමණක්
-    // බලනවා. write-throttle නිසා frames කිහිපයක් අතරතුර ලියන්නේ නැති නිසා
-    // "y වෙනස් නොවීම" තනිවම නරක ලකුණක් නොවේ.
+    // Stall guard: api liyapu agayata (auto.expect) awaada kiyala pamanaki balanne.
     if (auto.expect >= 0) {
       if (y < auto.expect - AUTO_WRITE_EPS) auto.stall++;
       else auto.stall = 0;
+      if (auto.stall > STALL_FRAMES) {
+        stopAuto();
+        return;
+      }
     }
     auto.prevY = y;
 
+    auto.ms += dt;
     auto.carry += (autoPps() * dt) / 1000;
-    // Write-throttle: 1px/frame @60fps = තත්පරයකට programmatic scroll 60ක් +
-    // scroll event 60ක් + viewport update 60ක්. දිගු පිටුවක ඒක තමයි මුළු
-    // main-thread අයවැයම. අඩුම තරමින් 3px එකතු වූ පසු පමණක් ලිව්වොත්
-    // එය ~15/s දක්වා අඩු වන අතර කියවන විට පෙනුමේ වෙනසක් නෑ.
-    if (auto.carry < AUTO_MIN_WRITE_PX) return;
+    if (auto.carry > 320) auto.carry = 320;
+
+    // Write budget: ththparayakata liweem ~18k. px pramanaya nowei liweem
+    // gananai durakanayaka main thread eka hira kanne - frame ekakata liwimak
+    // = scroll event + viewport update + raster.
+    if (auto.ms < AUTO_WRITE_MS || auto.carry < AUTO_MIN_WRITE_PX) return;
+    auto.ms -= AUTO_WRITE_MS;
+    if (auto.ms > AUTO_WRITE_MS * 4) auto.ms = AUTO_WRITE_MS * 4;
+
     const step = Math.floor(auto.carry);
     auto.carry -= step;
 
     const target = Math.min(max, y + step);
     setY(target);
-
-    // expect = ලිව්ව අගයමයි; නැවත කියවීමක් නෑ (අමතර forced layout එකක් නෑ)
     auto.expect = target;
 
-    if (auto.stall > STALL_FRAMES) {
-      stopAuto();
-      return;
+    if (ui.stopPct && ts - auto.pctAt > 500) {
+      auto.pctAt = ts;
+      const pct = max > 0 ? Math.min(100, Math.round((target / max) * 100)) : 100;
+      if (pct !== auto.pctShow) {
+        auto.pctShow = pct;
+        ui.stopPct.textContent = pct + '%';
+      }
     }
   }
 
@@ -596,8 +634,7 @@
     if (auto.raf || !article) return;
     if (scrollMax(true) <= 8) return;
 
-    // panel එක වැහෙනවා: scroll lock සහ scrim දෙකම ඉවත් වෙනවා, කතාව
-    // කියවෙනවා, සහ ANR එකට හේතු වුණ full-screen repaint නවතිනවා.
+    // panel eka wahenawa: scroll lock saha scrim dekkama iwath wenawa.
     close();
     document.documentElement.classList.remove('rt-locked');
     ensureAutoStyle();
@@ -609,20 +646,28 @@
 
     auto.last = 0;
     auto.carry = 0;
+    auto.ms = 0;
     auto.stall = 0;
     auto.expect = -1;
     auto.armed = false;
+    auto.paused = false;
+    auto.gov = 1;
+    auto.pctAt = 0;
+    auto.pctShow = -1;
     auto.prevY = window.scrollY;
-    if (ui.stop) ui.stop.setAttribute('aria-pressed', 'true');
+    if (ui.stop) {
+      ui.stop.setAttribute('data-on', '1');
+      ui.stop.setAttribute('aria-pressed', 'true');
+      ui.stop.removeAttribute('data-paused');
+      if (ui.stopPct) ui.stopPct.textContent = '0%';
+    }
     if (auto.armTimer) clearTimeout(auto.armTimer);
-    // ආරම්භ කළ tap එකේම touchend/click එකෙන් ආපහු නවතින්නේ නැති වෙන්න
+    // arambha kala tap ekenma apeha nawatinne nathi wenna
     auto.armTimer = setTimeout(() => {
       auto.armTimer = 0;
       auto.armed = true;
     }, AUTO_ARM_MS);
 
-    // watchdog: rAF loop එක reschedule නොවී නැවතුණොත් engine එක තනිවම
-    // නවත්වනවා. ආරම්භයට කලින් පැරණි interval එකක් ඉතුරු නොවෙන්න ඉවත් කරනවා.
     auto.wdY = window.scrollY;
     auto.wdAt = Date.now();
     if (auto.watchdog) clearInterval(auto.watchdog);
@@ -630,8 +675,8 @@
 
     auto.raf = requestAnimationFrame(autoStep);
 
-    // CSS එකෙන් FAB එක visibility:hidden වෙන නිසා යතුරු පුවරුවෙන් ආ පරිශීලකයා
-    // නොපෙනෙන බොත්තමක රැඳී නොසිටින්න - focus එක පෙනෙන නවත්වන බොත්තමට යනවා.
+    // CSS eken FAB eka visibility:hidden wena nisa yathuru puwaruwe atha
+    // aawa user nopene buththamaka ranndi nositinna.
     if (ui.fab && ui.stop && document.activeElement === ui.fab) {
       try { ui.stop.focus({ preventScroll: true }); } catch (e) {}
     }
@@ -639,32 +684,40 @@
   }
 
   function stopAuto() {
+    if (auto.stopFlag) return;
+    auto.stopFlag = true;
+    // 1. Timers FIRST. main thread eka busy wunath nawathuma seethakai - me
+    //    nisa stop eka "ehema weda karanne nae" thaththwaya ain wenawa.
+    if (auto.armTimer) { clearTimeout(auto.armTimer); auto.armTimer = 0; }
+    if (auto.watchdog) { clearInterval(auto.watchdog); auto.watchdog = 0; }
     const was = !!auto.raf;
-    if (auto.raf) cancelAnimationFrame(auto.raf);
-    auto.raf = 0;
-    if (auto.armTimer) {
-      clearTimeout(auto.armTimer);
-      auto.armTimer = 0;
-    }
-    if (auto.watchdog) {
-      clearInterval(auto.watchdog);
-      auto.watchdog = 0;
-    }
+    if (auto.raf) { cancelAnimationFrame(auto.raf); auto.raf = 0; }
+    // 2. State (no layout reads here)
     auto.armed = false;
+    auto.paused = false;
     auto.last = 0;
     auto.carry = 0;
+    auto.ms = 0;
     auto.stall = 0;
     auto.expect = -1;
     auto.prevY = 0;
     auto.wdY = -1;
     auto.wdAt = 0;
+    auto.gov = 1;
+    auto.pctAt = 0;
+    auto.pctShow = -1;
+    // 3. DOM flags
     document.documentElement.removeAttribute('data-rt-scrolling');
     if (ui.root) {
       ui.root.removeAttribute('data-scrolling');
       ui.root.removeAttribute('data-autoscroll');
     }
-    if (ui.stop) ui.stop.setAttribute('aria-pressed', 'false');
-    // නවතින විට පමණක් කියවීමේ ස්ථානය ලියනවා (දුවන frame එකේදී ලියන්නේ නෑ)
+    if (ui.stop) {
+      ui.stop.setAttribute('data-on', '0');
+      ui.stop.setAttribute('aria-pressed', 'false');
+      ui.stop.removeAttribute('data-paused');
+    }
+    auto.stopFlag = false;
     if (was) {
       savePos();
       emit('autoscroll', false);
@@ -674,6 +727,35 @@
   function toggleAuto() {
     if (auto.raf) stopAuto();
     else startAuto();
+  }
+
+  // Wirama: raf eka duwamin thibe, liweem pamanaki nawathenne (position eka
+  // tamange thiyenawa). Nithara nawaththanne nam stop eka.
+  function pauseAuto() {
+    if (!auto.raf || auto.paused) return;
+    auto.paused = true;
+    auto.last = 0;
+    auto.carry = 0;
+    auto.ms = 0;
+    auto.stall = 0;
+    auto.expect = -1;
+    if (ui.stop) {
+      ui.stop.setAttribute('data-paused', '1');
+      if (ui.stopPct) ui.stopPct.textContent = '||';
+    }
+    emit('autoscrollpaused', true);
+  }
+
+  function resumeAuto() {
+    if (!auto.raf || !auto.paused) return;
+    auto.paused = false;
+    auto.last = 0;
+    auto.carry = 0;
+    auto.ms = 0;
+    auto.stall = 0;
+    auto.expect = -1;
+    if (ui.stop) ui.stop.removeAttribute('data-paused');
+    emit('autoscrollpaused', false);
   }
 
   // ------------------------------------------------------------ open/close
@@ -1068,7 +1150,7 @@
       });
 
       ttsStopHard();
-      tts = { i: 0, playing: false, stopped: true, userPaused: false, kick: null };
+      tts = { i: 0, playing: false, stopped: true, userPaused: false, kick: null, gen: 0, guard: 0 };
 
       const note = el('p', { class: 'rt-note', text: 'සූදානම්.' });
       const select = el('select', { class: 'rt-select', 'aria-label': 'හඬ තෝරන්න' });
@@ -1134,6 +1216,8 @@
           return;
         }
         tts.i = i;
+        const gen = tts.gen;
+        if (tts.guard) { clearTimeout(tts.guard); tts.guard = 0; }
         const item = queue[i];
         highlight(item.node);
 
@@ -1148,16 +1232,49 @@
         }
         u.rate = state.rate;
         u.pitch = state.pitch;
-        u.onend = () => {
-          if (tts && !tts.stopped) speakAt(i + 1);
+
+        // Single-shot: onend eka dekwarayak aawoth ho guard ekath ekkama
+        // aawoth chunk ekak skip nowenna 'advanced' flag eka.
+        let advanced = false;
+        const done = () => {
+          if (advanced) return;
+          advanced = true;
+          if (tts.guard) { clearTimeout(tts.guard); tts.guard = 0; }
+          if (!tts || tts.stopped || tts.gen !== gen) return;
+          speakAt(i + 1);
         };
+        u.onend = done;
         u.onerror = (ev) => {
           if (ev && (ev.error === 'interrupted' || ev.error === 'canceled')) return;
+          if (!tts || tts.gen !== gen) return;
           note.setAttribute('data-warn', '1');
           note.textContent = 'හඬ කියවීමේ දෝෂයක්. වෙනත් හඬක් තෝරා නැවත උත්සාහ කරන්න.';
           ttsStopHard();
           label('කියවන්න');
         };
+
+        // Samahara engine (wisheshayen network hand) onend nodenawa. Ewita
+        // kathawa polime sadahatama nawatinawa - nishchitha kala seemawakata
+        // passe idiriya yanawa. Wiramayedi nam eka push karanaawa.
+        const est = Math.max(4000, Math.min(60000,
+          Math.round((item.text.length / 11) * 1000 / Math.max(0.5, state.rate)) + 3500));
+        const t0 = Date.now();
+        const tick = () => {
+          if (!tts || tts.stopped || tts.gen !== gen) { if (tts) tts.guard = 0; return; }
+          if (synth.paused) { tts.guard = setTimeout(tick, 1500); return; }
+          const idle = synth.speaking === false && synth.pending === false;
+          // Thawa kathaa karanawa nam thawa welawak denawa; 2x estimate eken
+          // passe nam eka stuck utterance ekak - eka cancel karala idiriya.
+          if (!idle && Date.now() - t0 < est + 8000) {
+            tts.guard = setTimeout(tick, 1200);
+            return;
+          }
+          tts.guard = 0;
+          if (!idle) { try { synth.cancel(); } catch (e) {} }
+          done();
+        };
+        tts.guard = setTimeout(tick, est);
+
         try {
           synth.speak(u);
         } catch (e) {
@@ -1176,6 +1293,9 @@
           return;
         }
         if (tts.playing) return;
+        const gen = ++tts.gen;
+        if (tts.guard) { clearTimeout(tts.guard); tts.guard = 0; }
+        if (tts.kick) { clearTimeout(tts.kick); tts.kick = null; }
         tts.stopped = false;
         tts.playing = true;
         tts.userPaused = false;
@@ -1184,8 +1304,8 @@
         label('කියවනවා');
         try { synth.cancel(); } catch (e) {}
         tts.kick = setTimeout(() => {
-          if (!tts) return;
           tts.kick = null;
+          if (!tts || tts.gen !== gen) return;
           speakAt(tts.i);
         }, 90);
       }
@@ -1200,6 +1320,12 @@
       }
 
       function stopVoice() {
+        if (tts) {
+          tts.gen++;
+          if (tts.kick) { clearTimeout(tts.kick); tts.kick = null; }
+          if (tts.guard) { clearTimeout(tts.guard); tts.guard = 0; }
+        }
+        try { synth.cancel(); } catch (e) {}
         ttsStopHard();
         if (tts) tts.i = 0;
         label('කියවන්න');
@@ -1227,6 +1353,12 @@
       return () => {
         clearTimeout(poll);
         synth.removeEventListener('voiceschanged', fillVoices);
+        if (tts) {
+          tts.gen++;
+          if (tts.kick) clearTimeout(tts.kick);
+          if (tts.guard) clearTimeout(tts.guard);
+        }
+        try { synth.cancel(); } catch (e) {}
         ttsStopHard();
         tts = null;
       };
@@ -1260,6 +1392,7 @@
       ));
 
       const btn = el('button', { class: 'rt-btn', type: 'button' });
+      const btnPause = el('button', { class: 'rt-btn', type: 'button' });
 
       function paint() {
         const running = !!auto.raf;
@@ -1271,11 +1404,29 @@
         if (running) btn.removeAttribute('data-primary');
         else btn.removeAttribute('data-danger');
       }
-      paint();
-      const offAuto = on('autoscroll', paint);
-      btn.addEventListener('click', toggleAuto);
 
-      box.appendChild(btn);
+      function paintPause() {
+        const running = !!auto.raf;
+        const held = running && auto.paused;
+        btnPause.innerHTML =
+          (held ? ICON.play : ICON.pause) +
+          '<span>' + (held ? 'දිගටම' : 'විරාමය') + '</span>';
+        btnPause.disabled = !running;
+        btnPause.setAttribute('aria-pressed', held ? 'true' : 'false');
+      }
+
+      paint();
+      paintPause();
+      const offAuto = on('autoscroll', () => { paint(); paintPause(); });
+      const offPaused = on('autoscrollpaused', paintPause);
+      btn.addEventListener('click', toggleAuto);
+      btnPause.addEventListener('click', () => {
+        if (!auto.raf) return;
+        if (auto.paused) resumeAuto();
+        else pauseAuto();
+      });
+
+      box.appendChild(el('div', { class: 'rt-row' }, [btn, btnPause]));
       box.appendChild(el('p', {
         class: 'rt-empty',
         text: 'අරඹන විට මේ මෙනුව ස්වයංක්‍රීයව වැසෙනවා. නවත්වන්න පහළ මැදින් පෙනෙන රතු බොත්තම ඔබන්න, නැතිනම් තිරය අතින් අනුචලනය කරන්න. පිටුව අවසානයේ තනිවම නවතිනවා.',
@@ -1292,7 +1443,7 @@
           html: ICON.up + '<span>කලින් නැවතුණ තැනට (' + Math.round(saved * 100) + '%)</span>',
           onclick: () => {
             stopAuto();
-            window.scrollTo({ top: scrollMax(true) * saved, behavior: behavior() });
+            window.scrollTo({ top: scrollMax(true) * saved, behavior: isMobile() ? 'auto' : behavior() });
             if (isMobile()) close();
           },
         }));
@@ -1303,21 +1454,19 @@
           class: 'rt-btn', type: 'button', html: ICON.up + '<span>මුලට</span>',
           onclick: () => {
             stopAuto();
-            window.scrollTo({ top: 0, behavior: behavior() });
+            window.scrollTo({ top: 0, behavior: isMobile() ? 'auto' : behavior() });
           },
         }),
         el('button', {
           class: 'rt-btn', type: 'button', html: ICON.down + '<span>අන්තිමට</span>',
           onclick: () => {
             stopAuto();
-            window.scrollTo({ top: scrollMax(true), behavior: behavior() });
+            window.scrollTo({ top: scrollMax(true), behavior: isMobile() ? 'auto' : behavior() });
           },
         }),
       ]));
 
-      // cleanup එකෙන් auto-scroll නවත්වන්නේ නෑ — panel එක වැහුණත්
-      // දිගටම යන්න ඕන. teardown එකෙන් පමණක් නවතිනවා.
-      return () => { offAuto(); };
+      return () => { offAuto(); offPaused(); };
     },
   });
 
@@ -1433,7 +1582,8 @@
     // යතුරක් එබීමක් එකෙන්ම නවතිනවා. capture phase එකේ බැඳී ඇති නිසා වෙන
     // කිසිම handler එකකට වඩා මුලින්ම දුවනවා.
     const tapStop = (ev) => {
-      if (!auto.raf || !auto.armed) return;
+      // armed window eketh nawathvanawa - user ta "weda karanne nae" lesa penenne nae
+      if (!auto.raf) return;
       const t = ev ? ev.target : null;
       if (t && ui.stop && (t === ui.stop || ui.stop.contains(t))) {
         stopAuto();
@@ -1593,7 +1743,7 @@
   // ---------------------------------------------------------------- api
 
   window.ReaderTools = {
-    version: 11,
+    version: 12,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
