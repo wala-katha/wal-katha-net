@@ -59,6 +59,11 @@
   const AUTO_MAX_DT = 64;
   const STALL_FRAMES = 45;
   const AUTO_STYLE_ID = 'wk-rt-auto-style';
+  // watchdog: rAF loop එක reschedule නොවී නැවතුණොත් engine එක තනිවම
+  // නවත්වනවා (නිදාගත් tab throttle, නැති වූ raf id වැනි).
+  const AUTO_WATCHDOG_MS = 1500;
+  const AUTO_WD_POLL_MS = 400;
+  const AUTO_WRITE_EPS = 0.5;
 
   const DEFAULTS = {
     page: 'dark',
@@ -263,29 +268,32 @@
   function ensureAutoStyle() {
     if (!document.head || document.getElementById(AUTO_STYLE_ID)) return;
     const css =
-      'html[data-rt-scrolling="1"]{scroll-behavior:auto !important;}' +
+      'html[data-rt-scrolling="1"],html[data-rt-scrolling="1"] body{' +
+      'scroll-behavior:auto !important;}' +
       '.rt-root .rt-stopfab{display:none;position:fixed;left:50%;' +
       'bottom:calc(1.25rem + env(safe-area-inset-bottom));' +
-      'transform:translateX(-50%) translateZ(0);z-index:2147480000;' +
+      'transform:translateX(-50%) translateZ(0);z-index:9650;' +
       'align-items:center;gap:8px;margin:0;padding:11px 17px 11px 13px;' +
       'border:1px solid rgba(239,68,68,.65);border-radius:999px;' +
       'background:#b91c1c;color:#fff;font-family:inherit;font-size:12px;' +
       'font-weight:800;line-height:1;white-space:nowrap;cursor:pointer;' +
-      'box-shadow:0 10px 26px rgba(0,0,0,.55);' +
-      '-webkit-tap-highlight-color:transparent;will-change:transform;}' +
+      'pointer-events:auto;-webkit-tap-highlight-color:transparent;' +
+      'box-shadow:0 10px 26px rgba(0,0,0,.55);will-change:transform;}' +
       '.rt-root[data-scrolling="1"] .rt-stopfab,' +
       '.rt-root[data-autoscroll="1"] .rt-stopfab{display:inline-flex !important;}' +
+      '.rt-root .rt-stopfab[hidden]{display:none !important;}' +
       '.rt-root[data-scrolling="1"] .rt-fab,' +
       '.rt-root[data-autoscroll="1"] .rt-fab{opacity:0 !important;' +
-      'pointer-events:none !important;}' +
+      'pointer-events:none !important;visibility:hidden !important;}' +
       '.rt-root .rt-stopfab:active{transform:translateX(-50%) translateZ(0) scale(.96);}' +
       '.rt-root .rt-stopfab svg{display:block;width:15px;height:15px;flex:0 0 auto;}' +
       '.rt-root .rt-stopfab i{width:9px;height:9px;flex:0 0 auto;border-radius:999px;' +
       'background:#fff;animation:wk-rt-pulse 1.1s ease-in-out infinite;}' +
       '@keyframes wk-rt-pulse{0%,100%{opacity:1}50%{opacity:.25}}' +
       '@media (max-width:640px){.rt-root .rt-stopfab{' +
-      'bottom:calc(5rem + env(safe-area-inset-bottom));font-size:12.5px;}}' +
-      '@media (prefers-reduced-motion:reduce){.rt-root .rt-stopfab i{animation:none;}}';
+      'bottom:calc(4.75rem + env(safe-area-inset-bottom));font-size:12px;}}' +
+      '@media (prefers-reduced-motion:reduce){.rt-root .rt-stopfab i{animation:none;}}' +
+      '@media print{.rt-root .rt-stopfab{display:none !important;}}';
     const s = document.createElement('style');
     s.id = AUTO_STYLE_ID;
     s.textContent = css;
@@ -488,7 +496,24 @@
   // නවතින්නේ නෑ; නමුත් පිටුව මාරු වෙනවිට teardown එකෙන් නවතිනවා.
   const auto = {
     raf: 0, last: 0, carry: 0, expect: -1, stall: 0, armed: false, armTimer: 0,
+    prevY: 0, watchdog: 0, wdY: -1, wdAt: 0,
   };
+
+  // watchdog: rAF loop එක reschedule නොවී නැවතුණොත් engine එක තනිවම
+  // නවත්වනවා - ඉතිරි වූ loop එකක් දිගටම නොදුවන්න.
+  function autoWatchdog() {
+    if (!auto.raf) return;
+    const y = window.scrollY;
+    const now = Date.now();
+    if (now - auto.wdAt > AUTO_WATCHDOG_MS) {
+      stopAuto();
+      return;
+    }
+    if (y !== auto.wdY) {
+      auto.wdY = y;
+      auto.wdAt = now;
+    }
+  }
 
   function autoPps() {
     return AUTO_PPS[clamp(Math.round(state.scrollSpeed), 1, 10) - 1];
@@ -510,6 +535,7 @@
 
     if (!auto.last) {
       auto.last = ts;
+      auto.prevY = window.scrollY;
       return;
     }
     let dt = ts - auto.last;
@@ -517,6 +543,9 @@
     if (dt <= 0) return;
     // tab throttle එකකින් හෝ jank එකකින් පිම්මක් නොපනින්න
     if (dt > AUTO_MAX_DT) dt = AUTO_MAX_DT;
+
+    // watchdog heartbeat: loop එක ජීවත්ව දුවනවා නම් wdAt යාවත්කාලීන වෙනවා
+    if (auto.watchdog) auto.wdAt = Date.now();
 
     const y = window.scrollY;
 
@@ -532,26 +561,27 @@
       return;
     }
 
+    // Stall guard: ලිව්වට පස්සේ ආපහු කියවීම (write-then-read) frame එකකට
+    // දෙවන forced layout එකක් ගෙනාවා - main thread හිර වීමට ඒක ප්රධාන හේතුව.
+    // දැන් කියවන්නේ පෙර frame එකේ ලියා තිබෙන auto.prevY සමඟ පමණයි.
+    if (auto.expect >= 0 && y <= auto.prevY + AUTO_WRITE_EPS) auto.stall++;
+    else auto.stall = 0;
+    auto.prevY = y;
+
     auto.carry += (autoPps() * dt) / 1000;
     const step = Math.floor(auto.carry);
     if (step < 1) return;
     auto.carry -= step;
 
-    setY(Math.min(max, y + step));
+    const target = Math.min(max, y + step);
+    setY(target);
 
-    const after = window.scrollY;
-    auto.expect = after;
+    // expect = ලිව්ව අගයමයි; නැවත කියවීමක් නෑ (අමතර forced layout එකක් නෑ)
+    auto.expect = target;
 
-    // Stall guard: overflow:hidden (panel lock) වගේ තත්ත්වයක scroll
-    // නොවෙනවා. කලින් ඒක අනන්ත rAF loop එකක් වී browser එක හිර වුණා.
-    if (after <= y + 0.5) {
-      auto.stall++;
-      if (auto.stall > STALL_FRAMES) {
-        stopAuto();
-        return;
-      }
-    } else {
-      auto.stall = 0;
+    if (auto.stall > STALL_FRAMES) {
+      stopAuto();
+      return;
     }
   }
 
@@ -575,6 +605,8 @@
     auto.stall = 0;
     auto.expect = -1;
     auto.armed = false;
+    auto.prevY = window.scrollY;
+    if (ui.stop) ui.stop.setAttribute('aria-pressed', 'true');
     if (auto.armTimer) clearTimeout(auto.armTimer);
     // ආරම්භ කළ tap එකේම touchend/click එකෙන් ආපහු නවතින්නේ නැති වෙන්න
     auto.armTimer = setTimeout(() => {
@@ -582,7 +614,20 @@
       auto.armed = true;
     }, AUTO_ARM_MS);
 
+    // watchdog: rAF loop එක reschedule නොවී නැවතුණොත් engine එක තනිවම
+    // නවත්වනවා. ආරම්භයට කලින් පැරණි interval එකක් ඉතුරු නොවෙන්න ඉවත් කරනවා.
+    auto.wdY = window.scrollY;
+    auto.wdAt = Date.now();
+    if (auto.watchdog) clearInterval(auto.watchdog);
+    auto.watchdog = setInterval(autoWatchdog, AUTO_WD_POLL_MS);
+
     auto.raf = requestAnimationFrame(autoStep);
+
+    // CSS එකෙන් FAB එක visibility:hidden වෙන නිසා යතුරු පුවරුවෙන් ආ පරිශීලකයා
+    // නොපෙනෙන බොත්තමක රැඳී නොසිටින්න - focus එක පෙනෙන නවත්වන බොත්තමට යනවා.
+    if (ui.fab && ui.stop && document.activeElement === ui.fab) {
+      try { ui.stop.focus({ preventScroll: true }); } catch (e) {}
+    }
     emit('autoscroll', true);
   }
 
@@ -594,17 +639,29 @@
       clearTimeout(auto.armTimer);
       auto.armTimer = 0;
     }
+    if (auto.watchdog) {
+      clearInterval(auto.watchdog);
+      auto.watchdog = 0;
+    }
     auto.armed = false;
     auto.last = 0;
     auto.carry = 0;
     auto.stall = 0;
     auto.expect = -1;
+    auto.prevY = 0;
+    auto.wdY = -1;
+    auto.wdAt = 0;
     document.documentElement.removeAttribute('data-rt-scrolling');
     if (ui.root) {
       ui.root.removeAttribute('data-scrolling');
       ui.root.removeAttribute('data-autoscroll');
     }
-    if (was) emit('autoscroll', false);
+    if (ui.stop) ui.stop.setAttribute('aria-pressed', 'false');
+    // නවතින විට පමණක් කියවීමේ ස්ථානය ලියනවා (දුවන frame එකේදී ලියන්නේ නෑ)
+    if (was) {
+      savePos();
+      emit('autoscroll', false);
+    }
   }
 
   function toggleAuto() {
@@ -1314,20 +1371,24 @@
     }
 
     const now = Date.now();
-    if (pct > 0.02 && now - lastSave > POS_SAVE_MS) {
+    // localStorage.setItem synchronous I/O - auto-scroll දුවන වෙලාවේ frame
+    // එකේදී ලිව්වොත් main thread එක ඇත්තටම හිර වෙනවා. ඒ නිසා දුවන වෙලාවේ
+    // ලියන්නේ නෑ; නවතින විට savePos() එකෙන් ලියනවා.
+    if (!auto.raf && pct > 0.02 && now - lastSave > POS_SAVE_MS) {
       lastSave = now;
-      try {
-        localStorage.setItem(posKey(curPath), pct.toFixed(3));
-      } catch (e) {}
+      savePos();
     }
   });
 
+  function savePos() {
+    try {
+      if (lastPct <= 0.02) return;
+      localStorage.setItem(posKey(curPath), lastPct.toFixed(3));
+    } catch (e) {}
+  }
+
   function flushPos() {
-    if (lastPct > 0.02) {
-      try {
-        localStorage.setItem(posKey(curPath), lastPct.toFixed(3));
-      } catch (e) {}
-    }
+    savePos();
     saveNow();
   }
 
@@ -1342,11 +1403,21 @@
 
     // රතු බොත්තම: stopPropagation නිසා පහළ abortAuto/document handler
     // වලට මේ click එක යන්නේ නෑ.
-    listen(ui.stop, 'click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
+    // රතු නවත්වන බොත්තම.
+    // click event එක main thread එක busy වෙලාවේ delay වෙනවා. තවත් ලොකු
+    // ප්රශ්නය: ඇඟිල්ල තද කරන විට browser එක ඒක scroll gesture එකක් ලෙස
+    // ගන්න නිසා click event එකම cancel වෙනවා. ඒ නිසා ඇත්තටම ලැබෙන
+    // පළමු event එකෙන්ම (pointerdown / touchstart) නවත්වනවා.
+    const hardStopAuto = (ev) => {
+      if (ev) {
+        if (ev.cancelable) ev.preventDefault();
+        ev.stopPropagation();
+      }
       stopAuto();
-    });
+    };
+    listen(ui.stop, 'pointerdown', hardStopAuto);
+    listen(ui.stop, 'touchstart', hardStopAuto, { passive: false });
+    listen(ui.stop, 'click', hardStopAuto);
 
     listen(window, 'scroll', onScroll, { passive: true });
     listen(window, 'resize', () => {
@@ -1486,7 +1557,7 @@
   // ---------------------------------------------------------------- api
 
   window.ReaderTools = {
-    version: 7,
+    version: 9,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
