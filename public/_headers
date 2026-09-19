@@ -1,42 +1,23 @@
-# 🎯 EARLY HINTS AUTOMATION NOTE (2026-08):
-# Per-post hero-image "Link: <...>; rel=preload; as=image" header rules
-# are auto-appended to this file's BUILD OUTPUT (dist/_headers) by
-# src/integrations/early-hints-preload.mjs (astro:build:done hook) -
-# NOT to this source file itself, since post images vary per post.
-# Once Speed > Optimization > Early Hints is enabled in the Cloudflare
-# dashboard for this zone, Cloudflare replays those Link headers as
-# real HTTP 103 Early Hints responses on subsequent requests.
+# Early Hints: per-post hero-image "Link: rel=preload" rules are appended to
+# dist/_headers (build output) by src/integrations/early-hints-preload.mjs.
+# Cloudflare replays them as HTTP 103 once Early Hints is enabled for the zone.
+#
+# 2026-09: connect-src now also allows https://translate.googleapis.com.
+# The reader tools "voice" tab uses it to translate the article chunk by
+# chunk when a non-Sinhala reading language is selected. Remove this entry
+# if that fallback is ever dropped from reader-tools.js.
 /*
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://comments.wala-katha.workers.dev https://api.web3forms.com https://cloudflareinsights.com; frame-ancestors 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://comments.wala-katha.workers.dev https://api.web3forms.com https://cloudflareinsights.com https://translate.googleapis.com; frame-ancestors 'self'
 
-# PAGESPEED "USE EFFICIENT CACHE LIFETIMES" FIX (Est savings 5 KiB):
-# PageSpeed flagged the Cloudflare beacon.min.js script (1d TTL) - that
-# script is served from Cloudflare's own static.cloudflareinsights.com
-# origin (Web Analytics dashboard feature), NOT from this codebase, so
-# its cache lifetime cannot be controlled here (see chat explanation).
+# Cache lifetimes for assets served from our own origin. Astro hashes JS/CSS
+# bundle filenames and site images never change in place (optimize-images.yml
+# rewrites a .webp only when its content changes), so a one-year immutable
+# cache is safe. The Cloudflare beacon script comes from
+# static.cloudflareinsights.com and its cache lifetime cannot be set here.
 #
-# What CAN be controlled from this file is every asset WE serve from our
-# own origin. Astro's build output hashes filenames for JS/CSS bundles
-# and this site's images are all static (never mutate in-place - see
-# optimize-images.yml, which always writes to the same .webp path only
-# when content actually changed), so it is 100% safe to cache these
-# aggressively for a full year with "immutable" - eliminating any
-# repeat-visit re-download entirely for these paths, which directly
-# improves the "Use efficient cache lifetimes" score for every asset
-# this site actually controls.
-#
-# 2026-08 CSP UPDATE (Footer "Watch Movies" popup - iframe removed):
-# the movies popup previously tried to embed teraboxpage.com inside an
-# <iframe>, which required whitelisting it under frame-src. That embed
-# was permanently abandoned - teraboxpage.com refuses to be rendered
-# inside any cross-origin iframe (its own X-Frame-Options/CSP policy,
-# not something we can override from here), the exact same limitation
-# already documented for the earlier Trustpilot iframe attempt. The
-# popup now opens teraboxpage.com as a normal new-tab link instead, so
-# frame-src no longer needs any teraboxpage.com/Trustpilot entries at
-# all - removing them keeps this policy as tight as possible instead of
-# leaving an unused, unnecessarily-broad allowance in place.
+# The footer "Watch Movies" popup opens teraboxpage.com in a new tab (its own
+# X-Frame-Options blocks iframes), so no frame-src allowance is needed.
 /images/*
   Cache-Control: public, max-age=31536000, immutable
 
