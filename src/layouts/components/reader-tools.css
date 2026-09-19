@@ -2,10 +2,12 @@
    Selectors: .rt-* (panel) and [data-rt-*] (surface).
    z-index: progress 9500, fab 9600, scrim 9700, stop pill 9750, panel 9800.
    age-gate overlay = 999999, so the gate always wins. */
+
 :root {
   --rt-font-scale: 1;
   --rt-line-height: 1.85;
   --rt-letter: 0em;
+
   --rt-bg: #0c0d10;
   --rt-bg2: #14161b;
   --rt-bg3: #1d2026;
@@ -14,18 +16,22 @@
   --rt-accent: #01ad9f;
   --rt-border: rgba(255, 255, 255, 0.09);
   --rt-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+
   --rt-panel-w: min(352px, 92vw);
   --rt-radius: 1.1rem;
+
   --rt-z-progress: 9500;
   --rt-z-fab: 9600;
   --rt-z-stop: 9750;
   --rt-z-scrim: 9700;
   --rt-z-panel: 9800;
 }
+
 /* ---------------------------------------------------------------- surface */
 /* .custom-post-content = PostSingle.astro wrapper. It is listed alongside
    [data-rt-article] so the saved theme paints on the FIRST frame, before
    reader-tools.js has run and tagged the element. */
+
 [data-rt-article],
 .custom-post-content {
   font-size: calc(1rem * var(--rt-font-scale));
@@ -33,11 +39,13 @@
   letter-spacing: var(--rt-letter);
   transition: background-color 0.25s ease, color 0.25s ease;
 }
+
 [data-rt-article] :is(p, li, blockquote, dd),
 .custom-post-content :is(p, li, blockquote, dd) {
   line-height: inherit;
   letter-spacing: inherit;
 }
+
 /* font families */
 html[data-rt-font="sinhala"] :is([data-rt-article], .custom-post-content) {
   font-family: "Noto Sans Sinhala", "Iskoola Pota", system-ui, sans-serif;
@@ -48,6 +56,7 @@ html[data-rt-font="serif"] :is([data-rt-article], .custom-post-content) {
 html[data-rt-font="system"] :is([data-rt-article], .custom-post-content) {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
 /* measure */
 html[data-rt-measure="narrow"] :is([data-rt-article], .custom-post-content) {
   max-width: 34rem;
@@ -56,6 +65,7 @@ html[data-rt-measure="narrow"] :is([data-rt-article], .custom-post-content) {
 html[data-rt-measure="wide"] :is([data-rt-article], .custom-post-content) {
   max-width: none;
 }
+
 /* light surfaces.
    The site is dark-only and uses Tailwind arbitrary colour classes on the
    text nodes, so a container-level colour is not inherited - the child
@@ -68,6 +78,7 @@ html[data-rt-page="contrast"] :is([data-rt-article], .custom-post-content) {
   border-radius: 14px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
 }
+
 html[data-rt-page="paper"] :is([data-rt-article], .custom-post-content) {
   background: #fdfcf9 !important;
   color: #1b1d22 !important;
@@ -80,12 +91,14 @@ html[data-rt-page="contrast"] :is([data-rt-article], .custom-post-content) {
   background: #000 !important;
   color: #fff !important;
 }
+
 html[data-rt-page="paper"] :is([data-rt-article], .custom-post-content) :is(p, li, span, div, h1, h2, h3, h4, h5, h6, strong, b, em, i, u, small, td, th, dt, dd, figcaption, blockquote),
 html[data-rt-page="sepia"] :is([data-rt-article], .custom-post-content) :is(p, li, span, div, h1, h2, h3, h4, h5, h6, strong, b, em, i, u, small, td, th, dt, dd, figcaption, blockquote),
 html[data-rt-page="contrast"] :is([data-rt-article], .custom-post-content) :is(p, li, span, div, h1, h2, h3, h4, h5, h6, strong, b, em, i, u, small, td, th, dt, dd, figcaption, blockquote) {
   color: inherit !important;
   background-color: transparent !important;
 }
+
 html[data-rt-page="paper"] :is([data-rt-article], .custom-post-content) a {
   color: #0b6f66 !important;
 }
@@ -95,6 +108,7 @@ html[data-rt-page="sepia"] :is([data-rt-article], .custom-post-content) a {
 html[data-rt-page="contrast"] :is([data-rt-article], .custom-post-content) a {
   color: #7dd3fc !important;
 }
+
 html[data-rt-page="paper"] :is([data-rt-article], .custom-post-content) blockquote {
   background: #f1efe7 !important;
   border-left-color: #0b6f66 !important;
@@ -103,6 +117,7 @@ html[data-rt-page="sepia"] :is([data-rt-article], .custom-post-content) blockquo
   background: #ead9bd !important;
   border-left-color: #8a5a1c !important;
 }
+
 /* focus mode.
    Two guards, because a stale focus flag used to hide the header and
    footer on the home page AND inside posts:
@@ -130,13 +145,16 @@ html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim]:hover,
 html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim]:focus-within {
   opacity: 1;
 }
+
 /* tts highlight */
 .rt-speaking {
   background: rgba(1, 173, 159, 0.16) !important;
   box-shadow: inset 3px 0 0 var(--rt-accent);
   border-radius: 6px;
 }
+
 /* ------------------------------------------------------------------ root */
+
 .rt-root {
   font-family: inherit;
 }
@@ -150,11 +168,13 @@ html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim]:focus-within {
   user-select: auto !important;
   -webkit-touch-callout: default;
 }
+
 /* The age gate blurs and disables every body child, but it does not stop
    a keyboard user reaching the FAB. Hard-hide it instead. */
 html.age-gate-pending .rt-root {
   display: none !important;
 }
+
 /* nothing at all until reader-tools.js confirms a real article.
    .rt-stopfab is in this list too: without it the auto-scroll pill could
    paint for one frame on the home page before boot() removed it. */
@@ -165,7 +185,9 @@ html.age-gate-pending .rt-root {
 .rt-root:not([data-rt-ready="1"]) .rt-panel {
   display: none !important;
 }
+
 /* ---------------------------------------------------------------- progress */
+
 .rt-progress {
   position: fixed;
   top: 0;
@@ -186,6 +208,7 @@ html.age-gate-pending .rt-root {
   transform-origin: 0 50%;
   background: linear-gradient(90deg, #01ad9f, #34d399);
 }
+
 /* `will-change` pinned on a 100%-wide fixed element keeps a full-viewport
    width compositor layer resident for the whole visit - on a low-end
    Android that is RAM the compositor needs back while a long page scrolls.
@@ -193,11 +216,13 @@ html.age-gate-pending .rt-root {
 html[data-rt-scrolling="1"] .rt-progress > i {
   will-change: transform;
 }
+
 /* -------------------------------------------------------------------- fab */
 /* Opaque background, NO backdrop-filter. A blurred backdrop on a fixed
    element forces the browser to re-sample the whole page behind it on
    every single scroll frame - that is what locked up the phone once
    auto-scroll started moving the page 60 times a second. */
+
 .rt-fab {
   position: fixed;
   right: 0;
@@ -249,6 +274,7 @@ html[data-rt-scrolling="1"] .rt-progress > i {
   pointer-events: none;
   visibility: hidden;
 }
+
 /* Scrim fade-out keeps visibility:visible for 280 ms (the transition
    delay). During that window it sits at z-index 9700 - above the FAB and
    above the older 9650 stop pill - so an impatient tap right after
@@ -258,9 +284,11 @@ html[data-rt-scrolling="1"] .rt-progress > i {
 .rt-root:not([data-open="1"]) .rt-scrim {
   pointer-events: none;
 }
+
 /* ------------------------------------------------------------------ scrim */
 /* backdrop-filter removed here as well - same repaint problem, and on
    low-end Android it also delayed the panel close animation. */
+
 .rt-scrim {
   position: fixed;
   inset: 0;
@@ -275,10 +303,12 @@ html[data-rt-scrolling="1"] .rt-progress > i {
   visibility: visible;
   transition: opacity 0.28s ease, visibility 0s;
 }
+
 /* ------------------------------------------------------------------ panel */
 /* visibility (not the `hidden` attribute) so the slide can actually
    transition - display:none cancels transitions outright. The 0s-delayed
    visibility keeps the element reachable for the whole slide-out. */
+
 .rt-panel {
   position: fixed;
   top: 0;
@@ -306,6 +336,7 @@ html[data-rt-scrolling="1"] .rt-progress > i {
   visibility: visible;
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s;
 }
+
 .rt-head {
   display: flex;
   align-items: center;
@@ -365,7 +396,9 @@ html[data-rt-scrolling="1"] .rt-progress > i {
   color: #f87171;
   outline: none;
 }
+
 /* ------------------------------------------------------------------- tabs */
+
 .rt-tabs {
   display: flex;
   gap: 2px;
@@ -403,7 +436,9 @@ html[data-rt-scrolling="1"] .rt-progress > i {
   color: var(--rt-accent);
   border-bottom-color: var(--rt-accent);
 }
+
 /* ------------------------------------------------------------------- body */
+
 .rt-body {
   flex: 1 1 auto;
   display: flex;
@@ -416,16 +451,6 @@ html[data-rt-scrolling="1"] .rt-progress > i {
 }
 .rt-body:focus {
   outline: none;
-}
-/* Direct children of the scrolling body must never shrink. In a column flex
-   container with overflow, any child that has its own overflow (the voice
-   status card, the collapsible reset wrapper) has an automatic min-height of 0
-   and gets squashed instead of making .rt-body scroll. */
-.rt-body {
-  min-height: 0;
-}
-.rt-body > * {
-  flex-shrink: 0;
 }
 .rt-group {
   display: flex;
@@ -509,6 +534,7 @@ html[data-rt-scrolling="1"] .rt-progress > i {
   height: 15px;
   flex: 0 0 auto;
 }
+
 /* touch-action: none is required. Base.astro sets `touch-action: pan-y`
    on <body>, which swallowed the horizontal drag and made every slider
    unusable on phones. The padded hit area keeps the thumb tappable. */
@@ -601,7 +627,9 @@ html[data-rt-scrolling="1"] .rt-progress > i {
   font-weight: 700;
   color: var(--rt-muted);
 }
+
 /* -------------------------------------------------------------------- toc */
+
 .rt-toc {
   display: flex;
   flex-direction: column;
@@ -646,10 +674,12 @@ html[data-rt-scrolling="1"] .rt-progress > i {
   line-height: 1.7;
   color: var(--rt-muted);
 }
+
 /* ------------------------------------------------------------------ mobile */
 /* Bottom sheet, and the FAB moves to the LEFT edge: the comments FAB
    already owns bottom-right (Tailwind bottom-6 right-6) and the two
    were stacking on top of each other. */
+
 @media (max-width: 640px) {
   .rt-panel {
     top: auto;
@@ -686,21 +716,25 @@ html[data-rt-scrolling="1"] .rt-progress > i {
     transform: translateX(-110%);
   }
 }
+
 /* body scroll lock while the sheet is open */
 html.rt-locked,
 html.rt-locked body {
   overflow: hidden !important;
 }
+
 /* -------------------------------------------------------------- stop pill */
 /* Auto-scroll stop button. It only exists while the scroll is running:
    reader-tools.js closes the panel, sets data-autoscroll="1" on .rt-root
    and data-on="1" on the button itself, then starts its rAF loop - so the
    reader sees the story plus this one red capsule and nothing else.
+
    Shape: capsule + white circular badge holding the stop glyph + label +
    small percentage chip the script updates at most twice a second.
    Deliberately cheap to paint - flat colour, no blur, no shadow animation,
    no will-change (the layer comes from translateZ(0) only while visible),
    because it sits over a page that is moving every frame. */
+
 .rt-stopfab {
   position: fixed;
   left: 50%;
@@ -726,12 +760,14 @@ html.rt-locked body {
   transform: translateX(-50%) translateZ(0);
   transition: transform 0.12s ease, background-color 0.12s ease;
 }
+
 /* shown by the root flag or by the data-on flag the script sets -
    whichever arrives first. */
 .rt-root[data-autoscroll="1"] .rt-stopfab,
 .rt-stopfab[data-on="1"] {
   display: inline-flex;
 }
+
 .rt-stopfab:hover,
 .rt-stopfab:focus-visible {
   background: #b91c1c;
@@ -743,6 +779,7 @@ html.rt-locked body {
 .rt-stopfab:active {
   transform: translateX(-50%) translateZ(0) scale(0.95);
 }
+
 /* white badge = the icon sits in its own circle, so the glyph and the
    capsule read as one shape instead of a floating symbol */
 .rt-stopfab-badge {
@@ -778,6 +815,7 @@ html.rt-locked body {
   background: #fde68a;
   color: #78350f;
 }
+
 /* on phones the pill sits slightly higher so the browser chrome and the
    comments FAB do not cover it */
 @media (max-width: 640px) {
@@ -795,11 +833,13 @@ html.rt-locked body {
     display: none;
   }
 }
+
 @media (max-width: 380px) {
   .rt-stopfab-txt {
     display: none;
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .rt-panel,
   .rt-scrim,
@@ -812,6 +852,7 @@ html.rt-locked body {
     transition: none !important;
   }
 }
+
 @media print {
   .rt-root {
     display: none !important;
