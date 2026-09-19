@@ -1,26 +1,17 @@
 // ==========================================================================
-// Reader Tools — logic only. Chrome + themes = reader-tools.css
+// Reader Tools - logic only. Chrome + themes live in reader-tools.css
 // --------------------------------------------------------------------------
-// slash-star block comment පාවිච්චි කරන්නේ නෑ (nested comment නිසා build
-// කැඩෙන ප්‍රශ්නය ආපහු එන්නේ නැති වෙන්නයි).
+// v13:
+//  - reading tab: focus-mode toggle and pause button removed
+//  - reading tab: red reset button appears only when speed differs from default
+//  - reading tab: all small texts rewritten in natural spoken Sinhala
+//  - resume button no longer stretches vertically (wrapped in a row)
 //
-// v7 හි ප්‍රධාන නිවැරදි කිරීම් තුනක්:
-//  1. රතු "නවත්වන්න" pill එකේ styles මේ ෆයිල් එකම inject කරනවා. එහෙම
-//     නැතිව CSS ෆයිල් එකේ නම (rt-stop-fab / rt-stopfab) වෙනස් වුණාම
-//     බොත්තම කිසිදා පෙනුණේ නෑ.
-//  2. auto-scroll දුවන වෙලාවේ <html> එකේ scroll-behavior එක බලෙන් auto
-//     කරනවා. smooth තිබෙන විට frame එකකට scrollTo() එකක් = browser එකට
-//     එකිනෙක මතට smooth animation 60ක් - ඒකයි Chrome ANR එකට හේතුව.
-//  3. අනුචලනය px/second වලින් (dt මත) - කලින් px/frame නිසා වේගය
-//     උපාංගයෙන් උපාංගයට වෙනස් වුණා.
+// Do not add a second auto-scroll script: two rAF loops freeze low-end phones.
 //
-// auto-scroll.js වගේ වෙනම ෆයිල් එකක් එකතු කර ඇත්නම් එය මකන්න -
-// rAF loop දෙකක් එකවර දුවනවා නම් උපාංගය ආපහු හිර වෙනවා.
-//
-// අලුත් tool එකක් (මේ ෆයිල් එක වෙනස් නොකර):
+// Extra tool (no edit to this file needed):
 //   ReaderTools.register({ id, label, icon, order, mount(box, ctx) {} });
 // ==========================================================================
-
 (() => {
   'use strict';
 
@@ -39,10 +30,6 @@
     'main article',
   ];
 
-  // 'header' මෙතන නෑ. navigation එක මැකෙන එක වැරදියි — focus mode
-  // එකේදීත් header එක සම්පූර්ණයෙන් පෙනෙන්න ඕන.
-  const DIM_CANDIDATES = ['footer', '#comments', '.related-posts'];
-
   const HEADING_SEL = 'h2, h3, h4';
   const BLOCK_SEL = 'p, li, h2, h3, h4, blockquote';
   const MIN_ARTICLE_CHARS = 400;
@@ -59,14 +46,14 @@
   const AUTO_MAX_DT = 64;
   const STALL_FRAMES = 45;
   const AUTO_STYLE_ID = 'wk-rt-auto-style';
-  // watchdog: rAF loop එක reschedule නොවී නැවතුණොත් engine එක තනිවම
-  // නවත්වනවා (නිදාගත් tab throttle, නැති වූ raf id වැනි).
+  const RESET_STYLE_ID = 'wk-rt-reset-style';
+
+  // watchdog: stops the engine if the rAF loop dies silently
   const AUTO_WATCHDOG_MS = 1500;
   const AUTO_WD_POLL_MS = 400;
   const AUTO_WRITE_EPS = 0.5;
   const AUTO_MIN_WRITE_PX = 2;
-  // Main-thread ayawya: phone ekak hira kanne px pramanaya nowei, ththparayakata
-  // siduwana programmatic scroll liweem gananai. ~18/s upper bound.
+  // write budget: count scroll writes per second, not pixels (~18/s max)
   const AUTO_WRITE_MS = 55;
   const AUTO_JANK_MS = 50;
   const AUTO_GOV_MIN = 0.4;
@@ -79,7 +66,6 @@
     lineHeight: 1.85,
     letter: 0,
     measure: 'normal',
-    focus: false,
     rate: 1,
     pitch: 1,
     voiceURI: '',
@@ -108,6 +94,7 @@
   const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
   const isNum = (v) => typeof v === 'number' && isFinite(v);
   const round = (n, step) => Math.round(n / step) * step;
+
   const reduceMotion = () =>
     !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const isMobile = () => !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
@@ -136,7 +123,7 @@
     return n;
   }
 
-  // frame එකකට rAF එකයි. scroll consumer හැමෝම එකම handler එකක් බෙදාගන්නවා.
+  // one rAF per frame; all scroll consumers share one handler
   function rafOnce(fn) {
     let queued = false;
     return function () {
@@ -149,8 +136,7 @@
     };
   }
 
-  // scrollHeight කියවීම = forced layout. frame එකකට කියවපු එක ANR එකට
-  // දායක වුණා; 400ms cache එකකින් ඒක නවතිනවා.
+  // scrollHeight read = forced layout; cached for 400ms
   let maxCache = -1;
   let maxCacheAt = 0;
   function scrollMax(force) {
@@ -162,7 +148,7 @@
     return maxCache;
   }
 
-  // Tracked listeners: teardown එකේදී එකක්වත් ඉතුරු වෙන්නේ නෑ.
+  // tracked listeners: teardown removes every one of them
   const bound = [];
   function listen(target, type, fn, opts) {
     if (!target) return;
@@ -189,8 +175,8 @@
       const l = LIMITS[k];
       s[k] = clamp(isNum(s[k]) ? s[k] : DEFAULTS[k], l[0], l[1]);
     });
-    // Focus mode කිසි විටෙක storage එකෙන් ආපහු එන්නේ නෑ.
-    s.focus = false;
+    // legacy key from the removed focus mode
+    delete s.focus;
     s.voiceURI = typeof s.voiceURI === 'string' ? s.voiceURI : '';
     return s;
   }
@@ -205,19 +191,13 @@
 
   const state = load();
 
-  function persistable() {
-    const out = Object.assign({}, state);
-    delete out.focus;
-    return out;
-  }
-
   let storeTimer = null;
   function save() {
     if (storeTimer) clearTimeout(storeTimer);
     storeTimer = setTimeout(() => {
       storeTimer = null;
       try {
-        localStorage.setItem(STORE_KEY, JSON.stringify(persistable()));
+        localStorage.setItem(STORE_KEY, JSON.stringify(state));
       } catch (e) {}
     }, STORE_DEBOUNCE_MS);
   }
@@ -227,7 +207,7 @@
       storeTimer = null;
     }
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(persistable()));
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
     } catch (e) {}
   }
 
@@ -268,10 +248,8 @@
   };
 
   // ------------------------------------------------- injected auto-scroll css
-
-  // මේවා reader-tools.css එකේ තිබුණත් මෙතන ආපහු inject කරනවා. හේතුව:
-  // class නම වෙනස් වුණාම හෝ පරණ build එකක් cache වුණාම රතු බොත්තම
-  // නොපෙනී යනවා. inject වෙන style එක head එකේ අන්තිමට යන නිසා දිනනවා.
+  // Also lives here (not only in the css file) so a renamed class or a cached
+  // old css build can never make the red stop pill invisible.
   function ensureAutoStyle() {
     if (!document.head || document.getElementById(AUTO_STYLE_ID)) return;
     const css =
@@ -306,6 +284,51 @@
       '@media print{.rt-root .rt-stopfab{display:none !important;}}';
     const s = document.createElement('style');
     s.id = AUTO_STYLE_ID;
+    s.textContent = css;
+    document.head.appendChild(s);
+  }
+
+  // Red "reset speed" button. The wrapper collapses with grid-template-rows so
+  // showing/hiding it never makes the panel jump; hidden state uses
+  // visibility:hidden so it cannot be focused or tapped.
+  function ensureResetStyle() {
+    if (!document.head || document.getElementById(RESET_STYLE_ID)) return;
+    const css =
+      '.rt-root .rt-reset-wrap{display:grid;grid-template-rows:0fr;opacity:0;' +
+      'visibility:hidden;margin-top:-14px;' +
+      'transition:grid-template-rows .3s ease,opacity .25s ease,margin .3s ease,' +
+      'visibility 0s linear .3s;}' +
+      '.rt-root .rt-reset-wrap[data-show="1"]{grid-template-rows:1fr;opacity:1;' +
+      'visibility:visible;margin-top:0;' +
+      'transition:grid-template-rows .3s ease,opacity .25s ease,margin .3s ease,' +
+      'visibility 0s;}' +
+      '.rt-root .rt-reset-inner{min-height:0;overflow:hidden;}' +
+      '.rt-root .rt-reset-btn{display:flex;align-items:center;justify-content:center;' +
+      'gap:8px;width:100%;padding:10px 14px;border:1px solid rgba(248,113,113,.55);' +
+      'border-radius:12px;background:rgba(239,68,68,.14);color:#f87171;' +
+      'font:inherit;font-size:12px;font-weight:800;line-height:1.2;cursor:pointer;' +
+      '-webkit-tap-highlight-color:transparent;' +
+      'transition:background-color .18s ease,border-color .18s ease,color .18s ease,' +
+      'transform .12s ease;}' +
+      '.rt-root .rt-reset-wrap[data-show="1"] .rt-reset-btn{' +
+      'animation:wk-rt-reset-pop .35s cubic-bezier(.34,1.56,.64,1);}' +
+      '.rt-root .rt-reset-btn:hover,.rt-root .rt-reset-btn:focus-visible{' +
+      'background:#dc2626;border-color:#dc2626;color:#fff;outline:none;}' +
+      '.rt-root .rt-reset-btn:active{transform:scale(.97);}' +
+      '.rt-root .rt-reset-btn svg{display:block;width:15px;height:15px;flex:0 0 auto;' +
+      'transition:transform .45s ease;}' +
+      '.rt-root .rt-reset-btn:hover svg{transform:rotate(-360deg);}' +
+      '.rt-root .rt-reset-tag{padding:2px 8px;border-radius:999px;' +
+      'background:rgba(248,113,113,.18);font-size:10px;font-weight:700;' +
+      'font-variant-numeric:tabular-nums;}' +
+      '.rt-root .rt-reset-btn:hover .rt-reset-tag,' +
+      '.rt-root .rt-reset-btn:focus-visible .rt-reset-tag{background:rgba(255,255,255,.22);}' +
+      '@keyframes wk-rt-reset-pop{0%{transform:scale(.92);}100%{transform:scale(1);}}' +
+      '@media (prefers-reduced-motion:reduce){.rt-root .rt-reset-wrap,' +
+      '.rt-root .rt-reset-btn,.rt-root .rt-reset-btn svg{transition:none !important;' +
+      'animation:none !important;}}';
+    const s = document.createElement('style');
+    s.id = RESET_STYLE_ID;
     s.textContent = css;
     document.head.appendChild(s);
   }
@@ -346,13 +369,12 @@
   function buildChrome() {
     if (!document.body) return false;
     const root = ensureRoot();
-
     root.textContent = '';
     root.setAttribute('data-open', '0');
     root.setAttribute('data-rt-ready', '0');
     root.removeAttribute('data-scrolling');
     root.removeAttribute('data-autoscroll');
-    // Base.astro එකේ copy-protection selectstart blocker එකෙන් බේරෙන්න
+    // escape the global copy-protection selectstart blocker
     root.setAttribute('data-allow-select', '');
 
     const bar = el('i');
@@ -371,10 +393,7 @@
       el('span', { class: 'rt-fab-txt', text: 'මෙවලම්' }),
     ]);
 
-    // auto-scroll දුවන වෙලාවේ පමණක් පෙනෙන කුඩා රතු නවත්වන බොත්තම.
-    // auto-scroll duwana welawa pamanakin penena raghu nawathvana boththama.
-    // Hadaawa: capsule ekak + wana waththuru badge ekak (stop glyph) + label
-    // ekak + live % chip ekak. Script ekakin 500ms walata wadhaa update wenne nae.
+    // red stop pill: visible only while auto-scroll runs
     const stopFab = el('button', {
       class: 'rt-stopfab',
       type: 'button',
@@ -396,7 +415,6 @@
       'aria-label': 'වසන්න',
       html: ICON.close,
     });
-
     const head = el('div', { class: 'rt-head' }, [
       el('span', { class: 'rt-head-dot', 'aria-hidden': 'true' }),
       el('span', { class: 'rt-head-txt' }, [
@@ -408,7 +426,6 @@
 
     const tabs = el('div', { class: 'rt-tabs', role: 'tablist', 'aria-label': 'මෙවලම්' });
     const body = el('div', { class: 'rt-body', role: 'tabpanel', tabindex: '-1' });
-
     const panel = el('aside', {
       class: 'rt-panel',
       id: 'rt-panel',
@@ -449,16 +466,7 @@
     return null;
   }
 
-  function markDim() {
-    DIM_CANDIDATES.forEach((sel) => {
-      $$(sel).forEach((n) => {
-        if (ui.root && (ui.root.contains(n) || n.contains(ui.root))) return;
-        if (article && (n.contains(article) || article.contains(n))) return;
-        n.setAttribute('data-rt-dim', '');
-      });
-    });
-  }
-
+  // removes stale dim flags left by the retired focus mode
   function clearDim() {
     $$('[data-rt-dim]').forEach((n) => n.removeAttribute('data-rt-dim'));
   }
@@ -490,13 +498,9 @@
     } else {
       r.removeAttribute('data-rt-has-article');
     }
+    r.setAttribute('data-rt-focus', 'off');
 
-    const focusOn = !!state.focus && !!article;
-    r.setAttribute('data-rt-focus', focusOn ? 'on' : 'off');
-    if (focusOn) markDim();
-    else clearDim();
-
-    // font/line-height වෙනස් වුණාම document උස වෙනස් වෙනවා.
+    // font/line-height changes alter the document height
     scrollMax(true);
   }
 
@@ -509,24 +513,17 @@
   }
 
   // -------------------------------------------------------- auto scroll
+  // Module level: keeps running when the panel closes; teardown stops it.
 
-  // Module මට්ටමේ තියෙන නිසා tab එක unmount වුණත් හෝ panel වැහුණත්
-  // නවතින්නේ නෑ; නමුත් පිටුව මාරු වෙනවිට teardown එකෙන් නවතිනවා.
   const auto = {
     raf: 0, last: 0, carry: 0, expect: -1, stall: 0, armed: false, armTimer: 0,
     prevY: 0, watchdog: 0, wdY: -1, wdAt: 0,
-    ms: 0, gov: 1, paused: false, stopFlag: false, pctAt: 0, pctShow: -1,
+    ms: 0, gov: 1, stopFlag: false, pctAt: 0, pctShow: -1,
   };
 
-  // watchdog: rAF loop එක reschedule නොවී නැවතුණොත් engine එක තනිවම
-  // නවත්වනවා - ඉතිරි වූ loop එකක් දිගටම නොදුවන්න.
   function autoWatchdog() {
     if (!auto.raf) return;
     const now = Date.now();
-    if (auto.paused) {
-      auto.wdAt = now;
-      return;
-    }
     if (now - auto.wdAt > AUTO_WATCHDOG_MS) {
       stopAuto();
       return;
@@ -542,8 +539,7 @@
     return AUTO_PPS[clamp(Math.round(state.scrollSpeed), 1, 10) - 1] * auto.gov;
   }
 
-  // Jank governor: frame ekak diga una nam vega pahala. Manndagaami durakanayaka
-  // ANR eka valakvana pradhana aarakshakaya mekai.
+  // jank governor: a long frame slows the scroll down, protecting weak phones
   function autoGovern(dt) {
     if (dt > AUTO_JANK_MS) auto.gov = Math.max(AUTO_GOV_MIN, auto.gov - 0.08);
     else if (auto.gov < 1) auto.gov = Math.min(1, auto.gov + AUTO_GOV_UP);
@@ -566,20 +562,20 @@
       auto.prevY = window.scrollY;
       return;
     }
+
     let dt = ts - auto.last;
     auto.last = ts;
     if (dt <= 0) return;
     if (dt > AUTO_MAX_DT) dt = AUTO_MAX_DT;
 
-    // watchdog heartbeat: loop eka jeewathwa duwanawa nam wdAt update wenawa
+    // watchdog heartbeat
     auto.wdAt = Date.now();
-    if (auto.paused) return;
 
     autoGovern(dt);
 
     const y = window.scrollY;
 
-    // user athin anuchalanaya kaloth (scrollbar drag athuluwa) nawatinawa
+    // user scrolled by hand (scrollbar drag included)
     if (auto.armed && auto.expect >= 0 && Math.abs(y - auto.expect) > AUTO_DRIFT) {
       stopAuto();
       return;
@@ -591,7 +587,7 @@
       return;
     }
 
-    // Stall guard: api liyapu agayata (auto.expect) awaada kiyala pamanaki balanne.
+    // stall guard: compares only against the value we wrote last
     if (auto.expect >= 0) {
       if (y < auto.expect - AUTO_WRITE_EPS) auto.stall++;
       else auto.stall = 0;
@@ -606,9 +602,6 @@
     auto.carry += (autoPps() * dt) / 1000;
     if (auto.carry > 320) auto.carry = 320;
 
-    // Write budget: ththparayakata liweem ~18k. px pramanaya nowei liweem
-    // gananai durakanayaka main thread eka hira kanne - frame ekakata liwimak
-    // = scroll event + viewport update + raster.
     if (auto.ms < AUTO_WRITE_MS || auto.carry < AUTO_MIN_WRITE_PX) return;
     auto.ms -= AUTO_WRITE_MS;
     if (auto.ms > AUTO_WRITE_MS * 4) auto.ms = AUTO_WRITE_MS * 4;
@@ -634,7 +627,7 @@
     if (auto.raf || !article) return;
     if (scrollMax(true) <= 8) return;
 
-    // panel eka wahenawa: scroll lock saha scrim dekkama iwath wenawa.
+    // panel closes: scroll lock and scrim both go away
     close();
     document.documentElement.classList.remove('rt-locked');
     ensureAutoStyle();
@@ -650,7 +643,6 @@
     auto.stall = 0;
     auto.expect = -1;
     auto.armed = false;
-    auto.paused = false;
     auto.gov = 1;
     auto.pctAt = 0;
     auto.pctShow = -1;
@@ -658,11 +650,10 @@
     if (ui.stop) {
       ui.stop.setAttribute('data-on', '1');
       ui.stop.setAttribute('aria-pressed', 'true');
-      ui.stop.removeAttribute('data-paused');
       if (ui.stopPct) ui.stopPct.textContent = '0%';
     }
     if (auto.armTimer) clearTimeout(auto.armTimer);
-    // arambha kala tap ekenma apeha nawatinne nathi wenna
+    // arm late so the tap that started the scroll does not stop it
     auto.armTimer = setTimeout(() => {
       auto.armTimer = 0;
       auto.armed = true;
@@ -675,8 +666,7 @@
 
     auto.raf = requestAnimationFrame(autoStep);
 
-    // CSS eken FAB eka visibility:hidden wena nisa yathuru puwaruwe atha
-    // aawa user nopene buththamaka ranndi nositinna.
+    // the FAB turns visibility:hidden; move keyboard focus to the stop pill
     if (ui.fab && ui.stop && document.activeElement === ui.fab) {
       try { ui.stop.focus({ preventScroll: true }); } catch (e) {}
     }
@@ -686,15 +676,14 @@
   function stopAuto() {
     if (auto.stopFlag) return;
     auto.stopFlag = true;
-    // 1. Timers FIRST. main thread eka busy wunath nawathuma seethakai - me
-    //    nisa stop eka "ehema weda karanne nae" thaththwaya ain wenawa.
+
+    // timers first: stop must work even when the main thread is busy
     if (auto.armTimer) { clearTimeout(auto.armTimer); auto.armTimer = 0; }
     if (auto.watchdog) { clearInterval(auto.watchdog); auto.watchdog = 0; }
     const was = !!auto.raf;
     if (auto.raf) { cancelAnimationFrame(auto.raf); auto.raf = 0; }
-    // 2. State (no layout reads here)
+
     auto.armed = false;
-    auto.paused = false;
     auto.last = 0;
     auto.carry = 0;
     auto.ms = 0;
@@ -706,7 +695,7 @@
     auto.gov = 1;
     auto.pctAt = 0;
     auto.pctShow = -1;
-    // 3. DOM flags
+
     document.documentElement.removeAttribute('data-rt-scrolling');
     if (ui.root) {
       ui.root.removeAttribute('data-scrolling');
@@ -715,7 +704,6 @@
     if (ui.stop) {
       ui.stop.setAttribute('data-on', '0');
       ui.stop.setAttribute('aria-pressed', 'false');
-      ui.stop.removeAttribute('data-paused');
     }
     auto.stopFlag = false;
     if (was) {
@@ -727,35 +715,6 @@
   function toggleAuto() {
     if (auto.raf) stopAuto();
     else startAuto();
-  }
-
-  // Wirama: raf eka duwamin thibe, liweem pamanaki nawathenne (position eka
-  // tamange thiyenawa). Nithara nawaththanne nam stop eka.
-  function pauseAuto() {
-    if (!auto.raf || auto.paused) return;
-    auto.paused = true;
-    auto.last = 0;
-    auto.carry = 0;
-    auto.ms = 0;
-    auto.stall = 0;
-    auto.expect = -1;
-    if (ui.stop) {
-      ui.stop.setAttribute('data-paused', '1');
-      if (ui.stopPct) ui.stopPct.textContent = '||';
-    }
-    emit('autoscrollpaused', true);
-  }
-
-  function resumeAuto() {
-    if (!auto.raf || !auto.paused) return;
-    auto.paused = false;
-    auto.last = 0;
-    auto.carry = 0;
-    auto.ms = 0;
-    auto.stall = 0;
-    auto.expect = -1;
-    if (ui.stop) ui.stop.removeAttribute('data-paused');
-    emit('autoscrollpaused', false);
   }
 
   // ------------------------------------------------------------ open/close
@@ -790,7 +749,7 @@
   function open() {
     if (!ui.root || isOpen || !article) return;
     if (document.documentElement.classList.contains('age-gate-pending')) return;
-    // panel එක විවෘත වෙනවිට scroll lock යොදන නිසා auto-scroll නවත්වනවා.
+    // the panel locks scrolling, so auto-scroll stops first
     stopAuto();
     isOpen = true;
     lastFocus = document.activeElement;
@@ -914,6 +873,8 @@
     ]);
   }
 
+  // returns the group element; group.rtSync(v) updates the thumb and label
+  // from code (used by the speed reset button)
   function slider(label, key, fmt, onLive) {
     const l = LIMITS[key];
     const out = el('span', { class: 'rt-val', text: fmt(state[key]) });
@@ -936,10 +897,15 @@
     });
     input.addEventListener('change', saveNow);
     input.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
-    return el('div', { class: 'rt-group' }, [
+    const group = el('div', { class: 'rt-group' }, [
       el('p', { class: 'rt-label', text: label }),
       el('div', { class: 'rt-row' }, [input, out]),
     ]);
+    group.rtSync = (v) => {
+      input.value = String(v);
+      out.textContent = fmt(v);
+    };
+    return group;
   }
 
   // ------------------------------------------------------------- tool: toc
@@ -967,14 +933,12 @@
           el('span', { text: 'කියවා ඇත' }),
         ]),
       ]));
-
       pctEl = $('[data-rt-pct]', box);
       if (pctEl) pctEl.textContent = Math.round(lastPct * 100) + '%';
 
       const group = el('div', { class: 'rt-group' }, [
         el('p', { class: 'rt-label', text: 'කොටස්' }),
       ]);
-
       const heads = article
         ? $$(HEADING_SEL, article).filter((h) => (h.textContent || '').trim())
         : [];
@@ -982,7 +946,7 @@
       if (!heads.length) {
         group.appendChild(el('p', {
           class: 'rt-empty',
-          text: 'මෙම ලිපියේ උපශීර්ෂ නැහැ. "කියවීම" ටැබ් එකෙන් ස්වයං-අනුචලනය භාවිත කරන්න.',
+          text: 'මේ ලිපියේ උපශීර්ෂ නැහැ. "කියවීම" ටැබ් එකෙන් ස්වයං-අනුචලනය පාවිච්චි කරන්න පුළුවන්.',
         }));
         box.appendChild(group);
         return () => { pctEl = null; };
@@ -1087,7 +1051,7 @@
     while (rest.length > TTS_CHUNK) {
       let cut = -1;
       const head = rest.slice(0, TTS_CHUNK);
-      const seps = ['. ', '! ', '? ', '। ', ', ', ' '];
+      const seps = ['. ', '! ', '? ', '\u0DF4 ', ', ', ' '];
       for (let i = 0; i < seps.length && cut < 0; i++) {
         const at = head.lastIndexOf(seps[i]);
         if (at > TTS_CHUNK * 0.5) cut = at + seps[i].length;
@@ -1154,6 +1118,7 @@
 
       const note = el('p', { class: 'rt-note', text: 'සූදානම්.' });
       const select = el('select', { class: 'rt-select', 'aria-label': 'හඬ තෝරන්න' });
+
       const btnPlay = el('button', {
         class: 'rt-btn', 'data-primary': '1', type: 'button',
         html: ICON.play + '<span>කියවන්න</span>',
@@ -1166,7 +1131,6 @@
       });
 
       let voicesFilled = false;
-
       function fillVoices() {
         const all = synth.getVoices() || [];
         if (!all.length) return;
@@ -1190,11 +1154,9 @@
           note.textContent = 'සිංහල හඬ ලබා ගත හැක.';
         }
       }
-
       fillVoices();
       synth.addEventListener('voiceschanged', fillVoices);
       const poll = setTimeout(() => { if (!voicesFilled) fillVoices(); }, 400);
-
       select.addEventListener('change', () => set({ voiceURI: select.value }, { immediate: true }));
 
       function label(txt) {
@@ -1233,8 +1195,7 @@
         u.rate = state.rate;
         u.pitch = state.pitch;
 
-        // Single-shot: onend eka dekwarayak aawoth ho guard ekath ekkama
-        // aawoth chunk ekak skip nowenna 'advanced' flag eka.
+        // single-shot: onend and the guard timer must not both advance
         let advanced = false;
         const done = () => {
           if (advanced) return;
@@ -1253,9 +1214,8 @@
           label('කියවන්න');
         };
 
-        // Samahara engine (wisheshayen network hand) onend nodenawa. Ewita
-        // kathawa polime sadahatama nawatinawa - nishchitha kala seemawakata
-        // passe idiriya yanawa. Wiramayedi nam eka push karanaawa.
+        // some engines never fire onend; a guard timer moves on after a
+        // generous estimate, and waits while the user has paused
         const est = Math.max(4000, Math.min(60000,
           Math.round((item.text.length / 11) * 1000 / Math.max(0.5, state.rate)) + 3500));
         const t0 = Date.now();
@@ -1263,8 +1223,6 @@
           if (!tts || tts.stopped || tts.gen !== gen) { if (tts) tts.guard = 0; return; }
           if (synth.paused) { tts.guard = setTimeout(tick, 1500); return; }
           const idle = synth.speaking === false && synth.pending === false;
-          // Thawa kathaa karanawa nam thawa welawak denawa; 2x estimate eken
-          // passe nam eka stuck utterance ekak - eka cancel karala idiriya.
           if (!idle && Date.now() - t0 < est + 8000) {
             tts.guard = setTimeout(tick, 1200);
             return;
@@ -1347,7 +1305,7 @@
       box.appendChild(note);
       box.appendChild(el('p', {
         class: 'rt-empty',
-        text: 'කොටස් ' + queue.length + 'ක් පෝලිමේ. පිටුව මාරු වූ විට හඬ ස්වයංක්‍රීයව නවතී.',
+        text: 'කොටස් ' + queue.length + 'ක් පෝලිමේ. පිටුව මාරු කළොත් හඬ ඉබේම නවතිනවා.',
       }));
 
       return () => {
@@ -1367,69 +1325,95 @@
 
   // --------------------------------------------------------- tool: reading
 
+  // short spoken-Sinhala description that follows the speed slider
+  function speedHint(v) {
+    const n = clamp(Math.round(v), 1, 10);
+    if (n <= 3) return 'හරිම සෙමින් යනවා. හොඳින් රස විඳිමින් කියවන්න පුළුවන්.';
+    if (n <= 6) return 'මධ්‍යම වේගයක්. සාමාන්‍යයෙන් කියවන්න හොඳයි.';
+    if (n <= 8) return 'ටිකක් වේගයි. ඉක්මනට කියවන අයට.';
+    return 'හරිම වේගයි. පිටුව ඉක්මනින් පහළට යනවා.';
+  }
+
   register({
     id: 'reading',
     label: 'කියවීම',
     icon: ICON.eye,
     order: 40,
     mount(box) {
-      box.appendChild(segment('නාභි ආකාරය', state.focus ? 'on' : 'off', [
-        { value: 'off', label: 'ක්‍රියාවිරහිත' },
-        { value: 'on', label: 'ක්‍රියාත්මක' },
-      ], (v) => set({ focus: v === 'on' }, { immediate: true })));
+      const defSpeed = DEFAULTS.scrollSpeed;
 
-      box.appendChild(el('p', {
-        class: 'rt-empty',
-        text: 'නාභි ආකාරය මේ පිටුවට පමණක් වලංගුයි. පිටුව මාරු කළ විට ස්වයංක්‍රීයව නිවෙනවා.',
-      }));
+      const hintEl = el('p', { class: 'rt-empty' });
 
-      // වේගය දුවන අතරතුරත් වෙනස් කළ හැක — autoStep එක state එකෙන්
-      // හැම frame එකකම වේගය කියවනවා.
-      box.appendChild(slider(
-        'අනුචලන වේගය',
+      // red reset button: shown only while the speed differs from default
+      const btnReset = el('button', {
+        class: 'rt-reset-btn',
+        type: 'button',
+        'aria-label': 'වේගය මුල් අගයට නැවත සකසන්න',
+        html:
+          ICON.reset +
+          '<span>වේගය නැවත සකසන්න</span>' +
+          '<span class="rt-reset-tag">මුල් අගය ' + defSpeed + '</span>',
+      });
+      const resetWrap = el('div', {
+        class: 'rt-reset-wrap',
+        'data-show': '0',
+        'aria-hidden': 'true',
+      }, el('div', { class: 'rt-reset-inner' }, btnReset));
+
+      function paintHint() {
+        hintEl.textContent = speedHint(state.scrollSpeed);
+      }
+      function paintReset() {
+        const changed = Math.round(state.scrollSpeed) !== defSpeed;
+        resetWrap.setAttribute('data-show', changed ? '1' : '0');
+        resetWrap.setAttribute('aria-hidden', changed ? 'false' : 'true');
+      }
+
+      // speed can be changed while running too: autoStep reads state each frame
+      const speedGroup = slider(
+        'ස්වයං-අනුචලන වේගය',
         'scrollSpeed',
-        (v) => String(Math.round(v)) + ' · ' + AUTO_PPS[clamp(Math.round(v), 1, 10) - 1] + 'px/s'
-      ));
+        (v) => Math.round(v) + ' / 10',
+        () => {
+          paintHint();
+          paintReset();
+        }
+      );
+      speedGroup.appendChild(hintEl);
+      box.appendChild(speedGroup);
+      box.appendChild(resetWrap);
+      paintHint();
+      paintReset();
+
+      btnReset.addEventListener('click', () => {
+        set({ scrollSpeed: defSpeed }, { immediate: true });
+        speedGroup.rtSync(defSpeed);
+        paintHint();
+        paintReset();
+      });
 
       const btn = el('button', { class: 'rt-btn', type: 'button' });
-      const btnPause = el('button', { class: 'rt-btn', type: 'button' });
-
       function paint() {
         const running = !!auto.raf;
         btn.innerHTML =
           (running ? ICON.stop : ICON.down) +
-          '<span>' + (running ? 'අනුචලනය නවත්වන්න' : 'ස්වයං-අනුචලනය අරඹන්න') + '</span>';
-        if (running) btn.setAttribute('data-danger', '1');
-        else btn.setAttribute('data-primary', '1');
-        if (running) btn.removeAttribute('data-primary');
-        else btn.removeAttribute('data-danger');
+          '<span>' + (running ? 'නවත්වන්න' : 'ඉබේම පහළට යන්න පටන් ගන්න') + '</span>';
+        if (running) {
+          btn.setAttribute('data-danger', '1');
+          btn.removeAttribute('data-primary');
+        } else {
+          btn.setAttribute('data-primary', '1');
+          btn.removeAttribute('data-danger');
+        }
       }
-
-      function paintPause() {
-        const running = !!auto.raf;
-        const held = running && auto.paused;
-        btnPause.innerHTML =
-          (held ? ICON.play : ICON.pause) +
-          '<span>' + (held ? 'දිගටම' : 'විරාමය') + '</span>';
-        btnPause.disabled = !running;
-        btnPause.setAttribute('aria-pressed', held ? 'true' : 'false');
-      }
-
       paint();
-      paintPause();
-      const offAuto = on('autoscroll', () => { paint(); paintPause(); });
-      const offPaused = on('autoscrollpaused', paintPause);
+      const offAuto = on('autoscroll', paint);
       btn.addEventListener('click', toggleAuto);
-      btnPause.addEventListener('click', () => {
-        if (!auto.raf) return;
-        if (auto.paused) resumeAuto();
-        else pauseAuto();
-      });
 
-      box.appendChild(el('div', { class: 'rt-row' }, [btn, btnPause]));
+      box.appendChild(el('div', { class: 'rt-row' }, [btn]));
       box.appendChild(el('p', {
         class: 'rt-empty',
-        text: 'අරඹන විට මේ මෙනුව ස්වයංක්‍රීයව වැසෙනවා. නවත්වන්න පහළ මැදින් පෙනෙන රතු බොත්තම ඔබන්න, නැතිනම් තිරය අතින් අනුචලනය කරන්න. පිටුව අවසානයේ තනිවම නවතිනවා.',
+        text: 'පටන් ගත්තම මේ මෙනුව ඉබේම වැහෙනවා. නවත්වන්න ඕන නම් පහළ මැද තියෙන රතු බොත්තම ඔබන්න, නැත්නම් තිරය ඇඟිල්ලෙන් ඇදන්න. කතාව අවසාන වුනාම තනියම නවතිනවා.',
       }));
 
       let saved = 0;
@@ -1437,16 +1421,22 @@
         saved = parseFloat(localStorage.getItem(posKey(curPath)) || '0') || 0;
       } catch (e) {}
       if (saved > 0.04 && saved < 0.95) {
-        box.appendChild(el('button', {
-          class: 'rt-btn',
-          type: 'button',
-          html: ICON.up + '<span>කලින් නැවතුණ තැනට (' + Math.round(saved * 100) + '%)</span>',
-          onclick: () => {
-            stopAuto();
-            window.scrollTo({ top: scrollMax(true) * saved, behavior: isMobile() ? 'auto' : behavior() });
-            if (isMobile()) close();
-          },
-        }));
+        // inside a row so the button keeps its normal height
+        box.appendChild(el('div', { class: 'rt-row' }, [
+          el('button', {
+            class: 'rt-btn',
+            type: 'button',
+            html: ICON.up + '<span>කලින් නැවතුණු තැනට යන්න (' + Math.round(saved * 100) + '%)</span>',
+            onclick: () => {
+              stopAuto();
+              window.scrollTo({
+                top: scrollMax(true) * saved,
+                behavior: isMobile() ? 'auto' : behavior(),
+              });
+              if (isMobile()) close();
+            },
+          }),
+        ]));
       }
 
       box.appendChild(el('div', { class: 'rt-row' }, [
@@ -1466,7 +1456,7 @@
         }),
       ]));
 
-      return () => { offAuto(); offPaused(); };
+      return () => { offAuto(); };
     },
   });
 
@@ -1518,18 +1508,13 @@
     const max = scrollMax();
     const pct = max > 4 ? clamp(window.scrollY / max, 0, 1) : 0;
     lastPct = pct;
-
     if (ui.bar) ui.bar.style.transform = 'scaleX(' + pct.toFixed(4) + ')';
-
     if (isOpen) {
       if (pctEl) pctEl.textContent = Math.round(pct * 100) + '%';
       if (tocSync) tocSync();
     }
-
     const now = Date.now();
-    // localStorage.setItem synchronous I/O - auto-scroll දුවන වෙලාවේ frame
-    // එකේදී ලිව්වොත් main thread එක ඇත්තටම හිර වෙනවා. ඒ නිසා දුවන වෙලාවේ
-    // ලියන්නේ නෑ; නවතින විට savePos() එකෙන් ලියනවා.
+    // localStorage is synchronous I/O: never write it while auto-scroll runs
     if (!auto.raf && pct > 0.02 && now - lastSave > POS_SAVE_MS) {
       lastSave = now;
       savePos();
@@ -1557,13 +1542,8 @@
     listen(ui.close, 'click', close);
     listen(ui.scrim, 'click', close);
 
-    // රතු බොත්තම: stopPropagation නිසා පහළ abortAuto/document handler
-    // වලට මේ click එක යන්නේ නෑ.
-    // රතු නවත්වන බොත්තම.
-    // click event එක main thread එක busy වෙලාවේ delay වෙනවා. තවත් ලොකු
-    // ප්රශ්නය: ඇඟිල්ල තද කරන විට browser එක ඒක scroll gesture එකක් ලෙස
-    // ගන්න නිසා click event එකම cancel වෙනවා. ඒ නිසා ඇත්තටම ලැබෙන
-    // පළමු event එකෙන්ම (pointerdown / touchstart) නවත්වනවා.
+    // stop pill: act on the very first event (pointerdown / touchstart);
+    // a finger press can turn into a scroll gesture and cancel the click
     const hardStopAuto = (ev) => {
       if (ev) {
         if (ev.cancelable) ev.preventDefault();
@@ -1575,21 +1555,16 @@
     listen(ui.stop, 'touchstart', hardStopAuto, { passive: false });
     listen(ui.stop, 'click', hardStopAuto);
 
-    // ඉහත bindings පමණක් ප්රමාණවත් නොවේ: දිගු පිටුවක scroll write එක main
-    // thread එක තදින් අල්ලා ගන්නා විට browser එකේ event dispatch එකම ප්රමාද
-    // වෙනවා - මිනිසෙකුට "බොත්තම වැඩ කරන්නේ නෑ" ලෙස පෙනෙනවා.
-    // ඒ නිසා auto-scroll දුවන වෙලාවේ තිරයේ ඕනෑම තැනකට tap/click එකක් හෝ
-    // යතුරක් එබීමක් එකෙන්ම නවතිනවා. capture phase එකේ බැඳී ඇති නිසා වෙන
-    // කිසිම handler එකකට වඩා මුලින්ම දුවනවා.
+    // on a long page the scroll writes can delay event dispatch, so any tap
+    // outside the panel also stops auto-scroll (capture phase, runs first)
     const tapStop = (ev) => {
-      // armed window eketh nawathvanawa - user ta "weda karanne nae" lesa penenne nae
       if (!auto.raf) return;
       const t = ev ? ev.target : null;
       if (t && ui.stop && (t === ui.stop || ui.stop.contains(t))) {
         stopAuto();
         return;
       }
-      if (t && ui.root && ui.root.contains(t)) return; // panel/FAB ඇතුළත tap
+      if (t && ui.root && ui.root.contains(t)) return;
       stopAuto();
     };
     listen(window, 'pointerdown', tapStop, { capture: true, passive: true });
@@ -1612,9 +1587,8 @@
       onScroll();
     }, { passive: true });
 
-    // Manual input එකකින් auto-scroll නවතිනවා. panel/pill ඇතුළේ සිදු වන
-    // event නොසලකනවා (නැතිනම් නවත්වන බොත්තමම ආපහු start කරනවා).
-    // armed වෙන්නේ 420ms පසුවයි — ආරම්භ කළ tap එකෙන්ම නොනවතින්න.
+    // manual input stops auto-scroll; events inside the panel are ignored,
+    // and the 420ms arm delay protects the tap that started it
     const abortAuto = (ev) => {
       if (!auto.raf || !auto.armed) return;
       if (ui.root && ev && ev.target && ev.target.nodeType && ui.root.contains(ev.target)) return;
@@ -1637,7 +1611,7 @@
         toggle();
         return;
       }
-      // අනුචලන යතුරු පමණක් auto-scroll නවත්වනවා
+      // only scroll keys stop auto-scroll
       if (auto.raf && !e.altKey && !e.ctrlKey && !e.metaKey) {
         const k = e.key;
         if (k === ' ' || k === 'Spacebar' || k === 'ArrowUp' || k === 'ArrowDown' ||
@@ -1689,7 +1663,6 @@
       ui.root.removeAttribute('data-scrolling');
       ui.root.removeAttribute('data-autoscroll');
     }
-    state.focus = false;
     clearDim();
     document.documentElement.setAttribute('data-rt-focus', 'off');
     document.documentElement.removeAttribute('data-rt-has-article');
@@ -1705,11 +1678,10 @@
     curPath = location.pathname;
     if (!buildChrome()) return;
     booted = true;
-
     ensureAutoStyle();
-    state.focus = false;
+    ensureResetStyle();
+    clearDim();
     maxCache = -1;
-
     article = findArticle();
     apply();
 
@@ -1724,7 +1696,6 @@
     if (ui.sub) {
       ui.sub.textContent = words().toLocaleString('en-US') + ' වචන · ' + minutes() + ' මිනිත්තු';
     }
-
     renderTabs();
     bindGlobal();
     onScroll();
@@ -1736,14 +1707,13 @@
   } else {
     boot();
   }
-
   document.addEventListener('astro:before-swap', teardown);
   document.addEventListener('astro:page-load', boot);
 
   // ---------------------------------------------------------------- api
 
   window.ReaderTools = {
-    version: 12,
+    version: 13,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
