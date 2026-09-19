@@ -64,6 +64,7 @@
   const AUTO_WATCHDOG_MS = 1500;
   const AUTO_WD_POLL_MS = 400;
   const AUTO_WRITE_EPS = 0.5;
+  const AUTO_MIN_WRITE_PX = 3;
 
   const DEFAULTS = {
     page: 'dark',
@@ -272,7 +273,7 @@
       'scroll-behavior:auto !important;}' +
       '.rt-root .rt-stopfab{display:none;position:fixed;left:50%;' +
       'bottom:calc(1.25rem + env(safe-area-inset-bottom));' +
-      'transform:translateX(-50%) translateZ(0);z-index:9650;' +
+      'transform:translateX(-50%) translateZ(0);z-index:9750;' +
       'align-items:center;gap:8px;margin:0;padding:11px 17px 11px 13px;' +
       'border:1px solid rgba(239,68,68,.65);border-radius:999px;' +
       'background:#b91c1c;color:#fff;font-family:inherit;font-size:12px;' +
@@ -561,16 +562,22 @@
       return;
     }
 
-    // Stall guard: ලිව්වට පස්සේ ආපහු කියවීම (write-then-read) frame එකකට
-    // දෙවන forced layout එකක් ගෙනාවා - main thread හිර වීමට ඒක ප්රධාන හේතුව.
-    // දැන් කියවන්නේ පෙර frame එකේ ලියා තිබෙන auto.prevY සමඟ පමණයි.
-    if (auto.expect >= 0 && y <= auto.prevY + AUTO_WRITE_EPS) auto.stall++;
-    else auto.stall = 0;
+    // Stall guard: පිටුව ඇත්තටම අප ලිව්ව අගයට (auto.expect) ආවාද කියා පමණක්
+    // බලනවා. write-throttle නිසා frames කිහිපයක් අතරතුර ලියන්නේ නැති නිසා
+    // "y වෙනස් නොවීම" තනිවම නරක ලකුණක් නොවේ.
+    if (auto.expect >= 0) {
+      if (y < auto.expect - AUTO_WRITE_EPS) auto.stall++;
+      else auto.stall = 0;
+    }
     auto.prevY = y;
 
     auto.carry += (autoPps() * dt) / 1000;
+    // Write-throttle: 1px/frame @60fps = තත්පරයකට programmatic scroll 60ක් +
+    // scroll event 60ක් + viewport update 60ක්. දිගු පිටුවක ඒක තමයි මුළු
+    // main-thread අයවැයම. අඩුම තරමින් 3px එකතු වූ පසු පමණක් ලිව්වොත්
+    // එය ~15/s දක්වා අඩු වන අතර කියවන විට පෙනුමේ වෙනසක් නෑ.
+    if (auto.carry < AUTO_MIN_WRITE_PX) return;
     const step = Math.floor(auto.carry);
-    if (step < 1) return;
     auto.carry -= step;
 
     const target = Math.min(max, y + step);
@@ -1419,6 +1426,36 @@
     listen(ui.stop, 'touchstart', hardStopAuto, { passive: false });
     listen(ui.stop, 'click', hardStopAuto);
 
+    // ඉහත bindings පමණක් ප්රමාණවත් නොවේ: දිගු පිටුවක scroll write එක main
+    // thread එක තදින් අල්ලා ගන්නා විට browser එකේ event dispatch එකම ප්රමාද
+    // වෙනවා - මිනිසෙකුට "බොත්තම වැඩ කරන්නේ නෑ" ලෙස පෙනෙනවා.
+    // ඒ නිසා auto-scroll දුවන වෙලාවේ තිරයේ ඕනෑම තැනකට tap/click එකක් හෝ
+    // යතුරක් එබීමක් එකෙන්ම නවතිනවා. capture phase එකේ බැඳී ඇති නිසා වෙන
+    // කිසිම handler එකකට වඩා මුලින්ම දුවනවා.
+    const tapStop = (ev) => {
+      if (!auto.raf || !auto.armed) return;
+      const t = ev ? ev.target : null;
+      if (t && ui.stop && (t === ui.stop || ui.stop.contains(t))) {
+        stopAuto();
+        return;
+      }
+      if (t && ui.root && ui.root.contains(t)) return; // panel/FAB ඇතුළත tap
+      stopAuto();
+    };
+    listen(window, 'pointerdown', tapStop, { capture: true, passive: true });
+    listen(window, 'touchstart', tapStop, { capture: true, passive: true });
+    listen(window, 'mousedown', tapStop, { capture: true, passive: true });
+
+    const keyStop = (ev) => {
+      if (!auto.raf || !auto.armed) return;
+      const k = ev ? ev.key : '';
+      if (k === 'Escape' || k === ' ' || k === 'Home' || k === 'End' ||
+          k.slice(0, 5) === 'Arrow' || k.slice(0, 4) === 'Page') {
+        stopAuto();
+      }
+    };
+    listen(window, 'keydown', keyStop);
+
     listen(window, 'scroll', onScroll, { passive: true });
     listen(window, 'resize', () => {
       scrollMax(true);
@@ -1435,7 +1472,6 @@
     };
     listen(window, 'wheel', abortAuto, { passive: true });
     listen(window, 'touchmove', abortAuto, { passive: true });
-    listen(window, 'mousedown', abortAuto, true);
 
     listen(document, 'keydown', (e) => {
       if (e.key === 'Escape') {
@@ -1557,7 +1593,7 @@
   // ---------------------------------------------------------------- api
 
   window.ReaderTools = {
-    version: 9,
+    version: 11,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
