@@ -118,7 +118,35 @@ html[data-rt-page="sepia"] :is([data-rt-article], .custom-post-content) blockquo
   border-left-color: #8a5a1c !important;
 }
 
-/* tts highlight *//* tts highlight */
+/* focus mode.
+   Two guards, because a stale focus flag used to hide the header and
+   footer on the home page AND inside posts:
+     1. data-rt-focus="on"        - only while the user asks for it
+     2. data-rt-has-article="1"   - only on a real article page
+   The reset rule below runs whenever either guard is missing, so even a
+   leftover data-rt-dim attribute cannot keep anything invisible. The
+   header is no longer in the JS dim list at all. opacity only - `filter`
+   promotes a compositing layer and turns every scroll frame into a
+   repaint. */
+[data-rt-dim] {
+  transition: opacity 0.3s ease;
+}
+html:not([data-rt-focus="on"]) [data-rt-dim],
+html:not([data-rt-has-article="1"]) [data-rt-dim] {
+  opacity: 1 !important;
+  visibility: visible !important;
+  filter: none !important;
+  pointer-events: auto !important;
+}
+html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim] {
+  opacity: 0.55;
+}
+html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim]:hover,
+html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim]:focus-within {
+  opacity: 1;
+}
+
+/* tts highlight */
 .rt-speaking {
   background: rgba(1, 173, 159, 0.16) !important;
   box-shadow: inset 3px 0 0 var(--rt-accent);
@@ -507,24 +535,6 @@ html[data-rt-scrolling="1"] .rt-progress > i {
   flex: 0 0 auto;
 }
 
-
-/* reading-section reset: red on purpose - the only destructive-looking
-   control in the panel. Stays disabled until something was changed. */
-.rt-btn-reset {
-  border-color: rgba(239, 68, 68, 0.45);
-  background: rgba(239, 68, 68, 0.1);
-  color: #f87171;
-}
-.rt-btn-reset:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
-}
-.rt-btn-reset:disabled {
-  border-color: var(--rt-border);
-  background: var(--rt-bg2);
-  color: var(--rt-muted);
-}
-
 /* touch-action: none is required. Base.astro sets `touch-action: pan-y`
    on <body>, which swallowed the horizontal drag and made every slider
    unusable on phones. The padded hit area keeps the thumb tappable. */
@@ -800,6 +810,11 @@ html.rt-locked body {
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
+/* paused state: the badge turns amber, so "held" is visible at a glance */
+.rt-stopfab[data-paused="1"] .rt-stopfab-badge {
+  background: #fde68a;
+  color: #78350f;
+}
 
 /* on phones the pill sits slightly higher so the browser chrome and the
    comments FAB do not cover it */
@@ -831,6 +846,7 @@ html.rt-locked body {
   .rt-fab,
   .rt-stopfab,
   .rt-progress > i,
+  [data-rt-dim],
   [data-rt-article],
   .custom-post-content {
     transition: none !important;
@@ -840,5 +856,8 @@ html.rt-locked body {
 @media print {
   .rt-root {
     display: none !important;
+  }
+  [data-rt-dim] {
+    opacity: 1 !important;
   }
 }
