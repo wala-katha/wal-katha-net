@@ -207,6 +207,13 @@ html.age-gate-pending .rt-root {
   transform: scaleX(0);
   transform-origin: 0 50%;
   background: linear-gradient(90deg, #01ad9f, #34d399);
+}
+
+/* `will-change` pinned on a 100%-wide fixed element keeps a full-viewport
+   width compositor layer resident for the whole visit - on a low-end
+   Android that is RAM the compositor needs back while a long page scrolls.
+   Promote it only while auto-scroll is actually running. */
+html[data-rt-scrolling="1"] .rt-progress > i {
   will-change: transform;
 }
 
@@ -266,6 +273,16 @@ html.age-gate-pending .rt-root {
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
+}
+
+/* Scrim fade-out keeps visibility:visible for 280 ms (the transition
+   delay). During that window it sits at z-index 9700 - above the FAB and
+   above the older 9650 stop pill - so an impatient tap right after
+   "start" was swallowed by the scrim and the stop button looked dead.
+   Two guards: the scrim can never take a tap unless the panel is open,
+   and the pill was moved above it (9750). */
+.rt-root:not([data-open="1"]) .rt-scrim {
+  pointer-events: none;
 }
 
 /* ------------------------------------------------------------------ scrim */
