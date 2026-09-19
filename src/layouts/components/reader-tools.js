@@ -1,8 +1,6 @@
 // ==========================================================================
 // Reader Tools - logic only. Chrome + themes live in reader-tools.css
 // --------------------------------------------------------------------------
-// v15 (voice tab): status card no longer squashed by flex-shrink; male / female
-//   voice choice (real voice by name hints, pitch fallback) + sample preview.
 // v14:
 //  - voice engine moved to module level (state machine: idle/playing/paused)
 //  - language picker (12 languages), voices filtered per language
@@ -19,10 +17,13 @@
 // ==========================================================================
 (() => {
   'use strict';
+
   if (window.__wkReaderToolsInit) return;
   window.__wkReaderToolsInit = true;
+
   const STORE_KEY = 'wk:reader:v1';
   const posKey = (p) => 'wk:reader:pos:' + p;
+
   const ARTICLE_CANDIDATES = [
     '[data-rt-article]',
     '.custom-post-content',
@@ -31,6 +32,7 @@
     '#main-content article',
     'main article',
   ];
+
   const HEADING_SEL = 'h2, h3, h4';
   const BLOCK_SEL = 'p, li, h2, h3, h4, blockquote';
   const MIN_ARTICLE_CHARS = 400;
@@ -42,6 +44,7 @@
   const POS_SAVE_MS = 1500;
   const STORE_DEBOUNCE_MS = 300;
   const MAX_CACHE_MS = 400;
+
   // auto-scroll tuning
   const AUTO_PPS = [12, 20, 30, 42, 58, 78, 100, 124, 150, 178];
   const AUTO_ARM_MS = 420;
@@ -51,6 +54,7 @@
   const AUTO_STYLE_ID = 'wk-rt-auto-style';
   const RESET_STYLE_ID = 'wk-rt-reset-style';
   const VOICE_STYLE_ID = 'wk-rt-voice-style';
+
   // watchdog: stops the engine if the rAF loop dies silently
   const AUTO_WATCHDOG_MS = 1500;
   const AUTO_WD_POLL_MS = 400;
@@ -61,24 +65,23 @@
   const AUTO_JANK_MS = 50;
   const AUTO_GOV_MIN = 0.4;
   const AUTO_GOV_UP = 0.02;
-  // voice gender fallback: pitch factor used when the device has no real voice of that gender
-  const PITCH_MALE = 0.78;
-  const PITCH_FEMALE = 1.18;
-  // voice languages: id, chip label, Sinhala name, BCP47 tag, web translate code, preview sample
+
+  // voice languages: id, chip label, Sinhala name, BCP47 tag, web translate code
   const VOICE_LANGS = [
-    { id: 'si', label: 'සිංහල', name: 'සිංහල', tag: 'si-LK', tr: '', sample: "ආයුබෝවන්, මේ තමයි මගේ හඬ. කතාව කියවන්න මම සූදානම්." },
-    { id: 'en', label: 'English', name: 'ඉංග්‍රීසි', tag: 'en-US', tr: 'en', sample: "Hello, this is my voice. I am ready to read the story." },
-    { id: 'ta', label: 'தமிழ்', name: 'දෙමළ', tag: 'ta-IN', tr: 'ta', sample: "வணக்கம், இது என் குரல். கதையைப் படிக்க நான் தயார்." },
-    { id: 'hi', label: 'हिन्दी', name: 'හින්දි', tag: 'hi-IN', tr: 'hi', sample: "नमस्ते, यह मेरी आवाज़ है। मैं कहानी पढ़ने के लिए तैयार हूँ।" },
-    { id: 'ru', label: 'Русский', name: 'රුසියානු', tag: 'ru-RU', tr: 'ru', sample: "Здравствуйте, это мой голос. Я готов читать историю." },
-    { id: 'zh', label: '中文', name: 'චීන', tag: 'zh-CN', tr: 'zh-CN', sample: "你好，这是我的声音。我准备好读故事了。" },
-    { id: 'ar', label: 'العربية', name: 'අරාබි', tag: 'ar-SA', tr: 'ar', sample: "مرحباً، هذا صوتي. أنا مستعد لقراءة القصة." },
-    { id: 'ja', label: '日本語', name: 'ජපන්', tag: 'ja-JP', tr: 'ja', sample: "こんにちは、これは私の声です。物語を読む準備ができました。" },
-    { id: 'ko', label: '한국어', name: 'කොරියානු', tag: 'ko-KR', tr: 'ko', sample: "안녕하세요, 이것은 제 목소리입니다. 이야기를 읽을 준비가 되었습니다." },
-    { id: 'fr', label: 'Français', name: 'ප්‍රංශ', tag: 'fr-FR', tr: 'fr', sample: "Bonjour, ceci est ma voix. Je suis prêt à lire l'histoire." },
-    { id: 'de', label: 'Deutsch', name: 'ජර්මන්', tag: 'de-DE', tr: 'de', sample: "Hallo, das ist meine Stimme. Ich bin bereit, die Geschichte zu lesen." },
-    { id: 'es', label: 'Español', name: 'ස්පාඤ්ඤ', tag: 'es-ES', tr: 'es', sample: "Hola, esta es mi voz. Estoy listo para leer la historia." },
+    { id: 'si', label: 'සිංහල', name: 'සිංහල', tag: 'si-LK', tr: '' },
+    { id: 'en', label: 'English', name: 'ඉංග්‍රීසි', tag: 'en-US', tr: 'en' },
+    { id: 'ta', label: 'தமிழ்', name: 'දෙමළ', tag: 'ta-IN', tr: 'ta' },
+    { id: 'hi', label: 'हिन्दी', name: 'හින්දි', tag: 'hi-IN', tr: 'hi' },
+    { id: 'ru', label: 'Русский', name: 'රුසියානු', tag: 'ru-RU', tr: 'ru' },
+    { id: 'zh', label: '中文', name: 'චීන', tag: 'zh-CN', tr: 'zh-CN' },
+    { id: 'ar', label: 'العربية', name: 'අරාබි', tag: 'ar-SA', tr: 'ar' },
+    { id: 'ja', label: '日本語', name: 'ජපන්', tag: 'ja-JP', tr: 'ja' },
+    { id: 'ko', label: '한국어', name: 'කොරියානු', tag: 'ko-KR', tr: 'ko' },
+    { id: 'fr', label: 'Français', name: 'ප්‍රංශ', tag: 'fr-FR', tr: 'fr' },
+    { id: 'de', label: 'Deutsch', name: 'ජර්මන්', tag: 'de-DE', tr: 'de' },
+    { id: 'es', label: 'Español', name: 'ස්පාඤ්ඤ', tag: 'es-ES', tr: 'es' },
   ];
+
   const DEFAULTS = {
     page: 'dark',
     font: 'sinhala',
@@ -91,9 +94,9 @@
     voiceLang: 'si',
     voiceMap: {},
     voiceFrom: 'view',
-    voiceGender: 'auto',
     scrollSpeed: 4,
   };
+
   const LIMITS = {
     fontScale: [0.85, 1.6, 0.05],
     lineHeight: [1.4, 2.4, 0.05],
@@ -102,24 +105,28 @@
     pitch: [0.6, 1.4, 0.05],
     scrollSpeed: [1, 10, 1],
   };
+
   const ENUMS = {
     page: ['dark', 'paper', 'sepia', 'contrast'],
     font: ['sinhala', 'serif', 'system'],
     measure: ['narrow', 'normal', 'wide'],
     voiceFrom: ['view', 'top'],
-    voiceGender: ['auto', 'female', 'male'],
   };
+
   // ---------------------------------------------------------------- helpers
+
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
   const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
   const isNum = (v) => typeof v === 'number' && isFinite(v);
   const round = (n, step) => Math.round(n / step) * step;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
   const reduceMotion = () =>
     !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const isMobile = () => !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
   const behavior = () => (reduceMotion() ? 'auto' : 'smooth');
+
   const synth = (function () {
     try {
       return window.speechSynthesis || null;
@@ -127,12 +134,14 @@
       return null;
     }
   })();
+
   function langInfo(id) {
     for (let i = 0; i < VOICE_LANGS.length; i++) {
       if (VOICE_LANGS[i].id === id) return VOICE_LANGS[i];
     }
     return VOICE_LANGS[0];
   }
+
   function el(tag, attrs, kids) {
     const n = document.createElement(tag);
     if (attrs) {
@@ -155,6 +164,7 @@
     }
     return n;
   }
+
   // one rAF per frame; all scroll consumers share one handler
   function rafOnce(fn) {
     let queued = false;
@@ -167,6 +177,7 @@
       });
     };
   }
+
   // scrollHeight read = forced layout; cached for 400ms
   let maxCache = -1;
   let maxCacheAt = 0;
@@ -178,6 +189,7 @@
     }
     return maxCache;
   }
+
   // tracked listeners: teardown removes every one of them
   const bound = [];
   function listen(target, type, fn, opts) {
@@ -193,7 +205,9 @@
       } catch (e) {}
     }
   }
+
   // ---------------------------------------------------------------- storage
+
   function sanitize(raw) {
     const s = Object.assign({}, DEFAULTS, raw || {});
     Object.keys(ENUMS).forEach((k) => {
@@ -216,6 +230,7 @@
     delete s.voiceURI;
     return s;
   }
+
   function load() {
     try {
       return sanitize(JSON.parse(localStorage.getItem(STORE_KEY) || '{}'));
@@ -223,7 +238,9 @@
       return sanitize(null);
     }
   }
+
   const state = load();
+
   let storeTimer = null;
   function save() {
     if (storeTimer) clearTimeout(storeTimer);
@@ -243,7 +260,9 @@
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
     } catch (e) {}
   }
+
   // ------------------------------------------------------------------- bus
+
   const bus = {};
   function on(evt, fn) {
     (bus[evt] = bus[evt] || []).push(fn);
@@ -260,7 +279,9 @@
       }
     });
   }
+
   // ----------------------------------------------------------------- icons
+
   const ICON = {
     list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
     type: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>',
@@ -277,6 +298,7 @@
     reset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 14.6-5.9"/><path d="M19 3v4.5h-4.5"/></svg>',
     close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   };
+
   // ------------------------------------------------- injected auto-scroll css
   // Also lives here (not only in the css file) so a renamed class or a cached
   // old css build can never make the red stop pill invisible.
@@ -317,6 +339,7 @@
     s.textContent = css;
     document.head.appendChild(s);
   }
+
   // Red "reset speed" button. The wrapper collapses with grid-template-rows so
   // showing/hiding it never makes the panel jump; hidden state uses
   // visibility:hidden so it cannot be focused or tapped.
@@ -361,6 +384,7 @@
     s.textContent = css;
     document.head.appendChild(s);
   }
+
   // Voice tab card, language grid and the floating voice pill.
   function ensureVoiceStyle() {
     if (!document.head || document.getElementById(VOICE_STYLE_ID)) return;
@@ -401,10 +425,6 @@
       '.rt-root .rt-langs .rt-chip{min-width:0;padding:9px 4px;font-size:12px;' +
       'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
       // panel controls
-      '.rt-root .rt-body>*{flex-shrink:0;}' +
-      '.rt-root .rt-vcard{flex:0 0 auto;min-height:66px;}' +
-      '.rt-root .rt-genders{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}' +
-      '.rt-root .rt-genders .rt-chip{min-width:0;padding:10px 4px;font-size:12px;white-space:nowrap;}' +
       '.rt-root .rt-vmain{padding:12px 14px;font-size:13px;}' +
       '.rt-root .rt-vstop{flex:0 0 auto;padding:12px 16px;}' +
       '.rt-root .rt-vnav .rt-btn{padding:9px 8px;font-size:11px;}' +
@@ -450,13 +470,16 @@
     s.textContent = css;
     document.head.appendChild(s);
   }
+
   // --------------------------------------------------------------- elements
+
   const ui = {
     root: null, bar: null, fab: null, stop: null, stopPct: null,
     voice: null, voiceMain: null, voiceBadge: null, voiceTxt: null, voicePct: null,
     voiceStop: null,
     scrim: null, panel: null, tabs: null, body: null, sub: null, close: null,
   };
+
   let article = null;
   let isOpen = false;
   let activeTab = null;
@@ -464,7 +487,9 @@
   let lastFocus = null;
   let pctEl = null;
   let curPath = typeof location !== 'undefined' ? location.pathname : '/';
+
   // ------------------------------------------------------------ build chrome
+
   function ensureRoot() {
     const found = $$('[data-rt-root], .rt-root');
     if (!found.length) {
@@ -480,6 +505,7 @@
     root.setAttribute('data-rt-root', '');
     return root;
   }
+
   function buildChrome() {
     if (!document.body) return false;
     const root = ensureRoot();
@@ -490,8 +516,10 @@
     root.removeAttribute('data-autoscroll');
     // escape the global copy-protection selectstart blocker
     root.setAttribute('data-allow-select', '');
+
     const bar = el('i');
     const progress = el('div', { class: 'rt-progress', 'aria-hidden': 'true' }, bar);
+
     const fab = el('button', {
       class: 'rt-fab',
       type: 'button',
@@ -504,6 +532,7 @@
       el('span', { class: 'rt-fab-ico', html: ICON.type, 'aria-hidden': 'true' }),
       el('span', { class: 'rt-fab-txt', text: 'මෙවලම්' }),
     ]);
+
     // red stop pill: visible only while auto-scroll runs
     const stopFab = el('button', {
       class: 'rt-stopfab',
@@ -516,6 +545,7 @@
         '<span class="rt-stopfab-txt">නවත්වන්න</span>' +
         '<span class="rt-stopfab-pct" data-rt-stop-pct>0%</span>',
     });
+
     // teal voice pill: visible while speech is playing or paused
     const vfBadge = el('span', { class: 'rt-vf-badge', 'aria-hidden': 'true', html: ICON.pause });
     const vfTxt = el('span', { class: 'rt-vf-txt', text: 'විරාමය' });
@@ -539,7 +569,9 @@
       role: 'group',
       'aria-label': 'හඬ කියවීම පාලනය',
     }, [vfMain, vfPct, vfStop]);
+
     const scrim = el('div', { class: 'rt-scrim', 'data-rt-scrim': '', 'aria-hidden': 'true' });
+
     const sub = el('span', { class: 'rt-sub', 'data-rt-sub': '' });
     const closeBtn = el('button', {
       class: 'rt-iconbtn rt-close',
@@ -555,6 +587,7 @@
       ]),
       closeBtn,
     ]);
+
     const tabs = el('div', { class: 'rt-tabs', role: 'tablist', 'aria-label': 'මෙවලම්' });
     const body = el('div', { class: 'rt-body', role: 'tabpanel', tabindex: '-1' });
     const panel = el('aside', {
@@ -564,12 +597,14 @@
       'aria-label': 'කියවීමේ මෙවලම්',
       tabindex: '-1',
     }, [head, tabs, body]);
+
     root.appendChild(progress);
     root.appendChild(fab);
     root.appendChild(stopFab);
     root.appendChild(voicePill);
     root.appendChild(scrim);
     root.appendChild(panel);
+
     ui.root = root;
     ui.bar = bar;
     ui.fab = fab;
@@ -589,7 +624,9 @@
     ui.close = closeBtn;
     return true;
   }
+
   // --------------------------------------------------------------- article
+
   function findArticle() {
     for (let i = 0; i < ARTICLE_CANDIDATES.length; i++) {
       const n = $(ARTICLE_CANDIDATES[i]);
@@ -599,19 +636,24 @@
     }
     return null;
   }
+
   // removes stale dim flags left by the retired focus mode
   function clearDim() {
     $$('[data-rt-dim]').forEach((n) => n.removeAttribute('data-rt-dim'));
   }
+
   function words() {
     if (!article) return 0;
     const t = (article.textContent || '').replace(/\s+/g, ' ').trim();
     return t ? t.split(' ').length : 0;
   }
+
   function minutes() {
     return Math.max(1, Math.round(words() / WORDS_PER_MIN));
   }
+
   // ----------------------------------------------------------------- apply
+
   function apply() {
     const r = document.documentElement;
     r.setAttribute('data-rt-page', state.page);
@@ -620,6 +662,7 @@
     r.style.setProperty('--rt-font-scale', String(state.fontScale));
     r.style.setProperty('--rt-line-height', String(state.lineHeight));
     r.style.setProperty('--rt-letter', state.letter + 'em');
+
     if (article) {
       article.setAttribute('data-rt-article', '');
       r.setAttribute('data-rt-has-article', '1');
@@ -627,9 +670,11 @@
       r.removeAttribute('data-rt-has-article');
     }
     r.setAttribute('data-rt-focus', 'off');
+
     // font/line-height changes alter the document height
     scrollMax(true);
   }
+
   function set(patch, opts) {
     Object.assign(state, patch || {});
     apply();
@@ -637,13 +682,16 @@
     else save();
     emit('change', state);
   }
+
   // -------------------------------------------------------- auto scroll
   // Module level: keeps running when the panel closes; teardown stops it.
+
   const auto = {
     raf: 0, last: 0, carry: 0, expect: -1, stall: 0, armed: false, armTimer: 0,
     prevY: 0, watchdog: 0, wdY: -1, wdAt: 0,
     ms: 0, gov: 1, stopFlag: false, pctAt: 0, pctShow: -1,
   };
+
   function autoWatchdog() {
     if (!auto.raf) return;
     const now = Date.now();
@@ -657,14 +705,17 @@
       auto.wdAt = now;
     }
   }
+
   function autoPps() {
     return AUTO_PPS[clamp(Math.round(state.scrollSpeed), 1, 10) - 1] * auto.gov;
   }
+
   // jank governor: a long frame slows the scroll down, protecting weak phones
   function autoGovern(dt) {
     if (dt > AUTO_JANK_MS) auto.gov = Math.max(AUTO_GOV_MIN, auto.gov - 0.08);
     else if (auto.gov < 1) auto.gov = Math.min(1, auto.gov + AUTO_GOV_UP);
   }
+
   function setY(y) {
     try {
       window.scrollTo({ top: y, left: 0, behavior: 'instant' });
@@ -672,32 +723,41 @@
       window.scrollTo(0, y);
     }
   }
+
   function autoStep(ts) {
     if (!auto.raf) return;
     auto.raf = requestAnimationFrame(autoStep);
+
     if (!auto.last) {
       auto.last = ts;
       auto.prevY = window.scrollY;
       return;
     }
+
     let dt = ts - auto.last;
     auto.last = ts;
     if (dt <= 0) return;
     if (dt > AUTO_MAX_DT) dt = AUTO_MAX_DT;
+
     // watchdog heartbeat
     auto.wdAt = Date.now();
+
     autoGovern(dt);
+
     const y = window.scrollY;
+
     // user scrolled by hand (scrollbar drag included)
     if (auto.armed && auto.expect >= 0 && Math.abs(y - auto.expect) > AUTO_DRIFT) {
       stopAuto();
       return;
     }
+
     const max = scrollMax();
     if (max <= 4 || y >= max - 1) {
       stopAuto();
       return;
     }
+
     // stall guard: compares only against the value we wrote last
     if (auto.expect >= 0) {
       if (y < auto.expect - AUTO_WRITE_EPS) auto.stall++;
@@ -708,17 +768,22 @@
       }
     }
     auto.prevY = y;
+
     auto.ms += dt;
     auto.carry += (autoPps() * dt) / 1000;
     if (auto.carry > 320) auto.carry = 320;
+
     if (auto.ms < AUTO_WRITE_MS || auto.carry < AUTO_MIN_WRITE_PX) return;
     auto.ms -= AUTO_WRITE_MS;
     if (auto.ms > AUTO_WRITE_MS * 4) auto.ms = AUTO_WRITE_MS * 4;
+
     const step = Math.floor(auto.carry);
     auto.carry -= step;
+
     const target = Math.min(max, y + step);
     setY(target);
     auto.expect = target;
+
     if (ui.stopPct && ts - auto.pctAt > 500) {
       auto.pctAt = ts;
       const pct = max > 0 ? Math.min(100, Math.round((target / max) * 100)) : 100;
@@ -728,9 +793,11 @@
       }
     }
   }
+
   function startAuto() {
     if (auto.raf || !article) return;
     if (scrollMax(true) <= 8) return;
+
     // panel closes: scroll lock and scrim both go away
     close();
     document.documentElement.classList.remove('rt-locked');
@@ -740,6 +807,7 @@
       ui.root.setAttribute('data-scrolling', '1');
       ui.root.setAttribute('data-autoscroll', '1');
     }
+
     auto.last = 0;
     auto.carry = 0;
     auto.ms = 0;
@@ -761,25 +829,31 @@
       auto.armTimer = 0;
       auto.armed = true;
     }, AUTO_ARM_MS);
+
     auto.wdY = window.scrollY;
     auto.wdAt = Date.now();
     if (auto.watchdog) clearInterval(auto.watchdog);
     auto.watchdog = setInterval(autoWatchdog, AUTO_WD_POLL_MS);
+
     auto.raf = requestAnimationFrame(autoStep);
+
     // the FAB turns visibility:hidden; move keyboard focus to the stop pill
     if (ui.fab && ui.stop && document.activeElement === ui.fab) {
       try { ui.stop.focus({ preventScroll: true }); } catch (e) {}
     }
     emit('autoscroll', true);
   }
+
   function stopAuto() {
     if (auto.stopFlag) return;
     auto.stopFlag = true;
+
     // timers first: stop must work even when the main thread is busy
     if (auto.armTimer) { clearTimeout(auto.armTimer); auto.armTimer = 0; }
     if (auto.watchdog) { clearInterval(auto.watchdog); auto.watchdog = 0; }
     const was = !!auto.raf;
     if (auto.raf) { cancelAnimationFrame(auto.raf); auto.raf = 0; }
+
     auto.armed = false;
     auto.last = 0;
     auto.carry = 0;
@@ -792,6 +866,7 @@
     auto.gov = 1;
     auto.pctAt = 0;
     auto.pctShow = -1;
+
     document.documentElement.removeAttribute('data-rt-scrolling');
     if (ui.root) {
       ui.root.removeAttribute('data-scrolling');
@@ -807,21 +882,26 @@
       emit('autoscroll', false);
     }
   }
+
   function toggleAuto() {
     if (auto.raf) stopAuto();
     else startAuto();
   }
+
   // ------------------------------------------------------------ open/close
+
   function lockScroll(lock) {
     const r = document.documentElement;
     if (lock && isMobile()) r.classList.add('rt-locked');
     else r.classList.remove('rt-locked');
   }
+
   function focusables() {
     if (!ui.panel) return [];
     return $$('button, [href], select, input, [tabindex]:not([tabindex="-1"])', ui.panel)
       .filter((n) => !n.disabled && n.offsetParent !== null);
   }
+
   function trap(e) {
     if (!isOpen || e.key !== 'Tab' || !ui.panel) return;
     const f = focusables();
@@ -836,6 +916,7 @@
       first.focus();
     }
   }
+
   function open() {
     if (!ui.root || isOpen || !article) return;
     if (document.documentElement.classList.contains('age-gate-pending')) return;
@@ -854,6 +935,7 @@
     }, reduceMotion() ? 0 : 80);
     emit('open');
   }
+
   function close() {
     if (!ui.root || !isOpen) return;
     isOpen = false;
@@ -868,12 +950,16 @@
     lastFocus = null;
     emit('close');
   }
+
   function toggle() {
     if (isOpen) close();
     else open();
   }
+
   // -------------------------------------------------------------- registry
+
   const tools = [];
+
   function register(tool) {
     if (!tool || !tool.id || typeof tool.mount !== 'function') {
       console.warn('[reader-tools] invalid tool', tool);
@@ -884,6 +970,7 @@
     tools.sort((a, b) => a.order - b.order);
     if (ui.tabs) renderTabs();
   }
+
   function renderTabs() {
     if (!ui.tabs) return;
     ui.tabs.textContent = '';
@@ -903,6 +990,7 @@
       );
     });
   }
+
   function runCleanup() {
     if (typeof cleanupTab === 'function') {
       try { cleanupTab(); } catch (e) { console.warn('[reader-tools] cleanup', e); }
@@ -910,6 +998,7 @@
     cleanupTab = null;
     pctEl = null;
   }
+
   function showTab(id) {
     const tool = tools.filter((t) => t.id === id)[0];
     if (!tool || !ui.body) return;
@@ -930,7 +1019,9 @@
     }
     emit('tab', id);
   }
+
   // ------------------------------------------------------------- ui bits
+
   function segment(label, value, options, pick) {
     const seg = el('div', { class: 'rt-seg' });
     options.forEach((o) => {
@@ -952,6 +1043,7 @@
       seg,
     ]);
   }
+
   // returns the group element; group.rtSync(v) updates the thumb and label
   // from code (used by the speed reset button)
   function slider(label, key, fmt, onLive) {
@@ -986,8 +1078,11 @@
     };
     return group;
   }
+
   // ------------------------------------------------------------- tool: toc
+
   let tocSync = null;
+
   register({
     id: 'toc',
     label: 'අන්තර්ගතය',
@@ -1011,12 +1106,14 @@
       ]));
       pctEl = $('[data-rt-pct]', box);
       if (pctEl) pctEl.textContent = Math.round(lastPct * 100) + '%';
+
       const group = el('div', { class: 'rt-group' }, [
         el('p', { class: 'rt-label', text: 'කොටස්' }),
       ]);
       const heads = article
         ? $$(HEADING_SEL, article).filter((h) => (h.textContent || '').trim())
         : [];
+
       if (!heads.length) {
         group.appendChild(el('p', {
           class: 'rt-empty',
@@ -1025,6 +1122,7 @@
         box.appendChild(group);
         return () => { pctEl = null; };
       }
+
       const list = el('ul', { class: 'rt-toc' });
       const pairs = [];
       heads.forEach((h, i) => {
@@ -1044,6 +1142,7 @@
       });
       group.appendChild(list);
       box.appendChild(group);
+
       tocSync = () => {
         let cur = null;
         for (let i = 0; i < pairs.length; i++) {
@@ -1052,13 +1151,16 @@
         pairs.forEach((p) => p.a.setAttribute('data-active', p === cur ? '1' : '0'));
       };
       tocSync();
+
       return () => {
         tocSync = null;
         pctEl = null;
       };
     },
   });
+
   // --------------------------------------------------------- tool: display
+
   register({
     id: 'display',
     label: 'පෙනුම',
@@ -1071,19 +1173,23 @@
         { value: 'sepia', label: 'සෙපියා' },
         { value: 'contrast', label: 'තීව්‍ර' },
       ], (v) => set({ page: v }, { immediate: true })));
+
       box.appendChild(segment('අකුරු වර්ගය', state.font, [
         { value: 'sinhala', label: 'සිංහල' },
         { value: 'serif', label: 'සෙරිෆ්' },
         { value: 'system', label: 'පද්ධති' },
       ], (v) => set({ font: v }, { immediate: true })));
+
       box.appendChild(slider('අකුරු ප්‍රමාණය', 'fontScale', (v) => Math.round(v * 100) + '%'));
       box.appendChild(slider('පේළි පරතරය', 'lineHeight', (v) => v.toFixed(2)));
       box.appendChild(slider('අකුරු පරතරය', 'letter', (v) => String(Math.round(v * 1000))));
+
       box.appendChild(segment('පේළි පළල', state.measure, [
         { value: 'narrow', label: 'පටු' },
         { value: 'normal', label: 'සාමාන්‍ය' },
         { value: 'wide', label: 'පළල්' },
       ], (v) => set({ measure: v }, { immediate: true })));
+
       box.appendChild(el('button', {
         class: 'rt-btn',
         type: 'button',
@@ -1102,23 +1208,26 @@
       }));
     },
   });
+
   // ------------------------------------------------------------ voice engine
   // Module level, so it survives tab switches and panel close.
   // status: idle | playing | paused. Every async callback is guarded by the
   // generation counter (voice.gen), so stale callbacks can never speak.
+
   const voice = {
     status: 'idle', gen: 0, queue: [], i: 0, p: 0,
     kick: 0, guard: 0, utter: null, hl: null, cache: {},
     busy: false, error: '', done: false,
   };
-  let previewTimer = 0;
-  let previewUtter = null;
+
   const engines = {};
   function registerVoiceEngine(id, engine) {
     if (id && engine && typeof engine.speak === 'function') engines[id] = engine;
   }
+
   const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu;
   // note: U+200D (ZWJ) is kept on purpose, Sinhala conjuncts need it
+
   function cleanSpeech(t) {
     return String(t || '')
       .replace(/https?:\/\/\S+/g, ' ')
@@ -1126,6 +1235,7 @@
       .replace(/\s+/g, ' ')
       .trim();
   }
+
   function chunk(text, limit) {
     const out = [];
     let rest = (text || '').replace(/\s+/g, ' ').trim();
@@ -1144,6 +1254,7 @@
     if (rest) out.push(rest);
     return out;
   }
+
   function voiceBuildQueue() {
     const out = [];
     if (!article) return out;
@@ -1157,9 +1268,11 @@
     });
     return out;
   }
+
   function voiceLangOf(v) {
     return String(v.lang || '').toLowerCase().replace(/_/g, '-');
   }
+
   function voicesFor(code) {
     if (!synth) return [];
     let all = [];
@@ -1173,116 +1286,34 @@
       })
       .sort((a, b) => (b.default ? 1 : 0) - (a.default ? 1 : 0));
   }
-  // The Web Speech API exposes NO gender field, so gender is inferred from the
-  // voice name / URI: explicit words first, then a list of well known voice names.
-  const FEMALE_WORD = /(^|[^a-z])(female|woman|girl|feminine)([^a-z]|$)/;
-  const MALE_WORD = /(^|[^a-z])(male|man|boy|masculine)([^a-z]|$)/;
-  const FEMALE_NAMES = [
-    'zira', 'hazel', 'susan', 'aria', 'jenny', 'emma', 'sonia', 'libby', 'samantha',
-    'karen', 'victoria', 'moira', 'tessa', 'fiona', 'kate', 'serena', 'allison', 'ava',
-    'joanna', 'ivy', 'kendra', 'kimberly', 'salli', 'amy', 'emily', 'nicole', 'olivia',
-    'natasha', 'hedda', 'katja', 'amala', 'julia', 'paulina', 'helena', 'laura',
-    'sabina', 'elena', 'maria', 'monica', 'paola', 'isabella', 'lucia', 'thilini',
-    'saranya', 'pallavi', 'kalpana', 'swara', 'heera', 'neerja', 'irina', 'svetlana',
-    'tatyana', 'katya', 'xiaoxiao', 'xiaoyi', 'huihui', 'yaoyao', 'hanhan', 'tracy',
-    'yating', 'hsiaochen', 'hsiaoyu', 'sayaka', 'haruka', 'nanami', 'ayumi', 'mizuki',
-    'kyoko', 'sunhi', 'heami', 'yuna', 'sun-hi', 'denise', 'eloise', 'julie',
-    'hortense', 'marie', 'celine', 'lea', 'amelie', 'anna', 'petra', 'vicki', 'zariyah',
-    'salma', 'hoda', 'laila', 'zeina', 'mariam', 'shakira', 'ioana', 'zosia', 'ewa', 'agnieszka', 'ana', 'sabela', 'elvira',
-    'dalia', 'lupe', 'salome', 'paloma', 'lucy',
-  ];
-  const MALE_NAMES = [
-    'david', 'mark', 'george', 'guy', 'ryan', 'james', 'richard', 'daniel', 'alex',
-    'fred', 'tom', 'thomas', 'oliver', 'arthur', 'eric', 'brian', 'christopher',
-    'jorge', 'diego', 'juan', 'carlos', 'enrique', 'pablo', 'raul', 'antonio', 'alvaro',
-    'stefan', 'hans', 'markus', 'conrad', 'killian', 'florian', 'claude', 'henri',
-    'antoine', 'paul', 'jan', 'pavel', 'dmitry', 'maxim', 'yuri', 'hemant', 'madhur',
-    'prabhat', 'ravi', 'sameera', 'kumar', 'valluvar', 'surya', 'jun', 'kangkang',
-    'yunyang', 'yunxi', 'zhiwei', 'danny', 'takumi', 'keita', 'ichiro', 'otoya',
-    'injoon', 'hyunsu', 'hamed', 'shakir', 'naayf', 'majed', 'tarik',
-    'matej', 'filip', 'lucas', 'joao', 'jose', 'luca', 'andrew',
-  ];
-  function nameHit(text, list) {
-    for (let i = 0; i < list.length; i++) {
-      const n = list[i];
-      const at = text.indexOf(n);
-      if (at < 0) continue;
-      const before = at === 0 ? '' : text.charAt(at - 1);
-      const after = text.charAt(at + n.length);
-      if (!/[a-z]/.test(before) && !/[a-z]/.test(after)) return true;
-    }
-    return false;
-  }
-  // returns 'female' | 'male' | '' (unknown)
-  function voiceGender(v) {
-    if (!v) return '';
-    const text = (String(v.name || '') + ' ' + String(v.voiceURI || '')).toLowerCase();
-    if (FEMALE_WORD.test(text)) return 'female';
-    if (MALE_WORD.test(text)) return 'male';
-    if (nameHit(text, FEMALE_NAMES)) return 'female';
-    if (nameHit(text, MALE_NAMES)) return 'male';
-    return '';
-  }
-  function genderMark(v) {
-    const g = voiceGender(v);
-    return g === 'female' ? '\u2640 ' : g === 'male' ? '\u2642 ' : '';
-  }
-  function vmKey() {
-    return state.voiceLang + ':' + state.voiceGender;
-  }
-  // voices offered for the current language + gender: exact matches first, then
-  // voices of unknown gender, then everything (pitch fallback covers the rest)
-  function voicePool() {
-    const all = voicesFor(state.voiceLang);
-    const g = state.voiceGender;
-    if (g === 'auto') return { list: all, exact: true };
-    const match = all.filter((v) => voiceGender(v) === g);
-    if (match.length) return { list: match, exact: true };
-    const unknown = all.filter((v) => !voiceGender(v));
-    return { list: unknown.length ? unknown : all, exact: false };
-  }
+
   function pickVoice() {
-    const list = voicePool().list;
-    const want =
-      state.voiceMap[vmKey()] ||
-      (state.voiceGender === 'auto' ? state.voiceMap[state.voiceLang] : '');
+    const list = voicesFor(state.voiceLang);
+    const want = state.voiceMap[state.voiceLang];
     return list.filter((v) => v.voiceURI === want)[0] || list[0] || null;
   }
-  // pitch actually spoken: the slider value, shifted when the chosen gender has
-  // no real voice on this device
-  function effectivePitch(v) {
-    const g = state.voiceGender;
-    let p = state.pitch;
-    if ((g === 'male' || g === 'female') && (!v || voiceGender(v) !== g)) {
-      p *= g === 'male' ? PITCH_MALE : PITCH_FEMALE;
-    }
-    return clamp(p, 0.3, 2);
-  }
-  function applyVoiceTo(u) {
-    const v = pickVoice();
-    u.lang = v && v.lang ? String(v.lang).replace(/_/g, '-') : langInfo(state.voiceLang).tag;
-    if (v) u.voice = v;
-    u.rate = state.rate;
-    u.pitch = effectivePitch(v);
-    return v;
-  }
+
   // cancel + resume: avoids the Chrome state where speech stays stuck after cancel
   function hardCancel() {
     if (!synth) return;
     try { synth.cancel(); } catch (e) {}
     try { if (synth.paused) synth.resume(); } catch (e) {}
   }
+
   function clearVoiceTimers() {
     if (voice.kick) { clearTimeout(voice.kick); voice.kick = 0; }
     if (voice.guard) { clearTimeout(voice.guard); voice.guard = 0; }
   }
+
   function stale(gen) {
     return voice.gen !== gen || voice.status !== 'playing';
   }
+
   function inView(n) {
     const r = n.getBoundingClientRect();
     return r.bottom > 60 && r.top < window.innerHeight - 60;
   }
+
   // highlight the spoken block; follow it only if the reader was following
   function setHighlight(node) {
     const prev = voice.hl;
@@ -1297,10 +1328,12 @@
       window.scrollTo({ top: window.scrollY + r.top - 110, behavior: behavior() });
     }
   }
+
   function voicePct() {
     const n = voice.queue.length;
     return n ? Math.min(100, Math.round((voice.i / n) * 100)) : 0;
   }
+
   function paintVoicePill() {
     if (!ui.voice) return;
     const s = voice.status;
@@ -1311,12 +1344,13 @@
       s === 'paused' ? 'දිගටම' : voice.busy ? 'පරිවර්තනය...' : 'විරාමය';
     ui.voicePct.textContent = voicePct() + '%';
   }
+
   function voiceChanged() {
     paintVoicePill();
     emit('voice');
   }
+
   function voiceHalt() {
-    if (previewTimer) { clearTimeout(previewTimer); previewTimer = 0; }
     voice.status = 'idle';
     voice.gen++;
     clearVoiceTimers();
@@ -1325,6 +1359,7 @@
     voice.utter = null;
     setHighlight(null);
   }
+
   function voiceFail(msg) {
     voiceHalt();
     voice.error = msg;
@@ -1335,6 +1370,7 @@
       open();
     }
   }
+
   function voiceFinish() {
     voiceHalt();
     voice.i = 0;
@@ -1342,8 +1378,11 @@
     voice.done = true;
     voiceChanged();
   }
+
   // ---- translation (non-Sinhala languages)
+
   const trEngine = {};
+
   async function chromeTranslator(lang) {
     try {
       const T = self.Translator;
@@ -1355,6 +1394,7 @@
       return null;
     }
   }
+
   // unofficial Google web endpoint; needs connect-src in public/_headers
   async function webTranslate(text, lang) {
     const code = langInfo(lang).tr;
@@ -1380,6 +1420,7 @@
       if (timer) clearTimeout(timer);
     }
   }
+
   function getTranslator(lang) {
     if (!trEngine[lang]) {
       trEngine[lang] = (async () => {
@@ -1398,6 +1439,7 @@
     }
     return trEngine[lang];
   }
+
   // text of chunk i in the selected language (cached, failures are not cached)
   function getText(i) {
     const item = voice.queue[i];
@@ -1421,13 +1463,16 @@
     voice.cache[key] = p;
     return p;
   }
+
   function prefetch(from) {
     if (state.voiceLang === 'si') return;
     for (let k = 0; k < PREFETCH; k++) {
       if (from + k < voice.queue.length) getText(from + k);
     }
   }
+
   // ---- playback chain
+
   function armGuard(gen, len, next) {
     if (voice.guard) clearTimeout(voice.guard);
     const est = clamp(
@@ -1448,6 +1493,7 @@
     };
     voice.guard = setTimeout(tick, est);
   }
+
   function speakPart(i, parts, k, gen) {
     if (stale(gen)) return;
     if (k >= parts.length) {
@@ -1457,8 +1503,13 @@
     voice.p = k;
     const text = parts[k];
     const u = new SpeechSynthesisUtterance(text);
-    applyVoiceTo(u);
+    const v = pickVoice();
+    u.lang = v && v.lang ? String(v.lang).replace(/_/g, '-') : langInfo(state.voiceLang).tag;
+    if (v) u.voice = v;
+    u.rate = state.rate;
+    u.pitch = state.pitch;
     voice.utter = u; // keep a reference: a collected utterance never fires onend
+
     let advanced = false;
     const next = () => {
       if (advanced) return;
@@ -1485,6 +1536,7 @@
       voiceFail('හඬ කියවීම ආරම්භ කරන්න බැරි වුණා. පිටුව refresh කරලා නැවත උත්සාහ කරන්න.');
     }
   }
+
   function playItem(i, gen, startPart) {
     if (stale(gen)) return;
     const item = voice.queue[i];
@@ -1510,6 +1562,7 @@
       speakPart(i, parts, clamp(startPart, 0, Math.max(0, parts.length - 1)), gen);
     });
   }
+
   function advance(i, gen) {
     if (stale(gen)) return;
     if (i >= voice.queue.length) {
@@ -1519,6 +1572,7 @@
     voice.p = 0;
     playItem(i, gen, 0);
   }
+
   // start (or restart from voice.i / voice.p) after a short settle delay
   function beginPlayback() {
     voice.status = 'playing';
@@ -1533,6 +1587,7 @@
       playItem(voice.i, gen, voice.p);
     }, KICK_MS);
   }
+
   function voiceStartIndex() {
     if (state.voiceFrom !== 'view') return 0;
     const q = voice.queue;
@@ -1541,6 +1596,7 @@
     }
     return 0;
   }
+
   function voiceStart() {
     if (!synth || !article) return;
     if (voice.status === 'paused') { voiceResume(); return; }
@@ -1559,6 +1615,7 @@
     voice.hl = null;
     beginPlayback();
   }
+
   function voicePause() {
     if (voice.status !== 'playing') return;
     // native pause is unreliable (Android): cancel and remember the position
@@ -1569,10 +1626,12 @@
     voice.busy = false;
     voiceChanged();
   }
+
   function voiceResume() {
     if (voice.status !== 'paused') return;
     beginPlayback();
   }
+
   function voiceStop() {
     voiceHalt();
     voice.i = 0;
@@ -1581,11 +1640,13 @@
     voice.error = '';
     voiceChanged();
   }
+
   function voiceToggle() {
     if (voice.status === 'playing') voicePause();
     else if (voice.status === 'paused') voiceResume();
     else voiceStart();
   }
+
   // language or voice changed: restart the current chunk with the new setting
   function voiceSettingChanged() {
     voice.p = 0;
@@ -1601,6 +1662,7 @@
     }
     voiceChanged();
   }
+
   // jump to previous / next paragraph
   function voiceSkip(dir) {
     const q = voice.queue;
@@ -1637,33 +1699,14 @@
     }
     voiceChanged();
   }
-  // short spoken sample so the reader can hear the chosen language / gender / voice
-  function voicePreview() {
-    if (!synth || voice.status === 'playing') return;
-    if (previewTimer) clearTimeout(previewTimer);
-    hardCancel();
-    const sample = langInfo(state.voiceLang).sample;
-    previewTimer = setTimeout(() => {
-      previewTimer = 0;
-      if (voice.status === 'playing') return;
-      try {
-        const u = new SpeechSynthesisUtterance(sample);
-        applyVoiceTo(u);
-        previewUtter = u; // keep a reference so the utterance is not collected
-        synth.speak(u);
-      } catch (e) {}
-    }, KICK_MS);
-  }
-  function previewStop() {
-    if (previewTimer) { clearTimeout(previewTimer); previewTimer = 0; }
-    if (voice.status !== 'playing') hardCancel();
-    previewUtter = null;
-  }
+
   // ----------------------------------------------------------- tool: voice
+
   const INSTALL_HELP =
     'Android: Settings → Text-to-speech (හෝ Language & input) → Google Speech Services → Install voice data. ' +
     'iPhone/iPad: Settings → Accessibility → Spoken Content → Voices. ' +
     'Windows: Settings → Time & language → Speech → Add voices.';
+
   register({
     id: 'voice',
     label: 'හඬ',
@@ -1685,6 +1728,7 @@
         }));
         return;
       }
+
       // ---- status card
       const title = el('span', { class: 'rt-vtitle' });
       const sub = el('span', { class: 'rt-vsub' });
@@ -1699,6 +1743,7 @@
         el('div', { class: 'rt-vbar', 'aria-hidden': 'true' }, bar),
       ]);
       box.appendChild(card);
+
       // ---- language chips
       const langBtns = {};
       const langWrap = el('div', {
@@ -1719,45 +1764,22 @@
         el('p', { class: 'rt-label', text: 'කියවන භාෂාව' }),
         langWrap,
       ]));
-      // ---- gender chips + preview
-      const genderBtns = {};
-      const genderWrap = el('div', {
-        class: 'rt-seg rt-genders', role: 'group', 'aria-label': 'හඬේ වර්ගය',
-      });
-      [
-        { id: 'auto', label: 'ස්වයංක්‍රීය' },
-        { id: 'female', label: '\u2640 ගැහැණු' },
-        { id: 'male', label: '\u2642 පිරිමි' },
-      ].forEach((g) => {
-        const b = el('button', {
-          class: 'rt-chip', type: 'button', text: g.label, onclick: () => chooseGender(g.id),
-        });
-        genderBtns[g.id] = b;
-        genderWrap.appendChild(b);
-      });
-      const genderNote = el('p', { class: 'rt-empty' });
-      const btnPreview = el('button', {
-        class: 'rt-btn', type: 'button', html: ICON.play + '<span>හඬ ඇහුම්කන් බලන්න</span>',
-      });
-      btnPreview.addEventListener('click', voicePreview);
-      box.appendChild(el('div', { class: 'rt-group' }, [
-        el('p', { class: 'rt-label', text: 'හඬේ වර්ගය (පිරිමි / ගැහැණු)' }),
-        genderWrap,
-        genderNote,
-        btnPreview,
-      ]));
+
       // ---- voice select
       const voiceLabel = el('p', { class: 'rt-label', text: 'හඬ තෝරන්න' });
       const select = el('select', { class: 'rt-select', 'aria-label': 'හඬ තෝරන්න' });
       box.appendChild(el('div', { class: 'rt-group' }, [voiceLabel, select]));
+
       // ---- sliders
       box.appendChild(slider('කියවන වේගය', 'rate', (v) => v.toFixed(2) + 'x'));
       box.appendChild(slider('හඬේ ස්වරය (උස / පහත)', 'pitch', (v) => v.toFixed(2)));
+
       // ---- start position
       box.appendChild(segment('පටන් ගන්නේ කොහෙන්ද?', state.voiceFrom, [
         { value: 'view', label: 'තිරයේ පෙනෙන තැනින්' },
         { value: 'top', label: 'ලිපියේ මුල සිට' },
       ], (v) => set({ voiceFrom: v }, { immediate: true })));
+
       // ---- controls
       const btnMain = el('button', { class: 'rt-btn rt-vmain', type: 'button' });
       const btnStop = el('button', {
@@ -1776,18 +1798,21 @@
       btnNext.addEventListener('click', () => voiceSkip(1));
       box.appendChild(el('div', { class: 'rt-row' }, [btnMain, btnStop]));
       box.appendChild(el('div', { class: 'rt-row rt-vnav' }, [btnPrev, btnNext]));
+
       const note = el('p', { class: 'rt-note' });
       box.appendChild(note);
       box.appendChild(el('p', {
         class: 'rt-empty',
         text: 'කියවන්න පටන් ගත්තම මේ මෙනුව ඉබේම වැහෙනවා. කියවන ඡේදය ඉස්මතු වෙලා පෙනෙනවා. විරාමයට දාන්න හෝ නවත්වන්න ඕන නම් තිරයේ පහළ මැද තියෙන පාලන බොත්තම් පාවිච්චි කරන්න.',
       }));
+
       // ---- painters
       function paintLangs() {
         VOICE_LANGS.forEach((l) => {
           langBtns[l.id].setAttribute('aria-pressed', l.id === state.voiceLang ? 'true' : 'false');
         });
       }
+
       function paintNote() {
         const L = langInfo(state.voiceLang);
         const has = voicesFor(state.voiceLang).length > 0;
@@ -1813,6 +1838,7 @@
             'මේ ලිපිය මුලින්ම සිංහලෙන් තියෙන්නේ. ඔබ තෝරපු භාෂාවට කොටස් කොටස් පරිවර්තනය කරලා තමයි කියවන්නේ. පරිවර්තනය යන්ත්‍රයකින් කරන නිසා අර්ථයේ පොඩි වෙනස්කම් තියෙන්න පුළුවන්, ඒ වගේම ඉන්ටර්නෙට් සම්බන්ධතාවයක් අවශ්‍යයි.';
         }
       }
+
       function paint() {
         const s = voice.status;
         const n = voice.queue.length;
@@ -1835,6 +1861,7 @@
           sub.textContent = L.label + ' · කොටස් ' + n + 'කට බෙදා ඇත';
         }
         bar.style.transform = 'scaleX(' + (s === 'idle' ? 0 : voicePct() / 100).toFixed(3) + ')';
+
         if (s === 'playing') {
           btnMain.innerHTML = ICON.pause + '<span>විරාමය</span>';
           btnMain.removeAttribute('data-primary');
@@ -1852,55 +1879,10 @@
         if (idle) btnStop.removeAttribute('data-danger');
         else btnStop.setAttribute('data-danger', '1');
         paintNote();
-        paintGender();
       }
-      function paintGender() {
-        ['auto', 'female', 'male'].forEach((id) => {
-          genderBtns[id].setAttribute('aria-pressed', id === state.voiceGender ? 'true' : 'false');
-        });
-        const all = voicesFor(state.voiceLang);
-        const g = state.voiceGender;
-        const L = langInfo(state.voiceLang);
-        let text = '';
-        if (!all.length) {
-          text = 'මේ භාෂාවට හඬක් නැති නිසා ඇහුම්කන් බලන්න බැහැ.';
-        } else if (g === 'auto') {
-          const f = all.filter((v) => voiceGender(v) === 'female').length;
-          const m = all.filter((v) => voiceGender(v) === 'male').length;
-          text = 'උපාංගයේ පෙරනිමි හඬ පාවිච්චි වෙනවා.' +
-            (f || m
-              ? ' (ගැහැණු හඬ ' + f + ' ක්, පිරිමි හඬ ' + m + ' ක් හමු වුණා.)'
-              : ' මේ උපාංගයේ හඬවල ගැහැණු / පිරිමි බව හඳුනාගන්න බැහැ. ඒ නිසා ඉහළින් ගැහැණු හෝ පිරිමි තෝරන්න, ස්වරය වෙනස් කරලා ආසන්න කරන්න පුළුවන්.');
-        } else {
-          const gn = g === 'male' ? 'පිරිමි' : 'ගැහැණු';
-          const v = pickVoice();
-          if (v && voiceGender(v) === g) {
-            text = '\u2714 ' + gn + ' හඬක් හමු වුණා: ' + v.name + '.';
-          } else {
-            text = 'මේ උපාංගයේ ' + L.name + ' භාෂාවට වෙනම ' + gn +
-              ' හඬක් නැහැ. ඒ නිසා ඇති හඬේ ස්වරය ' + (g === 'male' ? 'පහළට' : 'ඉහළට') +
-              ' හරවලා ' + gn + ' හඬකට ආසන්න කරනවා.' +
-              (state.voiceLang === 'si'
-                ? ' ඇත්තම හඬවල් ඕන නම් Windows / Mac හි Microsoft Edge පාවිච්චි කරන්න (Sameera = පිරිමි, Thilini = ගැහැණු).'
-                : '');
-          }
-        }
-        if (genderNote.textContent !== text) genderNote.textContent = text;
-        btnPreview.disabled = !all.length || voice.status === 'playing';
-      }
-      function chooseGender(id) {
-        if (id === state.voiceGender) {
-          voicePreview();
-          return;
-        }
-        set({ voiceGender: id }, { immediate: true });
-        paintGender();
-        fillVoices();
-        voiceSettingChanged();
-        voicePreview();
-      }
+
       function fillVoices() {
-        const list = voicePool().list;
+        const list = voicesFor(state.voiceLang);
         select.textContent = '';
         if (!list.length) {
           select.appendChild(el('option', { value: '', text: 'මේ භාෂාවට හඬක් නැහැ' }));
@@ -1909,18 +1891,16 @@
           select.disabled = false;
           list.forEach((v) => {
             select.appendChild(el('option', {
-              value: v.voiceURI, text: genderMark(v) + v.name + ' (' + v.lang + ')',
+              value: v.voiceURI, text: v.name + ' (' + v.lang + ')',
             }));
           });
-          const want =
-            state.voiceMap[vmKey()] ||
-            (state.voiceGender === 'auto' ? state.voiceMap[state.voiceLang] : '');
+          const want = state.voiceMap[state.voiceLang];
           select.value = want && list.some((v) => v.voiceURI === want) ? want : list[0].voiceURI;
         }
         voiceLabel.textContent = 'හඬ තෝරන්න' + (list.length ? ' (' + list.length + ')' : '');
         paintNote();
-        paintGender();
       }
+
       function chooseLang(id) {
         if (id === state.voiceLang) return;
         set({ voiceLang: id }, { immediate: true });
@@ -1928,34 +1908,37 @@
         fillVoices();
         voiceSettingChanged();
       }
+
       select.addEventListener('change', () => {
         if (!select.value) return;
         const map = Object.assign({}, state.voiceMap);
-        map[vmKey()] = select.value;
+        map[state.voiceLang] = select.value;
         set({ voiceMap: map }, { immediate: true });
-        paintGender();
         voiceSettingChanged();
-        voicePreview();
       });
+
       const off = on('voice', paint);
       synth.addEventListener('voiceschanged', fillVoices);
       // voices load late on some browsers
       const t1 = setTimeout(fillVoices, 350);
       const t2 = setTimeout(fillVoices, 1400);
+
       paintLangs();
       fillVoices();
       paint();
+
       // speech keeps running after this tab is left: it lives at module level
       return () => {
         off();
-        previewStop();
         synth.removeEventListener('voiceschanged', fillVoices);
         clearTimeout(t1);
         clearTimeout(t2);
       };
     },
   });
+
   // --------------------------------------------------------- tool: reading
+
   // short spoken-Sinhala description that follows the speed slider
   function speedHint(v) {
     const n = clamp(Math.round(v), 1, 10);
@@ -1964,6 +1947,7 @@
     if (n <= 8) return 'ටිකක් වේගයි. ඉක්මනට කියවන අයට.';
     return 'හරිම වේගයි. පිටුව ඉක්මනින් පහළට යනවා.';
   }
+
   register({
     id: 'reading',
     label: 'කියවීම',
@@ -1971,7 +1955,9 @@
     order: 40,
     mount(box) {
       const defSpeed = DEFAULTS.scrollSpeed;
+
       const hintEl = el('p', { class: 'rt-empty' });
+
       // red reset button: shown only while the speed differs from default
       const btnReset = el('button', {
         class: 'rt-reset-btn',
@@ -1987,6 +1973,7 @@
         'data-show': '0',
         'aria-hidden': 'true',
       }, el('div', { class: 'rt-reset-inner' }, btnReset));
+
       function paintHint() {
         hintEl.textContent = speedHint(state.scrollSpeed);
       }
@@ -1995,6 +1982,7 @@
         resetWrap.setAttribute('data-show', changed ? '1' : '0');
         resetWrap.setAttribute('aria-hidden', changed ? 'false' : 'true');
       }
+
       // speed can be changed while running too: autoStep reads state each frame
       const speedGroup = slider(
         'ස්වයං-අනුචලන වේගය',
@@ -2010,12 +1998,14 @@
       box.appendChild(resetWrap);
       paintHint();
       paintReset();
+
       btnReset.addEventListener('click', () => {
         set({ scrollSpeed: defSpeed }, { immediate: true });
         speedGroup.rtSync(defSpeed);
         paintHint();
         paintReset();
       });
+
       const btn = el('button', { class: 'rt-btn', type: 'button' });
       function paint() {
         const running = !!auto.raf;
@@ -2033,11 +2023,13 @@
       paint();
       const offAuto = on('autoscroll', paint);
       btn.addEventListener('click', toggleAuto);
+
       box.appendChild(el('div', { class: 'rt-row' }, [btn]));
       box.appendChild(el('p', {
         class: 'rt-empty',
         text: 'පටන් ගත්තම මේ මෙනුව ඉබේම වැහෙනවා. නවත්වන්න ඕන නම් පහළ මැද තියෙන රතු බොත්තම ඔබන්න, නැත්නම් තිරය ඇඟිල්ලෙන් ඇදන්න. කතාව අවසාන වුනාම තනියම නවතිනවා.',
       }));
+
       let saved = 0;
       try {
         saved = parseFloat(localStorage.getItem(posKey(curPath)) || '0') || 0;
@@ -2060,6 +2052,7 @@
           }),
         ]));
       }
+
       box.appendChild(el('div', { class: 'rt-row' }, [
         el('button', {
           class: 'rt-btn', type: 'button', html: ICON.up + '<span>මුලට</span>',
@@ -2076,10 +2069,13 @@
           },
         }),
       ]));
+
       return () => { offAuto(); };
     },
   });
+
   // ------------------------------------------------------- tool: translate
+
   register({
     id: 'translate',
     label: 'පරිවර්තනය',
@@ -2116,9 +2112,12 @@
       }));
     },
   });
+
   // -------------------------------------------------------- shared scroll
+
   let lastSave = 0;
   let lastPct = 0;
+
   const onScroll = rafOnce(() => {
     const max = scrollMax();
     const pct = max > 4 ? clamp(window.scrollY / max, 0, 1) : 0;
@@ -2135,25 +2134,32 @@
       savePos();
     }
   });
+
   function savePos() {
     try {
       if (lastPct <= 0.02) return;
       localStorage.setItem(posKey(curPath), lastPct.toFixed(3));
     } catch (e) {}
   }
+
   function flushPos() {
     savePos();
     saveNow();
   }
+
   // -------------------------------------------------------- boot/teardown
+
   let booted = false;
+
   function bindGlobal() {
     listen(ui.fab, 'click', toggle);
     listen(ui.close, 'click', close);
     listen(ui.scrim, 'click', close);
+
     // voice pill controls
     listen(ui.voiceMain, 'click', voiceToggle);
     listen(ui.voiceStop, 'click', voiceStop);
+
     // stop pill: act on the very first event (pointerdown / touchstart);
     // a finger press can turn into a scroll gesture and cancel the click
     const hardStopAuto = (ev) => {
@@ -2166,6 +2172,7 @@
     listen(ui.stop, 'pointerdown', hardStopAuto);
     listen(ui.stop, 'touchstart', hardStopAuto, { passive: false });
     listen(ui.stop, 'click', hardStopAuto);
+
     // on a long page the scroll writes can delay event dispatch, so any tap
     // outside the panel also stops auto-scroll (capture phase, runs first)
     const tapStop = (ev) => {
@@ -2181,6 +2188,7 @@
     listen(window, 'pointerdown', tapStop, { capture: true, passive: true });
     listen(window, 'touchstart', tapStop, { capture: true, passive: true });
     listen(window, 'mousedown', tapStop, { capture: true, passive: true });
+
     const keyStop = (ev) => {
       if (!auto.raf || !auto.armed) return;
       const k = ev ? ev.key : '';
@@ -2190,11 +2198,13 @@
       }
     };
     listen(window, 'keydown', keyStop);
+
     listen(window, 'scroll', onScroll, { passive: true });
     listen(window, 'resize', () => {
       scrollMax(true);
       onScroll();
     }, { passive: true });
+
     // manual input stops auto-scroll; events inside the panel are ignored,
     // and the 420ms arm delay protects the tap that started it
     const abortAuto = (ev) => {
@@ -2204,6 +2214,7 @@
     };
     listen(window, 'wheel', abortAuto, { passive: true });
     listen(window, 'touchmove', abortAuto, { passive: true });
+
     listen(document, 'keydown', (e) => {
       if (e.key === 'Escape') {
         if (auto.raf) stopAuto();
@@ -2228,6 +2239,7 @@
       }
       trap(e);
     });
+
     listen(window, 'pagehide', () => {
       stopAuto();
       voiceHalt();
@@ -2244,6 +2256,7 @@
       if (ui.root && article) ui.root.setAttribute('data-rt-ready', '1');
     });
   }
+
   function teardown() {
     stopAuto();
     runCleanup();
@@ -2278,6 +2291,7 @@
     article = null;
     booted = false;
   }
+
   function boot() {
     if (booted) return;
     if (!document.body) return;
@@ -2291,12 +2305,14 @@
     maxCache = -1;
     article = findArticle();
     apply();
+
     if (!article) {
       ui.root.setAttribute('data-rt-ready', '0');
       if (ui.bar) ui.bar.style.transform = 'scaleX(0)';
       emit('boot', { article: null });
       return;
     }
+
     ui.root.setAttribute('data-rt-ready', '1');
     if (ui.sub) {
       ui.sub.textContent = words().toLocaleString('en-US') + ' වචන · ' + minutes() + ' මිනිත්තු';
@@ -2306,6 +2322,7 @@
     onScroll();
     emit('boot', { article: article });
   }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot, { once: true });
   } else {
@@ -2313,9 +2330,11 @@
   }
   document.addEventListener('astro:before-swap', teardown);
   document.addEventListener('astro:page-load', boot);
+
   // ---------------------------------------------------------------- api
+
   window.ReaderTools = {
-    version: 15,
+    version: 14,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
