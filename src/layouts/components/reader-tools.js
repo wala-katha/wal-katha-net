@@ -1,11 +1,14 @@
 // ==========================================================================
 // Reader Tools - logic only. Chrome + themes live in reader-tools.css
 // --------------------------------------------------------------------------
-// v13:
-//  - reading tab: focus-mode toggle and pause button removed
-//  - reading tab: red reset button appears only when speed differs from default
-//  - reading tab: all small texts rewritten in natural spoken Sinhala
-//  - resume button no longer stretches vertically (wrapped in a row)
+// v14:
+//  - voice engine moved to module level (state machine: idle/playing/paused)
+//  - language picker (12 languages), voices filtered per language
+//  - non-Sinhala languages: chunk-by-chunk translation with prefetch
+//    (Chrome on-device Translator first, Google web endpoint as fallback)
+//  - pause = cancel + remember chunk (native pause is broken on Android)
+//  - panel closes when speech starts; floating voice pill controls it
+//  - start from visible paragraph, previous/next paragraph, follow highlight
 //
 // Do not add a second auto-scroll script: two rAF loops freeze low-end phones.
 //
@@ -35,6 +38,9 @@
   const MIN_ARTICLE_CHARS = 400;
   const WORDS_PER_MIN = 160;
   const TTS_CHUNK = 170;
+  const PART_MAX = 170;
+  const KICK_MS = 120;
+  const PREFETCH = 2;
   const POS_SAVE_MS = 1500;
   const STORE_DEBOUNCE_MS = 300;
   const MAX_CACHE_MS = 400;
@@ -47,6 +53,7 @@
   const STALL_FRAMES = 45;
   const AUTO_STYLE_ID = 'wk-rt-auto-style';
   const RESET_STYLE_ID = 'wk-rt-reset-style';
+  const VOICE_STYLE_ID = 'wk-rt-voice-style';
 
   // watchdog: stops the engine if the rAF loop dies silently
   const AUTO_WATCHDOG_MS = 1500;
@@ -59,6 +66,22 @@
   const AUTO_GOV_MIN = 0.4;
   const AUTO_GOV_UP = 0.02;
 
+  // voice languages: id, chip label, Sinhala name, BCP47 tag, web translate code
+  const VOICE_LANGS = [
+    { id: 'si', label: 'සිංහල', name: 'සිංහල', tag: 'si-LK', tr: '' },
+    { id: 'en', label: 'English', name: 'ඉංග්‍රීසි', tag: 'en-US', tr: 'en' },
+    { id: 'ta', label: 'தமிழ்', name: 'දෙමළ', tag: 'ta-IN', tr: 'ta' },
+    { id: 'hi', label: 'हिन्दी', name: 'හින්දි', tag: 'hi-IN', tr: 'hi' },
+    { id: 'ru', label: 'Русский', name: 'රුසියානු', tag: 'ru-RU', tr: 'ru' },
+    { id: 'zh', label: '中文', name: 'චීන', tag: 'zh-CN', tr: 'zh-CN' },
+    { id: 'ar', label: 'العربية', name: 'අරාබි', tag: 'ar-SA', tr: 'ar' },
+    { id: 'ja', label: '日本語', name: 'ජපන්', tag: 'ja-JP', tr: 'ja' },
+    { id: 'ko', label: '한국어', name: 'කොරියානු', tag: 'ko-KR', tr: 'ko' },
+    { id: 'fr', label: 'Français', name: 'ප්‍රංශ', tag: 'fr-FR', tr: 'fr' },
+    { id: 'de', label: 'Deutsch', name: 'ජර්මන්', tag: 'de-DE', tr: 'de' },
+    { id: 'es', label: 'Español', name: 'ස්පාඤ්ඤ', tag: 'es-ES', tr: 'es' },
+  ];
+
   const DEFAULTS = {
     page: 'dark',
     font: 'sinhala',
@@ -68,7 +91,9 @@
     measure: 'normal',
     rate: 1,
     pitch: 1,
-    voiceURI: '',
+    voiceLang: 'si',
+    voiceMap: {},
+    voiceFrom: 'view',
     scrollSpeed: 4,
   };
 
@@ -85,6 +110,7 @@
     page: ['dark', 'paper', 'sepia', 'contrast'],
     font: ['sinhala', 'serif', 'system'],
     measure: ['narrow', 'normal', 'wide'],
+    voiceFrom: ['view', 'top'],
   };
 
   // ---------------------------------------------------------------- helpers
@@ -94,11 +120,27 @@
   const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
   const isNum = (v) => typeof v === 'number' && isFinite(v);
   const round = (n, step) => Math.round(n / step) * step;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const reduceMotion = () =>
     !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const isMobile = () => !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
   const behavior = () => (reduceMotion() ? 'auto' : 'smooth');
+
+  const synth = (function () {
+    try {
+      return window.speechSynthesis || null;
+    } catch (e) {
+      return null;
+    }
+  })();
+
+  function langInfo(id) {
+    for (let i = 0; i < VOICE_LANGS.length; i++) {
+      if (VOICE_LANGS[i].id === id) return VOICE_LANGS[i];
+    }
+    return VOICE_LANGS[0];
+  }
 
   function el(tag, attrs, kids) {
     const n = document.createElement(tag);
@@ -175,9 +217,17 @@
       const l = LIMITS[k];
       s[k] = clamp(isNum(s[k]) ? s[k] : DEFAULTS[k], l[0], l[1]);
     });
-    // legacy key from the removed focus mode
+    if (!VOICE_LANGS.some((l) => l.id === s.voiceLang)) s.voiceLang = 'si';
+    const vm = {};
+    if (s.voiceMap && typeof s.voiceMap === 'object') {
+      Object.keys(s.voiceMap).forEach((k) => {
+        if (typeof s.voiceMap[k] === 'string') vm[k] = s.voiceMap[k];
+      });
+    }
+    s.voiceMap = vm;
+    // legacy keys from removed features
     delete s.focus;
-    s.voiceURI = typeof s.voiceURI === 'string' ? s.voiceURI : '';
+    delete s.voiceURI;
     return s;
   }
 
@@ -241,6 +291,8 @@
     play: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>',
     pause: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="7" y="5.5" width="3.4" height="13" rx="1"/><rect x="13.6" y="5.5" width="3.4" height="13" rx="1"/></svg>',
     stop: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg>',
+    prev: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h2v14H6zM19 5v14L9.5 12z"/></svg>',
+    next: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 5h2v14h-2zM5 5v14l9.5-7z"/></svg>',
     up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
     down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
     reset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 14.6-5.9"/><path d="M19 3v4.5h-4.5"/></svg>',
@@ -333,11 +385,99 @@
     document.head.appendChild(s);
   }
 
+  // Voice tab card, language grid and the floating voice pill.
+  function ensureVoiceStyle() {
+    if (!document.head || document.getElementById(VOICE_STYLE_ID)) return;
+    const css =
+      // status card
+      '.rt-root .rt-vcard{position:relative;display:flex;align-items:center;gap:12px;' +
+      'padding:13px 13px 16px;border:1px solid rgba(1,173,159,.3);border-radius:14px;' +
+      'background:linear-gradient(135deg,rgba(1,173,159,.14),rgba(1,173,159,.03));' +
+      'overflow:hidden;}' +
+      '.rt-root .rt-vdot{display:grid;place-items:center;width:40px;height:40px;' +
+      'flex:0 0 auto;border-radius:999px;background:rgba(1,173,159,.18);color:#01ad9f;' +
+      'transition:background-color .25s ease,color .25s ease;}' +
+      '.rt-root .rt-vico{display:grid;place-items:center;}' +
+      '.rt-root .rt-vdot svg{display:block;width:19px;height:19px;}' +
+      '.rt-root .rt-eq{display:none;align-items:flex-end;gap:2px;height:16px;}' +
+      '.rt-root .rt-eq i{display:block;width:3px;height:100%;border-radius:2px;' +
+      'background:currentColor;transform-origin:50% 100%;transform:scaleY(.4);' +
+      'animation:wk-rt-eq .9s ease-in-out infinite;}' +
+      '.rt-root .rt-eq i:nth-child(2){animation-delay:.15s;}' +
+      '.rt-root .rt-eq i:nth-child(3){animation-delay:.3s;}' +
+      '@keyframes wk-rt-eq{0%,100%{transform:scaleY(.3);}50%{transform:scaleY(1);}}' +
+      '.rt-root .rt-vcard[data-state="playing"] .rt-vdot{background:#01ad9f;color:#010203;}' +
+      '.rt-root .rt-vcard[data-state="playing"] .rt-eq{display:flex;}' +
+      '.rt-root .rt-vcard[data-state="playing"] .rt-vico{display:none;}' +
+      '.rt-root .rt-vcard[data-state="paused"] .rt-vdot{background:rgba(251,191,36,.18);color:#fbbf24;}' +
+      '.rt-root .rt-vcard[data-state="error"] .rt-vdot{background:rgba(239,68,68,.16);color:#f87171;}' +
+      '.rt-root .rt-vtxt{min-width:0;flex:1 1 auto;}' +
+      '.rt-root .rt-vtitle{display:block;font-size:13px;font-weight:800;line-height:1.35;}' +
+      '.rt-root .rt-vsub{display:block;margin-top:3px;font-size:10.5px;font-weight:600;' +
+      'color:var(--rt-muted);font-variant-numeric:tabular-nums;}' +
+      '.rt-root .rt-vbar{position:absolute;left:0;right:0;bottom:0;height:3px;' +
+      'background:rgba(255,255,255,.08);}' +
+      '.rt-root .rt-vbar i{display:block;width:100%;height:100%;transform:scaleX(0);' +
+      'transform-origin:0 50%;background:linear-gradient(90deg,#01ad9f,#34d399);' +
+      'transition:transform .35s ease;}' +
+      // language grid
+      '.rt-root .rt-langs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}' +
+      '.rt-root .rt-langs .rt-chip{min-width:0;padding:9px 4px;font-size:12px;' +
+      'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+      // panel controls
+      '.rt-root .rt-vmain{padding:12px 14px;font-size:13px;}' +
+      '.rt-root .rt-vstop{flex:0 0 auto;padding:12px 16px;}' +
+      '.rt-root .rt-vnav .rt-btn{padding:9px 8px;font-size:11px;}' +
+      // floating pill
+      '.rt-root .rt-voicefab{display:none;position:fixed;left:50%;' +
+      'bottom:calc(1.35rem + env(safe-area-inset-bottom));' +
+      'transform:translateX(-50%) translateZ(0);z-index:9760;align-items:center;gap:8px;' +
+      'margin:0;padding:5px 6px 5px 5px;border:1px solid rgba(1,173,159,.55);' +
+      'border-radius:999px;background:#0b3a36;color:#fff;font-family:inherit;' +
+      'font-size:12.5px;font-weight:800;line-height:1;white-space:nowrap;' +
+      'box-shadow:0 10px 26px rgba(0,0,0,.55);}' +
+      '.rt-root .rt-voicefab[data-on="1"]{display:inline-flex;}' +
+      '.rt-root[data-open="1"] .rt-voicefab{display:none !important;}' +
+      '.rt-root:not([data-rt-ready="1"]) .rt-voicefab{display:none !important;}' +
+      '.rt-root[data-autoscroll="1"] .rt-voicefab{' +
+      'bottom:calc(5rem + env(safe-area-inset-bottom));}' +
+      '.rt-root .rt-vf-main{display:inline-flex;align-items:center;gap:8px;margin:0;' +
+      'padding:0 4px 0 0;border:0;background:transparent;color:inherit;font:inherit;' +
+      'cursor:pointer;-webkit-tap-highlight-color:transparent;}' +
+      '.rt-root .rt-vf-main:focus-visible,.rt-root .rt-vf-stop:focus-visible{' +
+      'outline:2px solid #fff;outline-offset:2px;}' +
+      '.rt-root .rt-vf-badge{display:grid;place-items:center;width:28px;height:28px;' +
+      'flex:0 0 auto;border-radius:999px;background:#01ad9f;color:#010203;}' +
+      '.rt-root .rt-vf-badge svg{display:block;width:13px;height:13px;}' +
+      '.rt-root .rt-voicefab[data-paused="1"] .rt-vf-badge{background:#fde68a;color:#78350f;}' +
+      '.rt-root .rt-vf-pct{min-width:36px;padding:3px 7px;border-radius:999px;' +
+      'background:rgba(255,255,255,.14);font-size:10.5px;text-align:center;' +
+      'font-variant-numeric:tabular-nums;}' +
+      '.rt-root .rt-vf-stop{display:grid;place-items:center;width:28px;height:28px;' +
+      'flex:0 0 auto;margin:0;padding:0;border:1px solid rgba(248,113,113,.5);' +
+      'border-radius:999px;background:rgba(239,68,68,.16);color:#f87171;cursor:pointer;' +
+      '-webkit-tap-highlight-color:transparent;}' +
+      '.rt-root .rt-vf-stop:hover{background:#dc2626;color:#fff;}' +
+      '.rt-root .rt-vf-stop svg{display:block;width:12px;height:12px;}' +
+      '@media (max-width:640px){.rt-root .rt-voicefab{' +
+      'bottom:calc(4.9rem + env(safe-area-inset-bottom));}' +
+      '.rt-root[data-autoscroll="1"] .rt-voicefab{' +
+      'bottom:calc(8.6rem + env(safe-area-inset-bottom));}}' +
+      '@media (prefers-reduced-motion:reduce){.rt-root .rt-eq i{animation:none !important;' +
+      'transform:scaleY(.7);}.rt-root .rt-vbar i{transition:none !important;}}';
+    const s = document.createElement('style');
+    s.id = VOICE_STYLE_ID;
+    s.textContent = css;
+    document.head.appendChild(s);
+  }
+
   // --------------------------------------------------------------- elements
 
   const ui = {
-    root: null, bar: null, fab: null, stop: null, stopPct: null, scrim: null, panel: null,
-    tabs: null, body: null, sub: null, close: null,
+    root: null, bar: null, fab: null, stop: null, stopPct: null,
+    voice: null, voiceMain: null, voiceBadge: null, voiceTxt: null, voicePct: null,
+    voiceStop: null,
+    scrim: null, panel: null, tabs: null, body: null, sub: null, close: null,
   };
 
   let article = null;
@@ -406,6 +546,30 @@
         '<span class="rt-stopfab-pct" data-rt-stop-pct>0%</span>',
     });
 
+    // teal voice pill: visible while speech is playing or paused
+    const vfBadge = el('span', { class: 'rt-vf-badge', 'aria-hidden': 'true', html: ICON.pause });
+    const vfTxt = el('span', { class: 'rt-vf-txt', text: 'විරාමය' });
+    const vfMain = el('button', {
+      class: 'rt-vf-main',
+      type: 'button',
+      'aria-label': 'හඬ කියවීම විරාමය හෝ දිගටම',
+    }, [vfBadge, vfTxt]);
+    const vfPct = el('span', { class: 'rt-vf-pct', text: '0%' });
+    const vfStop = el('button', {
+      class: 'rt-vf-stop',
+      type: 'button',
+      'aria-label': 'හඬ කියවීම නවත්වන්න',
+      title: 'හඬ නවත්වන්න',
+      html: ICON.stop,
+    });
+    const voicePill = el('div', {
+      class: 'rt-voicefab',
+      'data-on': '0',
+      'data-paused': '0',
+      role: 'group',
+      'aria-label': 'හඬ කියවීම පාලනය',
+    }, [vfMain, vfPct, vfStop]);
+
     const scrim = el('div', { class: 'rt-scrim', 'data-rt-scrim': '', 'aria-hidden': 'true' });
 
     const sub = el('span', { class: 'rt-sub', 'data-rt-sub': '' });
@@ -437,6 +601,7 @@
     root.appendChild(progress);
     root.appendChild(fab);
     root.appendChild(stopFab);
+    root.appendChild(voicePill);
     root.appendChild(scrim);
     root.appendChild(panel);
 
@@ -445,6 +610,12 @@
     ui.fab = fab;
     ui.stop = stopFab;
     ui.stopPct = $('[data-rt-stop-pct]', stopFab);
+    ui.voice = voicePill;
+    ui.voiceMain = vfMain;
+    ui.voiceBadge = vfBadge;
+    ui.voiceTxt = vfTxt;
+    ui.voicePct = vfPct;
+    ui.voiceStop = vfStop;
     ui.scrim = scrim;
     ui.panel = panel;
     ui.tabs = tabs;
@@ -1038,25 +1209,45 @@
     },
   });
 
-  // ----------------------------------------------------------- tool: voice
+  // ------------------------------------------------------------ voice engine
+  // Module level, so it survives tab switches and panel close.
+  // status: idle | playing | paused. Every async callback is guarded by the
+  // generation counter (voice.gen), so stale callbacks can never speak.
+
+  const voice = {
+    status: 'idle', gen: 0, queue: [], i: 0, p: 0,
+    kick: 0, guard: 0, utter: null, hl: null, cache: {},
+    busy: false, error: '', done: false,
+  };
 
   const engines = {};
   function registerVoiceEngine(id, engine) {
     if (id && engine && typeof engine.speak === 'function') engines[id] = engine;
   }
 
-  function chunk(text) {
+  const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu;
+  // note: U+200D (ZWJ) is kept on purpose, Sinhala conjuncts need it
+
+  function cleanSpeech(t) {
+    return String(t || '')
+      .replace(/https?:\/\/\S+/g, ' ')
+      .replace(EMOJI_RE, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function chunk(text, limit) {
     const out = [];
     let rest = (text || '').replace(/\s+/g, ' ').trim();
-    while (rest.length > TTS_CHUNK) {
+    while (rest.length > limit) {
       let cut = -1;
-      const head = rest.slice(0, TTS_CHUNK);
+      const head = rest.slice(0, limit);
       const seps = ['. ', '! ', '? ', '\u0DF4 ', ', ', ' '];
       for (let i = 0; i < seps.length && cut < 0; i++) {
         const at = head.lastIndexOf(seps[i]);
-        if (at > TTS_CHUNK * 0.5) cut = at + seps[i].length;
+        if (at > limit * 0.5) cut = at + seps[i].length;
       }
-      if (cut < 0) cut = TTS_CHUNK;
+      if (cut < 0) cut = limit;
       out.push(rest.slice(0, cut).trim());
       rest = rest.slice(cut).trim();
     }
@@ -1064,23 +1255,457 @@
     return out;
   }
 
-  let tts = null;
-
-  function ttsStopHard() {
-    if (tts) {
-      tts.stopped = true;
-      tts.playing = false;
-      tts.userPaused = false;
-      if (tts.kick) {
-        clearTimeout(tts.kick);
-        tts.kick = null;
-      }
-    }
-    try {
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
-    } catch (e) {}
-    $$('.rt-speaking').forEach((n) => n.classList.remove('rt-speaking'));
+  function voiceBuildQueue() {
+    const out = [];
+    if (!article) return out;
+    const nodes = $$(BLOCK_SEL, article).filter((n) => cleanSpeech(n.textContent).length > 1);
+    // keep innermost blocks only (blockquote > p would be read twice)
+    const leaf = nodes.filter((n) => !nodes.some((o) => o !== n && n.contains(o)));
+    leaf.forEach((node) => {
+      chunk(cleanSpeech(node.textContent), TTS_CHUNK).forEach((text) => {
+        out.push({ node: node, text: text });
+      });
+    });
+    return out;
   }
+
+  function voiceLangOf(v) {
+    return String(v.lang || '').toLowerCase().replace(/_/g, '-');
+  }
+
+  function voicesFor(code) {
+    if (!synth) return [];
+    let all = [];
+    try {
+      all = synth.getVoices() || [];
+    } catch (e) {}
+    return all
+      .filter((v) => {
+        const l = voiceLangOf(v);
+        return l === code || l.indexOf(code + '-') === 0;
+      })
+      .sort((a, b) => (b.default ? 1 : 0) - (a.default ? 1 : 0));
+  }
+
+  function pickVoice() {
+    const list = voicesFor(state.voiceLang);
+    const want = state.voiceMap[state.voiceLang];
+    return list.filter((v) => v.voiceURI === want)[0] || list[0] || null;
+  }
+
+  // cancel + resume: avoids the Chrome state where speech stays stuck after cancel
+  function hardCancel() {
+    if (!synth) return;
+    try { synth.cancel(); } catch (e) {}
+    try { if (synth.paused) synth.resume(); } catch (e) {}
+  }
+
+  function clearVoiceTimers() {
+    if (voice.kick) { clearTimeout(voice.kick); voice.kick = 0; }
+    if (voice.guard) { clearTimeout(voice.guard); voice.guard = 0; }
+  }
+
+  function stale(gen) {
+    return voice.gen !== gen || voice.status !== 'playing';
+  }
+
+  function inView(n) {
+    const r = n.getBoundingClientRect();
+    return r.bottom > 60 && r.top < window.innerHeight - 60;
+  }
+
+  // highlight the spoken block; follow it only if the reader was following
+  function setHighlight(node) {
+    const prev = voice.hl;
+    if (prev && prev !== node) prev.classList.remove('rt-speaking');
+    voice.hl = node || null;
+    if (!node) return;
+    node.classList.add('rt-speaking');
+    if (node === prev || auto.raf) return;
+    if (prev && !inView(prev)) return;
+    const r = node.getBoundingClientRect();
+    if (r.top < 90 || r.bottom > window.innerHeight - 150) {
+      window.scrollTo({ top: window.scrollY + r.top - 110, behavior: behavior() });
+    }
+  }
+
+  function voicePct() {
+    const n = voice.queue.length;
+    return n ? Math.min(100, Math.round((voice.i / n) * 100)) : 0;
+  }
+
+  function paintVoicePill() {
+    if (!ui.voice) return;
+    const s = voice.status;
+    ui.voice.setAttribute('data-on', s === 'idle' ? '0' : '1');
+    ui.voice.setAttribute('data-paused', s === 'paused' ? '1' : '0');
+    ui.voiceBadge.innerHTML = s === 'paused' ? ICON.play : ICON.pause;
+    ui.voiceTxt.textContent =
+      s === 'paused' ? 'දිගටම' : voice.busy ? 'පරිවර්තනය...' : 'විරාමය';
+    ui.voicePct.textContent = voicePct() + '%';
+  }
+
+  function voiceChanged() {
+    paintVoicePill();
+    emit('voice');
+  }
+
+  function voiceHalt() {
+    voice.status = 'idle';
+    voice.gen++;
+    clearVoiceTimers();
+    hardCancel();
+    voice.busy = false;
+    voice.utter = null;
+    setHighlight(null);
+  }
+
+  function voiceFail(msg) {
+    voiceHalt();
+    voice.error = msg;
+    voiceChanged();
+    // panel is closed while listening: reopen it so the reason is visible
+    if (ui.root && article && !isOpen) {
+      showTab('voice');
+      open();
+    }
+  }
+
+  function voiceFinish() {
+    voiceHalt();
+    voice.i = 0;
+    voice.p = 0;
+    voice.done = true;
+    voiceChanged();
+  }
+
+  // ---- translation (non-Sinhala languages)
+
+  const trEngine = {};
+
+  async function chromeTranslator(lang) {
+    try {
+      const T = self.Translator;
+      if (!T || typeof T.availability !== 'function') return null;
+      const opts = { sourceLanguage: 'si', targetLanguage: lang };
+      if ((await T.availability(opts)) !== 'available') return null;
+      return await T.create(opts);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // unofficial Google web endpoint; needs connect-src in public/_headers
+  async function webTranslate(text, lang) {
+    const code = langInfo(lang).tr;
+    const url =
+      'https://translate.googleapis.com/translate_a/single?client=gtx&sl=si&tl=' +
+      encodeURIComponent(code) + '&dt=t';
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : 0;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: 'q=' + encodeURIComponent(text),
+        signal: ctrl ? ctrl.signal : undefined,
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!Array.isArray(data) || !Array.isArray(data[0])) throw new Error('bad response');
+      const out = data[0].map((s) => (s && s[0] ? s[0] : '')).join('').trim();
+      if (!out) throw new Error('empty');
+      return out;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  function getTranslator(lang) {
+    if (!trEngine[lang]) {
+      trEngine[lang] = (async () => {
+        const t = await chromeTranslator(lang);
+        if (t) {
+          return async (s) => {
+            try {
+              return await t.translate(s);
+            } catch (e) {
+              return webTranslate(s, lang);
+            }
+          };
+        }
+        return (s) => webTranslate(s, lang);
+      })();
+    }
+    return trEngine[lang];
+  }
+
+  // text of chunk i in the selected language (cached, failures are not cached)
+  function getText(i) {
+    const item = voice.queue[i];
+    if (!item) return Promise.resolve(null);
+    const lang = state.voiceLang;
+    if (lang === 'si') return Promise.resolve(item.text);
+    const key = lang + ':' + i;
+    if (voice.cache[key]) return voice.cache[key];
+    const p = (async () => {
+      const fn = await getTranslator(lang);
+      for (let a = 0; a < 2; a++) {
+        try {
+          const out = await fn(item.text);
+          if (out) return cleanSpeech(out);
+        } catch (e) {}
+        await sleep(400);
+      }
+      delete voice.cache[key];
+      return null;
+    })();
+    voice.cache[key] = p;
+    return p;
+  }
+
+  function prefetch(from) {
+    if (state.voiceLang === 'si') return;
+    for (let k = 0; k < PREFETCH; k++) {
+      if (from + k < voice.queue.length) getText(from + k);
+    }
+  }
+
+  // ---- playback chain
+
+  function armGuard(gen, len, next) {
+    if (voice.guard) clearTimeout(voice.guard);
+    const est = clamp(
+      Math.round(((len / 11) * 1000) / Math.max(0.5, state.rate)) + 3500, 4000, 60000
+    );
+    const t0 = Date.now();
+    // some engines never fire onend: move on after a generous estimate
+    const tick = () => {
+      if (stale(gen)) { voice.guard = 0; return; }
+      const idle = !synth.speaking && !synth.pending;
+      if (!idle && Date.now() - t0 < est + 8000) {
+        voice.guard = setTimeout(tick, 1200);
+        return;
+      }
+      voice.guard = 0;
+      if (!idle) { try { synth.cancel(); } catch (e) {} }
+      next();
+    };
+    voice.guard = setTimeout(tick, est);
+  }
+
+  function speakPart(i, parts, k, gen) {
+    if (stale(gen)) return;
+    if (k >= parts.length) {
+      advance(i + 1, gen);
+      return;
+    }
+    voice.p = k;
+    const text = parts[k];
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickVoice();
+    u.lang = v && v.lang ? String(v.lang).replace(/_/g, '-') : langInfo(state.voiceLang).tag;
+    if (v) u.voice = v;
+    u.rate = state.rate;
+    u.pitch = state.pitch;
+    voice.utter = u; // keep a reference: a collected utterance never fires onend
+
+    let advanced = false;
+    const next = () => {
+      if (advanced) return;
+      advanced = true;
+      if (voice.guard) { clearTimeout(voice.guard); voice.guard = 0; }
+      if (stale(gen)) return;
+      speakPart(i, parts, k + 1, gen);
+    };
+    u.onend = next;
+    u.onerror = (ev) => {
+      const code = ev && ev.error;
+      if (code === 'interrupted' || code === 'canceled') return;
+      if (stale(gen)) return;
+      if (code === 'language-unavailable' || code === 'voice-unavailable') {
+        voiceFail('තෝරාගත් භාෂාවට මේ උපාංගයේ හඬ දත්ත නැහැ. පහත උපදෙස් අනුව හඬ දත්ත install කරගන්න.');
+      } else {
+        voiceFail('හඬ කියවීමේදී දෝෂයක් ඇති වුණා. වෙනත් හඬක් තෝරා නැවත උත්සාහ කරන්න.');
+      }
+    };
+    armGuard(gen, text.length, next);
+    try {
+      synth.speak(u);
+    } catch (e) {
+      voiceFail('හඬ කියවීම ආරම්භ කරන්න බැරි වුණා. පිටුව refresh කරලා නැවත උත්සාහ කරන්න.');
+    }
+  }
+
+  function playItem(i, gen, startPart) {
+    if (stale(gen)) return;
+    const item = voice.queue[i];
+    if (!item) {
+      voiceFinish();
+      return;
+    }
+    voice.i = i;
+    setHighlight(item.node);
+    const key = state.voiceLang + ':' + i;
+    voice.busy = state.voiceLang !== 'si' && !voice.cache[key];
+    voiceChanged();
+    getText(i).then((text) => {
+      if (stale(gen)) return;
+      voice.busy = false;
+      if (!text) {
+        voiceFail('පරිවර්තනය කරගන්න බැරි වුණා. අන්තර්ජාල සම්බන්ධතාව පරීක්ෂා කරලා නැවත උත්සාහ කරන්න, නැත්නම් සිංහලෙන්ම කියවන්න.');
+        return;
+      }
+      voiceChanged();
+      prefetch(i + 1);
+      const parts = chunk(text, PART_MAX);
+      speakPart(i, parts, clamp(startPart, 0, Math.max(0, parts.length - 1)), gen);
+    });
+  }
+
+  function advance(i, gen) {
+    if (stale(gen)) return;
+    if (i >= voice.queue.length) {
+      voiceFinish();
+      return;
+    }
+    voice.p = 0;
+    playItem(i, gen, 0);
+  }
+
+  // start (or restart from voice.i / voice.p) after a short settle delay
+  function beginPlayback() {
+    voice.status = 'playing';
+    const gen = ++voice.gen;
+    clearVoiceTimers();
+    hardCancel();
+    voice.busy = false;
+    voiceChanged();
+    close(); // panel closes when speech starts
+    voice.kick = setTimeout(() => {
+      voice.kick = 0;
+      playItem(voice.i, gen, voice.p);
+    }, KICK_MS);
+  }
+
+  function voiceStartIndex() {
+    if (state.voiceFrom !== 'view') return 0;
+    const q = voice.queue;
+    for (let i = 0; i < q.length; i++) {
+      if (q[i].node.getBoundingClientRect().bottom > 90) return i;
+    }
+    return 0;
+  }
+
+  function voiceStart() {
+    if (!synth || !article) return;
+    if (voice.status === 'paused') { voiceResume(); return; }
+    if (voice.status === 'playing') return;
+    voice.queue = voiceBuildQueue();
+    voice.cache = {};
+    voice.error = '';
+    voice.done = false;
+    if (!voice.queue.length) {
+      voice.error = 'කියවීමට තරම් අන්තර්ගතයක් මේ පිටුවේ හමු වුණේ නැහැ.';
+      voiceChanged();
+      return;
+    }
+    voice.i = voiceStartIndex();
+    voice.p = 0;
+    voice.hl = null;
+    beginPlayback();
+  }
+
+  function voicePause() {
+    if (voice.status !== 'playing') return;
+    // native pause is unreliable (Android): cancel and remember the position
+    voice.status = 'paused';
+    voice.gen++;
+    clearVoiceTimers();
+    hardCancel();
+    voice.busy = false;
+    voiceChanged();
+  }
+
+  function voiceResume() {
+    if (voice.status !== 'paused') return;
+    beginPlayback();
+  }
+
+  function voiceStop() {
+    voiceHalt();
+    voice.i = 0;
+    voice.p = 0;
+    voice.done = false;
+    voice.error = '';
+    voiceChanged();
+  }
+
+  function voiceToggle() {
+    if (voice.status === 'playing') voicePause();
+    else if (voice.status === 'paused') voiceResume();
+    else voiceStart();
+  }
+
+  // language or voice changed: restart the current chunk with the new setting
+  function voiceSettingChanged() {
+    voice.p = 0;
+    voice.error = '';
+    if (voice.status === 'playing') {
+      const gen = ++voice.gen;
+      clearVoiceTimers();
+      hardCancel();
+      voice.kick = setTimeout(() => {
+        voice.kick = 0;
+        playItem(voice.i, gen, 0);
+      }, KICK_MS);
+    }
+    voiceChanged();
+  }
+
+  // jump to previous / next paragraph
+  function voiceSkip(dir) {
+    const q = voice.queue;
+    if (voice.status === 'idle' || !q.length) return;
+    const first = (n) => {
+      while (n > 0 && q[n - 1].node === q[n].node) n--;
+      return n;
+    };
+    let target;
+    if (dir < 0) {
+      const s = first(voice.i);
+      target = voice.i > s || voice.p > 0 ? s : first(Math.max(0, s - 1));
+    } else {
+      let n = voice.i;
+      while (n < q.length && q[n].node === q[voice.i].node) n++;
+      target = n >= q.length ? -1 : n;
+    }
+    if (target < 0) {
+      voiceFinish();
+      return;
+    }
+    voice.i = target;
+    voice.p = 0;
+    if (voice.status === 'playing') {
+      const gen = ++voice.gen;
+      clearVoiceTimers();
+      hardCancel();
+      voice.kick = setTimeout(() => {
+        voice.kick = 0;
+        playItem(target, gen, 0);
+      }, KICK_MS);
+    } else {
+      setHighlight(q[target].node);
+    }
+    voiceChanged();
+  }
+
+  // ----------------------------------------------------------- tool: voice
+
+  const INSTALL_HELP =
+    'Android: Settings → Text-to-speech (හෝ Language & input) → Google Speech Services → Install voice data. ' +
+    'iPhone/iPad: Settings → Accessibility → Spoken Content → Voices. ' +
+    'Windows: Settings → Time & language → Speech → Add voices.';
 
   register({
     id: 'voice',
@@ -1088,237 +1713,226 @@
     icon: ICON.voice,
     order: 30,
     mount(box) {
-      const synth = window.speechSynthesis;
       if (!synth) {
         box.appendChild(el('p', {
           class: 'rt-note', 'data-warn': '1',
-          text: 'මෙම බ්‍රව්සරය හඬ කියවීමට (TTS) සහාය නොදක්වයි.',
+          text: 'මෙම බ්‍රව්සරය හඬ කියවීමට (Text-to-Speech) සහාය නොදක්වයි. Chrome හෝ Edge භාවිත කර බලන්න.',
         }));
         return;
       }
-
-      const blocks = article
-        ? $$(BLOCK_SEL, article).filter((n) => (n.textContent || '').trim().length > 1)
-        : [];
-      if (!blocks.length) {
+      if (voice.status === 'idle') voice.queue = voiceBuildQueue();
+      if (!voice.queue.length) {
         box.appendChild(el('p', {
           class: 'rt-note', 'data-warn': '1',
-          text: 'කියවීමට අන්තර්ගතයක් හමු නොවුණි.',
+          text: 'කියවීමට තරම් අන්තර්ගතයක් මේ පිටුවේ හමු වුණේ නැහැ.',
         }));
         return;
       }
 
-      const queue = [];
-      blocks.forEach((node) => {
-        chunk(node.textContent).forEach((text) => queue.push({ node: node, text: text }));
-      });
+      // ---- status card
+      const title = el('span', { class: 'rt-vtitle' });
+      const sub = el('span', { class: 'rt-vsub' });
+      const bar = el('i');
+      const dot = el('span', { class: 'rt-vdot', 'aria-hidden': 'true' }, [
+        el('span', { class: 'rt-vico', html: ICON.voice }),
+        el('span', { class: 'rt-eq' }, [el('i'), el('i'), el('i')]),
+      ]);
+      const card = el('div', { class: 'rt-vcard', 'data-state': 'idle' }, [
+        dot,
+        el('div', { class: 'rt-vtxt' }, [title, sub]),
+        el('div', { class: 'rt-vbar', 'aria-hidden': 'true' }, bar),
+      ]);
+      box.appendChild(card);
 
-      ttsStopHard();
-      tts = { i: 0, playing: false, stopped: true, userPaused: false, kick: null, gen: 0, guard: 0 };
-
-      const note = el('p', { class: 'rt-note', text: 'සූදානම්.' });
-      const select = el('select', { class: 'rt-select', 'aria-label': 'හඬ තෝරන්න' });
-
-      const btnPlay = el('button', {
-        class: 'rt-btn', 'data-primary': '1', type: 'button',
-        html: ICON.play + '<span>කියවන්න</span>',
+      // ---- language chips
+      const langBtns = {};
+      const langWrap = el('div', {
+        class: 'rt-seg rt-langs', role: 'group', 'aria-label': 'කියවන භාෂාව',
       });
-      const btnPause = el('button', {
-        class: 'rt-btn', type: 'button', html: ICON.pause, 'aria-label': 'විරාමය',
-      });
-      const btnStop = el('button', {
-        class: 'rt-btn', type: 'button', html: ICON.stop, 'aria-label': 'නතර කරන්න',
-      });
-
-      let voicesFilled = false;
-      function fillVoices() {
-        const all = synth.getVoices() || [];
-        if (!all.length) return;
-        voicesFilled = true;
-        const keep = select.value;
-        select.textContent = '';
-        const si = all.filter((v) => (v.lang || '').toLowerCase().indexOf('si') === 0);
-        si.concat(all.filter((v) => si.indexOf(v) < 0)).forEach((v) => {
-          select.appendChild(el('option', {
-            value: v.voiceURI, text: v.name + ' (' + v.lang + ')',
-          }));
+      VOICE_LANGS.forEach((l) => {
+        const b = el('button', {
+          class: 'rt-chip',
+          type: 'button',
+          lang: l.tag,
+          text: l.label,
+          onclick: () => chooseLang(l.id),
         });
-        const want = keep || state.voiceURI;
-        if (want && all.some((v) => v.voiceURI === want)) select.value = want;
-        if (!si.length) {
-          note.setAttribute('data-warn', '1');
-          note.textContent =
-            'සිංහල (si-LK) හඬක් මේ උපාංගයේ නැහැ. Android: Settings → Language → Text-to-speech එකෙන් සිංහල pack එක install කරන්න. iOS / desktop බොහොමයක සිංහල හඬ නෑ — වෙනත් හඬක් තේරුවොත් උච්චාරණය නිවැරදි නොවේ.';
-        } else {
-          note.removeAttribute('data-warn');
-          note.textContent = 'සිංහල හඬ ලබා ගත හැක.';
-        }
-      }
-      fillVoices();
-      synth.addEventListener('voiceschanged', fillVoices);
-      const poll = setTimeout(() => { if (!voicesFilled) fillVoices(); }, 400);
-      select.addEventListener('change', () => set({ voiceURI: select.value }, { immediate: true }));
-
-      function label(txt) {
-        btnPlay.innerHTML = ICON.play + '<span>' + txt + '</span>';
-      }
-
-      function highlight(node) {
-        $$('.rt-speaking').forEach((n) => { if (n !== node) n.classList.remove('rt-speaking'); });
-        if (node) node.classList.add('rt-speaking');
-      }
-
-      function speakAt(i) {
-        if (!tts || tts.stopped) return;
-        if (i >= queue.length) {
-          ttsStopHard();
-          label('කියවන්න');
-          note.removeAttribute('data-warn');
-          note.textContent = 'කියවීම අවසන්.';
-          return;
-        }
-        tts.i = i;
-        const gen = tts.gen;
-        if (tts.guard) { clearTimeout(tts.guard); tts.guard = 0; }
-        const item = queue[i];
-        highlight(item.node);
-
-        const u = new SpeechSynthesisUtterance(item.text);
-        const all = synth.getVoices() || [];
-        const v = all.filter((x) => x.voiceURI === select.value)[0];
-        if (v) {
-          u.voice = v;
-          u.lang = v.lang;
-        } else {
-          u.lang = 'si-LK';
-        }
-        u.rate = state.rate;
-        u.pitch = state.pitch;
-
-        // single-shot: onend and the guard timer must not both advance
-        let advanced = false;
-        const done = () => {
-          if (advanced) return;
-          advanced = true;
-          if (tts.guard) { clearTimeout(tts.guard); tts.guard = 0; }
-          if (!tts || tts.stopped || tts.gen !== gen) return;
-          speakAt(i + 1);
-        };
-        u.onend = done;
-        u.onerror = (ev) => {
-          if (ev && (ev.error === 'interrupted' || ev.error === 'canceled')) return;
-          if (!tts || tts.gen !== gen) return;
-          note.setAttribute('data-warn', '1');
-          note.textContent = 'හඬ කියවීමේ දෝෂයක්. වෙනත් හඬක් තෝරා නැවත උත්සාහ කරන්න.';
-          ttsStopHard();
-          label('කියවන්න');
-        };
-
-        // some engines never fire onend; a guard timer moves on after a
-        // generous estimate, and waits while the user has paused
-        const est = Math.max(4000, Math.min(60000,
-          Math.round((item.text.length / 11) * 1000 / Math.max(0.5, state.rate)) + 3500));
-        const t0 = Date.now();
-        const tick = () => {
-          if (!tts || tts.stopped || tts.gen !== gen) { if (tts) tts.guard = 0; return; }
-          if (synth.paused) { tts.guard = setTimeout(tick, 1500); return; }
-          const idle = synth.speaking === false && synth.pending === false;
-          if (!idle && Date.now() - t0 < est + 8000) {
-            tts.guard = setTimeout(tick, 1200);
-            return;
-          }
-          tts.guard = 0;
-          if (!idle) { try { synth.cancel(); } catch (e) {} }
-          done();
-        };
-        tts.guard = setTimeout(tick, est);
-
-        try {
-          synth.speak(u);
-        } catch (e) {
-          ttsStopHard();
-          label('කියවන්න');
-        }
-      }
-
-      function play() {
-        if (!tts) return;
-        if (tts.playing && synth.paused) {
-          tts.userPaused = false;
-          try { synth.resume(); } catch (e) {}
-          note.textContent = 'කියවනවා...';
-          label('කියවනවා');
-          return;
-        }
-        if (tts.playing) return;
-        const gen = ++tts.gen;
-        if (tts.guard) { clearTimeout(tts.guard); tts.guard = 0; }
-        if (tts.kick) { clearTimeout(tts.kick); tts.kick = null; }
-        tts.stopped = false;
-        tts.playing = true;
-        tts.userPaused = false;
-        note.removeAttribute('data-warn');
-        note.textContent = 'කියවනවා...';
-        label('කියවනවා');
-        try { synth.cancel(); } catch (e) {}
-        tts.kick = setTimeout(() => {
-          tts.kick = null;
-          if (!tts || tts.gen !== gen) return;
-          speakAt(tts.i);
-        }, 90);
-      }
-
-      function pause() {
-        if (tts && tts.playing && !synth.paused) {
-          tts.userPaused = true;
-          try { synth.pause(); } catch (e) {}
-          note.textContent = 'විරාමයේ.';
-          label('දිගටම');
-        }
-      }
-
-      function stopVoice() {
-        if (tts) {
-          tts.gen++;
-          if (tts.kick) { clearTimeout(tts.kick); tts.kick = null; }
-          if (tts.guard) { clearTimeout(tts.guard); tts.guard = 0; }
-        }
-        try { synth.cancel(); } catch (e) {}
-        ttsStopHard();
-        if (tts) tts.i = 0;
-        label('කියවන්න');
-        note.removeAttribute('data-warn');
-        note.textContent = 'නතර කළා.';
-      }
-
-      btnPlay.addEventListener('click', play);
-      btnPause.addEventListener('click', pause);
-      btnStop.addEventListener('click', stopVoice);
-
+        langBtns[l.id] = b;
+        langWrap.appendChild(b);
+      });
       box.appendChild(el('div', { class: 'rt-group' }, [
-        el('p', { class: 'rt-label', text: 'හඬ' }),
-        select,
+        el('p', { class: 'rt-label', text: 'කියවන භාෂාව' }),
+        langWrap,
       ]));
-      box.appendChild(slider('වේගය', 'rate', (v) => v.toFixed(2) + 'x'));
-      box.appendChild(slider('ස්වරය', 'pitch', (v) => v.toFixed(2)));
-      box.appendChild(el('div', { class: 'rt-row' }, [btnPlay, btnPause, btnStop]));
+
+      // ---- voice select
+      const voiceLabel = el('p', { class: 'rt-label', text: 'හඬ තෝරන්න' });
+      const select = el('select', { class: 'rt-select', 'aria-label': 'හඬ තෝරන්න' });
+      box.appendChild(el('div', { class: 'rt-group' }, [voiceLabel, select]));
+
+      // ---- sliders
+      box.appendChild(slider('කියවන වේගය', 'rate', (v) => v.toFixed(2) + 'x'));
+      box.appendChild(slider('හඬේ ස්වරය (උස / පහත)', 'pitch', (v) => v.toFixed(2)));
+
+      // ---- start position
+      box.appendChild(segment('පටන් ගන්නේ කොහෙන්ද?', state.voiceFrom, [
+        { value: 'view', label: 'තිරයේ පෙනෙන තැනින්' },
+        { value: 'top', label: 'ලිපියේ මුල සිට' },
+      ], (v) => set({ voiceFrom: v }, { immediate: true })));
+
+      // ---- controls
+      const btnMain = el('button', { class: 'rt-btn rt-vmain', type: 'button' });
+      const btnStop = el('button', {
+        class: 'rt-btn rt-vstop', type: 'button', html: ICON.stop,
+        'aria-label': 'නවත්වන්න', title: 'නවත්වන්න',
+      });
+      const btnPrev = el('button', {
+        class: 'rt-btn', type: 'button', html: ICON.prev + '<span>පෙර ඡේදය</span>',
+      });
+      const btnNext = el('button', {
+        class: 'rt-btn', type: 'button', html: ICON.next + '<span>ඊළඟ ඡේදය</span>',
+      });
+      btnMain.addEventListener('click', voiceToggle);
+      btnStop.addEventListener('click', voiceStop);
+      btnPrev.addEventListener('click', () => voiceSkip(-1));
+      btnNext.addEventListener('click', () => voiceSkip(1));
+      box.appendChild(el('div', { class: 'rt-row' }, [btnMain, btnStop]));
+      box.appendChild(el('div', { class: 'rt-row rt-vnav' }, [btnPrev, btnNext]));
+
+      const note = el('p', { class: 'rt-note' });
       box.appendChild(note);
       box.appendChild(el('p', {
         class: 'rt-empty',
-        text: 'කොටස් ' + queue.length + 'ක් පෝලිමේ. පිටුව මාරු කළොත් හඬ ඉබේම නවතිනවා.',
+        text: 'කියවන්න පටන් ගත්තම මේ මෙනුව ඉබේම වැහෙනවා. කියවන ඡේදය ඉස්මතු වෙලා පෙනෙනවා. විරාමයට දාන්න හෝ නවත්වන්න ඕන නම් තිරයේ පහළ මැද තියෙන පාලන බොත්තම් පාවිච්චි කරන්න.',
       }));
 
-      return () => {
-        clearTimeout(poll);
-        synth.removeEventListener('voiceschanged', fillVoices);
-        if (tts) {
-          tts.gen++;
-          if (tts.kick) clearTimeout(tts.kick);
-          if (tts.guard) clearTimeout(tts.guard);
+      // ---- painters
+      function paintLangs() {
+        VOICE_LANGS.forEach((l) => {
+          langBtns[l.id].setAttribute('aria-pressed', l.id === state.voiceLang ? 'true' : 'false');
+        });
+      }
+
+      function paintNote() {
+        const L = langInfo(state.voiceLang);
+        const has = voicesFor(state.voiceLang).length > 0;
+        if (voice.error) {
+          note.setAttribute('data-warn', '1');
+          note.textContent = voice.error + (has ? '' : ' ' + INSTALL_HELP);
+          return;
         }
-        try { synth.cancel(); } catch (e) {}
-        ttsStopHard();
-        tts = null;
+        if (!has) {
+          note.setAttribute('data-warn', '1');
+          note.textContent =
+            'මේ උපාංගයේ ' + L.name + ' හඬක් install කරලා නැහැ. ' + INSTALL_HELP +
+            (state.voiceLang === 'si'
+              ? ' සිංහල හඬ බොහෝවිට තියෙන්නේ Android (Google Speech Services) වල විතරයි.'
+              : '');
+          return;
+        }
+        note.removeAttribute('data-warn');
+        if (state.voiceLang === 'si') {
+          note.textContent = 'සිංහල හඬ මේ උපාංගයේ තියෙනවා. ලිපිය මුල් සිංහලෙන්ම කියවනවා.';
+        } else {
+          note.textContent =
+            'මේ ලිපිය මුලින්ම සිංහලෙන් තියෙන්නේ. ඔබ තෝරපු භාෂාවට කොටස් කොටස් පරිවර්තනය කරලා තමයි කියවන්නේ. පරිවර්තනය යන්ත්‍රයකින් කරන නිසා අර්ථයේ පොඩි වෙනස්කම් තියෙන්න පුළුවන්, ඒ වගේම ඉන්ටර්නෙට් සම්බන්ධතාවයක් අවශ්‍යයි.';
+        }
+      }
+
+      function paint() {
+        const s = voice.status;
+        const n = voice.queue.length;
+        const L = langInfo(state.voiceLang);
+        card.setAttribute('data-state', voice.error ? 'error' : s);
+        if (voice.error) {
+          title.textContent = 'දෝෂයක් ඇති වුණා';
+          sub.textContent = 'පහත උපදෙස් බලන්න';
+        } else if (s === 'playing') {
+          title.textContent = voice.busy ? 'පරිවර්තනය වෙමින්...' : 'කියවමින් සිටී';
+          sub.textContent = L.label + ' · කොටස ' + (voice.i + 1) + ' / ' + n;
+        } else if (s === 'paused') {
+          title.textContent = 'විරාමයේ';
+          sub.textContent = L.label + ' · කොටස ' + (voice.i + 1) + ' / ' + n;
+        } else if (voice.done) {
+          title.textContent = 'කියවීම අවසන්';
+          sub.textContent = 'නැවත අහන්න පහළ බොත්තම ඔබන්න';
+        } else {
+          title.textContent = 'කියවීමට සූදානම්';
+          sub.textContent = L.label + ' · කොටස් ' + n + 'කට බෙදා ඇත';
+        }
+        bar.style.transform = 'scaleX(' + (s === 'idle' ? 0 : voicePct() / 100).toFixed(3) + ')';
+
+        if (s === 'playing') {
+          btnMain.innerHTML = ICON.pause + '<span>විරාමය</span>';
+          btnMain.removeAttribute('data-primary');
+        } else if (s === 'paused') {
+          btnMain.innerHTML = ICON.play + '<span>දිගටම කියවන්න</span>';
+          btnMain.setAttribute('data-primary', '1');
+        } else {
+          btnMain.innerHTML = ICON.play + '<span>කියවන්න පටන් ගන්න</span>';
+          btnMain.setAttribute('data-primary', '1');
+        }
+        const idle = s === 'idle';
+        btnStop.disabled = idle;
+        btnPrev.disabled = idle;
+        btnNext.disabled = idle;
+        if (idle) btnStop.removeAttribute('data-danger');
+        else btnStop.setAttribute('data-danger', '1');
+        paintNote();
+      }
+
+      function fillVoices() {
+        const list = voicesFor(state.voiceLang);
+        select.textContent = '';
+        if (!list.length) {
+          select.appendChild(el('option', { value: '', text: 'මේ භාෂාවට හඬක් නැහැ' }));
+          select.disabled = true;
+        } else {
+          select.disabled = false;
+          list.forEach((v) => {
+            select.appendChild(el('option', {
+              value: v.voiceURI, text: v.name + ' (' + v.lang + ')',
+            }));
+          });
+          const want = state.voiceMap[state.voiceLang];
+          select.value = want && list.some((v) => v.voiceURI === want) ? want : list[0].voiceURI;
+        }
+        voiceLabel.textContent = 'හඬ තෝරන්න' + (list.length ? ' (' + list.length + ')' : '');
+        paintNote();
+      }
+
+      function chooseLang(id) {
+        if (id === state.voiceLang) return;
+        set({ voiceLang: id }, { immediate: true });
+        paintLangs();
+        fillVoices();
+        voiceSettingChanged();
+      }
+
+      select.addEventListener('change', () => {
+        if (!select.value) return;
+        const map = Object.assign({}, state.voiceMap);
+        map[state.voiceLang] = select.value;
+        set({ voiceMap: map }, { immediate: true });
+        voiceSettingChanged();
+      });
+
+      const off = on('voice', paint);
+      synth.addEventListener('voiceschanged', fillVoices);
+      // voices load late on some browsers
+      const t1 = setTimeout(fillVoices, 350);
+      const t2 = setTimeout(fillVoices, 1400);
+
+      paintLangs();
+      fillVoices();
+      paint();
+
+      // speech keeps running after this tab is left: it lives at module level
+      return () => {
+        off();
+        synth.removeEventListener('voiceschanged', fillVoices);
+        clearTimeout(t1);
+        clearTimeout(t2);
       };
     },
   });
@@ -1542,6 +2156,10 @@
     listen(ui.close, 'click', close);
     listen(ui.scrim, 'click', close);
 
+    // voice pill controls
+    listen(ui.voiceMain, 'click', voiceToggle);
+    listen(ui.voiceStop, 'click', voiceStop);
+
     // stop pill: act on the very first event (pointerdown / touchstart);
     // a finger press can turn into a scroll gesture and cancel the click
     const hardStopAuto = (ev) => {
@@ -1624,17 +2242,14 @@
 
     listen(window, 'pagehide', () => {
       stopAuto();
+      voiceHalt();
       flushPos();
     });
     listen(document, 'visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
         stopAuto();
+        voicePause();
         flushPos();
-        if (window.speechSynthesis && tts && tts.playing && !window.speechSynthesis.paused) {
-          try { window.speechSynthesis.pause(); } catch (e) {}
-        }
-      } else if (window.speechSynthesis && tts && tts.playing && !tts.userPaused) {
-        try { window.speechSynthesis.resume(); } catch (e) {}
       }
     });
     listen(document, 'wk:age-verified', () => {
@@ -1645,8 +2260,13 @@
   function teardown() {
     stopAuto();
     runCleanup();
-    ttsStopHard();
-    tts = null;
+    voiceHalt();
+    voice.queue = [];
+    voice.cache = {};
+    voice.i = 0;
+    voice.p = 0;
+    voice.error = '';
+    voice.done = false;
     tocSync = null;
     pctEl = null;
     flushPos();
@@ -1680,6 +2300,7 @@
     booted = true;
     ensureAutoStyle();
     ensureResetStyle();
+    ensureVoiceStyle();
     clearDim();
     maxCache = -1;
     article = findArticle();
@@ -1713,7 +2334,7 @@
   // ---------------------------------------------------------------- api
 
   window.ReaderTools = {
-    version: 13,
+    version: 14,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
@@ -1727,7 +2348,11 @@
     startAutoScroll: startAuto,
     stopAutoScroll: stopAuto,
     toggleAutoScroll: toggleAuto,
+    startVoice: voiceStart,
+    pauseVoice: voicePause,
+    stopVoice: voiceStop,
     get scrolling() { return !!auto.raf; },
+    get speaking() { return voice.status === 'playing'; },
     get state() { return Object.assign({}, state); },
     get article() { return article; },
     get tools() { return tools.map((t) => t.id); },
