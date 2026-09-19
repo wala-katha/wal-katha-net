@@ -1,6 +1,6 @@
 /* Reader Tools — panel chrome + reading surface themes.
    Selectors: .rt-* (panel) and [data-rt-*] (surface).
-   z-index: progress 9500, fab 9600, stopfab 9650, scrim 9700, panel 9800.
+   z-index: progress 9500, fab 9600, stop-fab 9650, scrim 9700, panel 9800.
    age-gate overlay = 999999, so the gate always wins. */
 
 :root {
@@ -176,11 +176,11 @@ html.age-gate-pending .rt-root {
 }
 
 /* nothing at all until reader-tools.js confirms a real article.
-   .rt-stopfab is in this list too: without it the auto-scroll pill could
+   .rt-stop-fab is in this list too: without it the auto-scroll pill could
    paint for one frame on the home page before boot() removed it. */
 .rt-root:not([data-rt-ready="1"]) .rt-progress,
 .rt-root:not([data-rt-ready="1"]) .rt-fab,
-.rt-root:not([data-rt-ready="1"]) .rt-stopfab,
+.rt-root:not([data-rt-ready="1"]) .rt-stop-fab,
 .rt-root:not([data-rt-ready="1"]) .rt-scrim,
 .rt-root:not([data-rt-ready="1"]) .rt-panel {
   display: none !important;
@@ -716,7 +716,7 @@ html.rt-locked body {
    frame. `transform: translateZ(0)` puts it on its own layer so the
    scrolling content underneath never repaints it. */
 
-.rt-stopfab {
+.rt-stop-fab {
   position: fixed;
   left: 50%;
   bottom: calc(1.25rem + env(safe-area-inset-bottom));
@@ -742,23 +742,23 @@ html.rt-locked body {
 
 /* shown by the root flag, or by a data-on flag on the button itself -
    whichever the script sets. `hidden` always wins. */
-.rt-root[data-autoscroll="1"] .rt-stopfab,
-.rt-stopfab[data-on="1"] {
+.rt-root[data-autoscroll="1"] .rt-stop-fab,
+.rt-stop-fab[data-on="1"] {
   display: inline-flex;
 }
-.rt-stopfab[hidden] {
+.rt-stop-fab[hidden] {
   display: none !important;
 }
 
-.rt-stopfab:hover,
-.rt-stopfab:focus-visible {
+.rt-stop-fab:hover,
+.rt-stop-fab:focus-visible {
   background: #dc2626;
   outline: none;
 }
-.rt-stopfab:active {
+.rt-stop-fab:active {
   transform: translateX(-50%) translateZ(0) scale(0.96);
 }
-.rt-stopfab svg {
+.rt-stop-fab svg {
   display: block;
   width: 15px;
   height: 15px;
@@ -766,10 +766,8 @@ html.rt-locked body {
 }
 
 /* the dot pulses, not the pill - animating opacity on a 10px child is
-   far cheaper than animating the whole button while the page scrolls.
-   Targets the bare <i> that reader-tools.js actually creates inside the
-   pill (no separate class name is ever assigned to it). */
-.rt-stopfab i {
+   far cheaper than animating the whole button while the page scrolls */
+.rt-stop-dot {
   width: 9px;
   height: 9px;
   flex: 0 0 auto;
@@ -790,3 +788,34 @@ html.rt-locked body {
 /* on phones the pill sits slightly higher so the browser chrome and the
    comments FAB do not cover it */
 @media (max-width: 640px) {
+  .rt-stop-fab {
+    bottom: calc(4.75rem + env(safe-area-inset-bottom));
+    padding: 10px 16px 10px 13px;
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rt-panel,
+  .rt-scrim,
+  .rt-fab,
+  .rt-stop-fab,
+  .rt-progress > i,
+  [data-rt-dim],
+  [data-rt-article],
+  .custom-post-content {
+    transition: none !important;
+  }
+  .rt-stop-dot {
+    animation: none !important;
+  }
+}
+
+@media print {
+  .rt-root {
+    display: none !important;
+  }
+  [data-rt-dim] {
+    opacity: 1 !important;
+  }
+}
