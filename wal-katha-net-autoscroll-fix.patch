@@ -1,5 +1,5 @@
 diff --git a/src/layouts/components/reader-tools.css b/src/layouts/components/reader-tools.css
-index c32b2c6..3cc9e13 100644
+index c32b2c6..680f10f 100644
 --- a/src/layouts/components/reader-tools.css
 +++ b/src/layouts/components/reader-tools.css
 @@ -1,6 +1,6 @@
@@ -19,69 +19,7 @@ index c32b2c6..3cc9e13 100644
    --rt-z-scrim: 9700;
    --rt-z-panel: 9800;
  }
-@@ -118,35 +118,7 @@ html[data-rt-page="sepia"] :is([data-rt-article], .custom-post-content) blockquo
-   border-left-color: #8a5a1c !important;
- }
- 
--/* focus mode.
--   Two guards, because a stale focus flag used to hide the header and
--   footer on the home page AND inside posts:
--     1. data-rt-focus="on"        - only while the user asks for it
--     2. data-rt-has-article="1"   - only on a real article page
--   The reset rule below runs whenever either guard is missing, so even a
--   leftover data-rt-dim attribute cannot keep anything invisible. The
--   header is no longer in the JS dim list at all. opacity only - `filter`
--   promotes a compositing layer and turns every scroll frame into a
--   repaint. */
--[data-rt-dim] {
--  transition: opacity 0.3s ease;
--}
--html:not([data-rt-focus="on"]) [data-rt-dim],
--html:not([data-rt-has-article="1"]) [data-rt-dim] {
--  opacity: 1 !important;
--  visibility: visible !important;
--  filter: none !important;
--  pointer-events: auto !important;
--}
--html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim] {
--  opacity: 0.55;
--}
--html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim]:hover,
--html[data-rt-focus="on"][data-rt-has-article="1"] [data-rt-dim]:focus-within {
--  opacity: 1;
--}
--
--/* tts highlight */
-+/* tts highlight *//* tts highlight */
- .rt-speaking {
-   background: rgba(1, 173, 159, 0.16) !important;
-   box-shadow: inset 3px 0 0 var(--rt-accent);
-@@ -535,6 +507,24 @@ html[data-rt-scrolling="1"] .rt-progress > i {
-   flex: 0 0 auto;
- }
- 
-+
-+/* reading-section reset: red on purpose - the only destructive-looking
-+   control in the panel. Stays disabled until something was changed. */
-+.rt-btn-reset {
-+  border-color: rgba(239, 68, 68, 0.45);
-+  background: rgba(239, 68, 68, 0.1);
-+  color: #f87171;
-+}
-+.rt-btn-reset:hover:not(:disabled) {
-+  background: rgba(239, 68, 68, 0.2);
-+  border-color: #ef4444;
-+}
-+.rt-btn-reset:disabled {
-+  border-color: var(--rt-border);
-+  background: var(--rt-bg2);
-+  color: var(--rt-muted);
-+}
-+
- /* touch-action: none is required. Base.astro sets `touch-action: pan-y`
-    on <body>, which swallowed the horizontal drag and made every slider
-    unusable on phones. The padded hit area keeps the thumb tappable. */
-@@ -726,91 +716,113 @@ html.rt-locked body {
+@@ -726,91 +726,118 @@ html.rt-locked body {
  /* -------------------------------------------------------------- stop pill */
  /* Auto-scroll stop button. It only exists while the scroll is running:
     reader-tools.js closes the panel, sets data-autoscroll="1" on .rt-root
@@ -210,6 +148,11 @@ index c32b2c6..3cc9e13 100644
 +  font-size: 10.5px;
 +  font-variant-numeric: tabular-nums;
 +  text-align: center;
++}
++/* paused state: the badge turns amber, so "held" is visible at a glance */
++.rt-stopfab[data-paused="1"] .rt-stopfab-badge {
++  background: #fde68a;
++  color: #78350f;
  }
  
  /* on phones the pill sits slightly higher so the browser chrome and the
@@ -239,12 +182,7 @@ index c32b2c6..3cc9e13 100644
  }
  
  @media (prefers-reduced-motion: reduce) {
-@@ -819,21 +831,14 @@ html.rt-locked body {
-   .rt-fab,
-   .rt-stopfab,
-   .rt-progress > i,
--  [data-rt-dim],
-   [data-rt-article],
+@@ -824,9 +851,6 @@ html.rt-locked body {
    .custom-post-content {
      transition: none !important;
    }
@@ -254,29 +192,11 @@ index c32b2c6..3cc9e13 100644
  }
  
  @media print {
-   .rt-root {
-     display: none !important;
-   }
--  [data-rt-dim] {
--    opacity: 1 !important;
--  }
- }
 diff --git a/src/layouts/components/reader-tools.js b/src/layouts/components/reader-tools.js
-index 50fd9de..aec477c 100644
+index 50fd9de..9f027b9 100644
 --- a/src/layouts/components/reader-tools.js
 +++ b/src/layouts/components/reader-tools.js
-@@ -39,10 +39,6 @@
-     'main article',
-   ];
- 
--  // 'header' මෙතන නෑ. navigation එක මැකෙන එක වැරදියි — focus mode
--  // එකේදීත් header එක සම්පූර්ණයෙන් පෙනෙන්න ඕන.
--  const DIM_CANDIDATES = ['footer', '#comments', '.related-posts'];
--
-   const HEADING_SEL = 'h2, h3, h4';
-   const BLOCK_SEL = 'p, li, h2, h3, h4, blockquote';
-   const MIN_ARTICLE_CHARS = 400;
-@@ -53,7 +49,7 @@
+@@ -53,7 +53,7 @@
    const MAX_CACHE_MS = 400;
  
    // auto-scroll tuning
@@ -285,7 +205,7 @@ index 50fd9de..aec477c 100644
    const AUTO_ARM_MS = 420;
    const AUTO_DRIFT = 120;
    const AUTO_MAX_DT = 64;
-@@ -64,7 +60,13 @@
+@@ -64,7 +64,13 @@
    const AUTO_WATCHDOG_MS = 1500;
    const AUTO_WD_POLL_MS = 400;
    const AUTO_WRITE_EPS = 0.5;
@@ -300,7 +220,7 @@ index 50fd9de..aec477c 100644
  
    const DEFAULTS = {
      page: 'dark',
-@@ -272,28 +274,31 @@
+@@ -272,28 +278,31 @@
        'html[data-rt-scrolling="1"],html[data-rt-scrolling="1"] body{' +
        'scroll-behavior:auto !important;}' +
        '.rt-root .rt-stopfab{display:none;position:fixed;left:50%;' +
@@ -346,7 +266,7 @@ index 50fd9de..aec477c 100644
        '@media print{.rt-root .rt-stopfab{display:none !important;}}';
      const s = document.createElement('style');
      s.id = AUTO_STYLE_ID;
-@@ -304,7 +309,7 @@
+@@ -304,7 +313,7 @@
    // --------------------------------------------------------------- elements
  
    const ui = {
@@ -355,7 +275,7 @@ index 50fd9de..aec477c 100644
      tabs: null, body: null, sub: null, close: null,
    };
  
-@@ -363,12 +368,19 @@
+@@ -363,12 +372,19 @@
      ]);
  
      // auto-scroll දුවන වෙලාවේ පමණක් පෙනෙන කුඩා රතු නවත්වන බොත්තම.
@@ -365,11 +285,10 @@ index 50fd9de..aec477c 100644
      const stopFab = el('button', {
        class: 'rt-stopfab',
        type: 'button',
--      'aria-label': 'ස්වයං-අනුචලනය නවත්වන්න',
++      'data-on': '0',
+       'aria-label': 'ස්වයං-අනුචලනය නවත්වන්න',
 -      title: 'නවත්වන්න',
 -      html: '<i aria-hidden="true"></i>' + ICON.stop + '<span>නවත්වන්න</span>',
-+      'data-on': '0',
-+      'aria-label': 'පිටුව තමන්ම යාම නවත්වන්න',
 +      title: 'නවත්වන්න (Esc)',
 +      html:
 +        '<span class="rt-stopfab-badge" aria-hidden="true">' + ICON.stop + '</span>' +
@@ -378,7 +297,7 @@ index 50fd9de..aec477c 100644
      });
  
      const scrim = el('div', { class: 'rt-scrim', 'data-rt-scrim': '', 'aria-hidden': 'true' });
-@@ -411,6 +423,7 @@
+@@ -411,6 +427,7 @@
      ui.bar = bar;
      ui.fab = fab;
      ui.stop = stopFab;
@@ -386,43 +305,11 @@ index 50fd9de..aec477c 100644
      ui.scrim = scrim;
      ui.panel = panel;
      ui.tabs = tabs;
-@@ -432,19 +445,7 @@
-     return null;
-   }
- 
--  function markDim() {
--    DIM_CANDIDATES.forEach((sel) => {
--      $$(sel).forEach((n) => {
--        if (ui.root && (ui.root.contains(n) || n.contains(ui.root))) return;
--        if (article && (n.contains(article) || article.contains(n))) return;
--        n.setAttribute('data-rt-dim', '');
--      });
--    });
--  }
- 
--  function clearDim() {
--    $$('[data-rt-dim]').forEach((n) => n.removeAttribute('data-rt-dim'));
--  }
- 
-   function words() {
-     if (!article) return 0;
-@@ -474,11 +475,6 @@
-       r.removeAttribute('data-rt-has-article');
-     }
- 
--    const focusOn = !!state.focus && !!article;
--    r.setAttribute('data-rt-focus', focusOn ? 'on' : 'off');
--    if (focusOn) markDim();
--    else clearDim();
--
-     // font/line-height වෙනස් වුණාම document උස වෙනස් වෙනවා.
-     scrollMax(true);
-   }
-@@ -498,18 +494,19 @@
+@@ -498,18 +515,23 @@
    const auto = {
      raf: 0, last: 0, carry: 0, expect: -1, stall: 0, armed: false, armTimer: 0,
      prevY: 0, watchdog: 0, wdY: -1, wdAt: 0,
-+    ms: 0, gov: 1, stopFlag: false, pctAt: 0, pctShow: -1,
++    ms: 0, gov: 1, paused: false, stopFlag: false, pctAt: 0, pctShow: -1,
    };
  
    // watchdog: rAF loop එක reschedule නොවී නැවතුණොත් engine එක තනිවම
@@ -431,6 +318,10 @@ index 50fd9de..aec477c 100644
      if (!auto.raf) return;
 -    const y = window.scrollY;
      const now = Date.now();
++    if (auto.paused) {
++      auto.wdAt = now;
++      return;
++    }
      if (now - auto.wdAt > AUTO_WATCHDOG_MS) {
        stopAuto();
        return;
@@ -439,7 +330,7 @@ index 50fd9de..aec477c 100644
      if (y !== auto.wdY) {
        auto.wdY = y;
        auto.wdAt = now;
-@@ -517,11 +514,16 @@
+@@ -517,11 +539,16 @@
    }
  
    function autoPps() {
@@ -459,7 +350,7 @@ index 50fd9de..aec477c 100644
    function setY(y) {
      try {
        window.scrollTo({ top: y, left: 0, behavior: 'instant' });
-@@ -542,15 +544,16 @@
+@@ -542,15 +569,17 @@
      let dt = ts - auto.last;
      auto.last = ts;
      if (dt <= 0) return;
@@ -470,6 +361,7 @@ index 50fd9de..aec477c 100644
 -    if (auto.watchdog) auto.wdAt = Date.now();
 +    // watchdog heartbeat: loop eka jeewathwa duwanawa nam wdAt update wenawa
 +    auto.wdAt = Date.now();
++    if (auto.paused) return;
 +
 +    autoGovern(dt);
  
@@ -480,7 +372,7 @@ index 50fd9de..aec477c 100644
      if (auto.armed && auto.expect >= 0 && Math.abs(y - auto.expect) > AUTO_DRIFT) {
        stopAuto();
        return;
-@@ -562,33 +565,42 @@
+@@ -562,33 +591,42 @@
        return;
      }
  
@@ -536,7 +428,7 @@ index 50fd9de..aec477c 100644
      }
    }
  
-@@ -596,8 +608,7 @@
+@@ -596,8 +634,7 @@
      if (auto.raf || !article) return;
      if (scrollMax(true) <= 8) return;
  
@@ -546,7 +438,7 @@ index 50fd9de..aec477c 100644
      close();
      document.documentElement.classList.remove('rt-locked');
      ensureAutoStyle();
-@@ -609,20 +620,26 @@
+@@ -609,20 +646,28 @@
  
      auto.last = 0;
      auto.carry = 0;
@@ -554,6 +446,7 @@ index 50fd9de..aec477c 100644
      auto.stall = 0;
      auto.expect = -1;
      auto.armed = false;
++    auto.paused = false;
 +    auto.gov = 1;
 +    auto.pctAt = 0;
 +    auto.pctShow = -1;
@@ -562,6 +455,7 @@ index 50fd9de..aec477c 100644
 +    if (ui.stop) {
 +      ui.stop.setAttribute('data-on', '1');
 +      ui.stop.setAttribute('aria-pressed', 'true');
++      ui.stop.removeAttribute('data-paused');
 +      if (ui.stopPct) ui.stopPct.textContent = '0%';
 +    }
      if (auto.armTimer) clearTimeout(auto.armTimer);
@@ -577,7 +471,7 @@ index 50fd9de..aec477c 100644
      auto.wdY = window.scrollY;
      auto.wdAt = Date.now();
      if (auto.watchdog) clearInterval(auto.watchdog);
-@@ -630,8 +647,8 @@
+@@ -630,8 +675,8 @@
  
      auto.raf = requestAnimationFrame(autoStep);
  
@@ -588,7 +482,7 @@ index 50fd9de..aec477c 100644
      if (ui.fab && ui.stop && document.activeElement === ui.fab) {
        try { ui.stop.focus({ preventScroll: true }); } catch (e) {}
      }
-@@ -639,32 +656,38 @@
+@@ -639,32 +684,40 @@
    }
  
    function stopAuto() {
@@ -612,6 +506,7 @@ index 50fd9de..aec477c 100644
 +    if (auto.raf) { cancelAnimationFrame(auto.raf); auto.raf = 0; }
 +    // 2. State (no layout reads here)
      auto.armed = false;
++    auto.paused = false;
      auto.last = 0;
      auto.carry = 0;
 +    auto.ms = 0;
@@ -634,48 +529,49 @@ index 50fd9de..aec477c 100644
 +    if (ui.stop) {
 +      ui.stop.setAttribute('data-on', '0');
 +      ui.stop.setAttribute('aria-pressed', 'false');
++      ui.stop.removeAttribute('data-paused');
 +    }
 +    auto.stopFlag = false;
      if (was) {
        savePos();
        emit('autoscroll', false);
-@@ -676,7 +699,7 @@
+@@ -676,6 +729,35 @@
      else startAuto();
    }
  
--  // ------------------------------------------------------------ open/close
-+  // ------------------------------------------------------------ open/close  // ------------------------------------------------------------ open/close
++  // Wirama: raf eka duwamin thibe, liweem pamanaki nawathenne (position eka
++  // tamange thiyenawa). Nithara nawaththanne nam stop eka.
++  function pauseAuto() {
++    if (!auto.raf || auto.paused) return;
++    auto.paused = true;
++    auto.last = 0;
++    auto.carry = 0;
++    auto.ms = 0;
++    auto.stall = 0;
++    auto.expect = -1;
++    if (ui.stop) {
++      ui.stop.setAttribute('data-paused', '1');
++      if (ui.stopPct) ui.stopPct.textContent = '||';
++    }
++    emit('autoscrollpaused', true);
++  }
++
++  function resumeAuto() {
++    if (!auto.raf || !auto.paused) return;
++    auto.paused = false;
++    auto.last = 0;
++    auto.carry = 0;
++    auto.ms = 0;
++    auto.stall = 0;
++    auto.expect = -1;
++    if (ui.stop) ui.stop.removeAttribute('data-paused');
++    emit('autoscrollpaused', false);
++  }
++
+   // ------------------------------------------------------------ open/close
  
    function lockScroll(lock) {
-     const r = document.documentElement;
-@@ -900,7 +923,7 @@
-       if (!heads.length) {
-         group.appendChild(el('p', {
-           class: 'rt-empty',
--          text: 'මෙම ලිපියේ උපශීර්ෂ නැහැ. "කියවීම" ටැබ් එකෙන් ස්වයං-අනුචලනය භාවිත කරන්න.',
-+          text: 'මේ කතාවේ අතරමැදි මාතෘකා නැහැ. "කියවීම" ටැබ් එකෙන් පිටුව තමන්ම යන්න සෙට් කරගන්න.',
-         }));
-         box.appendChild(group);
-         return () => { pctEl = null; };
-@@ -1046,7 +1069,7 @@
-       if (!synth) {
-         box.appendChild(el('p', {
-           class: 'rt-note', 'data-warn': '1',
--          text: 'මෙම බ්‍රව්සරය හඬ කියවීමට (TTS) සහාය නොදක්වයි.',
-+          text: 'මේ බ්‍රව්සරයෙන් හඬට කියවන්න බෑ (TTS සහාය නැහැ).',
-         }));
-         return;
-       }
-@@ -1057,7 +1080,7 @@
-       if (!blocks.length) {
-         box.appendChild(el('p', {
-           class: 'rt-note', 'data-warn': '1',
--          text: 'කියවීමට අන්තර්ගතයක් හමු නොවුණි.',
-+          text: 'කියවන්න තරම් අකුරු මේ පිටුවේ හමු නොවුණා.',
-         }));
-         return;
-       }
-@@ -1068,7 +1091,7 @@
+@@ -1068,7 +1150,7 @@
        });
  
        ttsStopHard();
@@ -684,38 +580,7 @@ index 50fd9de..aec477c 100644
  
        const note = el('p', { class: 'rt-note', text: 'සූදානම්.' });
        const select = el('select', { class: 'rt-select', 'aria-label': 'හඬ තෝරන්න' });
-@@ -1077,10 +1100,10 @@
-         html: ICON.play + '<span>කියවන්න</span>',
-       });
-       const btnPause = el('button', {
--        class: 'rt-btn', type: 'button', html: ICON.pause, 'aria-label': 'විරාමය',
-+        class: 'rt-btn', type: 'button', html: ICON.pause, 'aria-label': 'විරාමයට තියන්න',
-       });
-       const btnStop = el('button', {
--        class: 'rt-btn', type: 'button', html: ICON.stop, 'aria-label': 'නතර කරන්න',
-+        class: 'rt-btn', type: 'button', html: ICON.stop, 'aria-label': 'නවත්වන්න',
-       });
- 
-       let voicesFilled = false;
-@@ -1102,10 +1125,10 @@
-         if (!si.length) {
-           note.setAttribute('data-warn', '1');
-           note.textContent =
--            'සිංහල (si-LK) හඬක් මේ උපාංගයේ නැහැ. Android: Settings → Language → Text-to-speech එකෙන් සිංහල pack එක install කරන්න. iOS / desktop බොහොමයක සිංහල හඬ නෑ — වෙනත් හඬක් තේරුවොත් උච්චාරණය නිවැරදි නොවේ.';
-+            'මේ උපාංගයේ සිංහල (si-LK) හඬක් නැහැ. Android නම් Settings → Language → Text-to-speech එකෙන් සිංහල pack එක දාගන්න. iPhone සහ බොහෝ කොම්පියුටර්වල සිංහල හඬ නැහැ — වෙන හඬක් තේරුවොත් උච්චාරණය හරියටම හරි නොවෙයි.';
-         } else {
-           note.removeAttribute('data-warn');
--          note.textContent = 'සිංහල හඬ ලබා ගත හැක.';
-+          note.textContent = 'සිංහල හඬක් තියෙනවා.';
-         }
-       }
- 
-@@ -1130,10 +1153,12 @@
-           ttsStopHard();
-           label('කියවන්න');
-           note.removeAttribute('data-warn');
--          note.textContent = 'කියවීම අවසන්.';
-+          note.textContent = 'කතාව ඉවරයි.';
+@@ -1134,6 +1216,8 @@
            return;
          }
          tts.i = i;
@@ -724,7 +589,7 @@ index 50fd9de..aec477c 100644
          const item = queue[i];
          highlight(item.node);
  
-@@ -1148,16 +1173,49 @@
+@@ -1148,16 +1232,49 @@
          }
          u.rate = state.rate;
          u.pitch = state.pitch;
@@ -746,8 +611,7 @@ index 50fd9de..aec477c 100644
            if (ev && (ev.error === 'interrupted' || ev.error === 'canceled')) return;
 +          if (!tts || tts.gen !== gen) return;
            note.setAttribute('data-warn', '1');
--          note.textContent = 'හඬ කියවීමේ දෝෂයක්. වෙනත් හඬක් තෝරා නැවත උත්සාහ කරන්න.';
-+          note.textContent = 'හඬ කියවද්දී ප්‍රශ්නයක් ආවා. වෙන හඬක් තෝරලා ආයෙත් බලන්න.';
+           note.textContent = 'හඬ කියවීමේ දෝෂයක්. වෙනත් හඬක් තෝරා නැවත උත්සාහ කරන්න.';
            ttsStopHard();
            label('කියවන්න');
          };
@@ -777,7 +641,7 @@ index 50fd9de..aec477c 100644
          try {
            synth.speak(u);
          } catch (e) {
-@@ -1176,6 +1234,9 @@
+@@ -1176,6 +1293,9 @@
            return;
          }
          if (tts.playing) return;
@@ -787,7 +651,7 @@ index 50fd9de..aec477c 100644
          tts.stopped = false;
          tts.playing = true;
          tts.userPaused = false;
-@@ -1184,8 +1245,8 @@
+@@ -1184,8 +1304,8 @@
          label('කියවනවා');
          try { synth.cancel(); } catch (e) {}
          tts.kick = setTimeout(() => {
@@ -797,15 +661,7 @@ index 50fd9de..aec477c 100644
            speakAt(tts.i);
          }, 90);
        }
-@@ -1194,17 +1255,23 @@
-         if (tts && tts.playing && !synth.paused) {
-           tts.userPaused = true;
-           try { synth.pause(); } catch (e) {}
--          note.textContent = 'විරාමයේ.';
--          label('දිගටම');
-+          note.textContent = 'නවත්තලා තියෙනවා.';
-+          label('දිගටම කියවන්න');
-         }
+@@ -1200,6 +1320,12 @@
        }
  
        function stopVoice() {
@@ -818,32 +674,7 @@ index 50fd9de..aec477c 100644
          ttsStopHard();
          if (tts) tts.i = 0;
          label('කියවන්න');
-         note.removeAttribute('data-warn');
--        note.textContent = 'නතර කළා.';
-+        note.textContent = 'නවත්තලා දැම්මා.';
-       }
- 
-       btnPlay.addEventListener('click', play);
-@@ -1212,21 +1279,27 @@
-       btnStop.addEventListener('click', stopVoice);
- 
-       box.appendChild(el('div', { class: 'rt-group' }, [
--        el('p', { class: 'rt-label', text: 'හඬ' }),
-+        el('p', { class: 'rt-label', text: 'කියවන හඬ' }),
-         select,
-       ]));
--      box.appendChild(slider('වේගය', 'rate', (v) => v.toFixed(2) + 'x'));
--      box.appendChild(slider('ස්වරය', 'pitch', (v) => v.toFixed(2)));
-+      box.appendChild(slider('කියවන වේගය', 'rate', (v) => v.toFixed(2) + 'x'));
-+      box.appendChild(slider('හඬේ ස්වරය', 'pitch', (v) => v.toFixed(2)));
-       box.appendChild(el('div', { class: 'rt-row' }, [btnPlay, btnPause, btnStop]));
-       box.appendChild(note);
-       box.appendChild(el('p', {
-         class: 'rt-empty',
--        text: 'කොටස් ' + queue.length + 'ක් පෝලිමේ. පිටුව මාරු වූ විට හඬ ස්වයංක්‍රීයව නවතී.',
-+        text: 'කොටස් ' + queue.length + 'ක් පෝලිමේ තියෙනවා. පිටුව මාරු කරාම හඬ තමන්ම නවතිනවා.',
-       }));
- 
+@@ -1227,6 +1353,12 @@
        return () => {
          clearTimeout(poll);
          synth.removeEventListener('voiceschanged', fillVoices);
@@ -856,79 +687,48 @@ index 50fd9de..aec477c 100644
          ttsStopHard();
          tts = null;
        };
-@@ -1241,44 +1314,52 @@
-     icon: ICON.eye,
-     order: 40,
-     mount(box) {
--      box.appendChild(segment('නාභි ආකාරය', state.focus ? 'on' : 'off', [
--        { value: 'off', label: 'ක්‍රියාවිරහිත' },
--        { value: 'on', label: 'ක්‍රියාත්මක' },
--      ], (v) => set({ focus: v === 'on' }, { immediate: true })));
--
--      box.appendChild(el('p', {
--        class: 'rt-empty',
--        text: 'නාභි ආකාරය මේ පිටුවට පමණක් වලංගුයි. පිටුව මාරු කළ විට ස්වයංක්‍රීයව නිවෙනවා.',
--      }));
--
-       // වේගය දුවන අතරතුරත් වෙනස් කළ හැක — autoStep එක state එකෙන්
-       // හැම frame එකකම වේගය කියවනවා.
-       box.appendChild(slider(
--        'අනුචලන වේගය',
-+        'පිටුව යන වේගය',
-         'scrollSpeed',
-         (v) => String(Math.round(v)) + ' · ' + AUTO_PPS[clamp(Math.round(v), 1, 10) - 1] + 'px/s'
+@@ -1260,6 +1392,7 @@
        ));
  
        const btn = el('button', { class: 'rt-btn', type: 'button' });
-+      const btnReset = el('button', { class: 'rt-btn rt-btn-reset', type: 'button' });
++      const btnPause = el('button', { class: 'rt-btn', type: 'button' });
  
        function paint() {
          const running = !!auto.raf;
-         btn.innerHTML =
-           (running ? ICON.stop : ICON.down) +
--          '<span>' + (running ? 'අනුචලනය නවත්වන්න' : 'ස්වයං-අනුචලනය අරඹන්න') + '</span>';
-+          '<span>' + (running ? 'නවත්වන්න' : 'පිටුව තමන්ම යන්න') + '</span>';
-         if (running) btn.setAttribute('data-danger', '1');
-         else btn.setAttribute('data-primary', '1');
+@@ -1271,11 +1404,29 @@
          if (running) btn.removeAttribute('data-primary');
          else btn.removeAttribute('data-danger');
        }
 +
-+      // මේ කොටසේ යමක් වෙනස් කළොත් පමණක් රතු reset බොත්තම සක්‍රීය වෙනවා.
-+      // එබුවම අනුචලනය නවතිලා වේගය ආපහු මුල් අගයට යනවා.
-+      function paintReset() {
-+        const dirty = Number(state.scrollSpeed) !== Number(DEFAULTS.scrollSpeed);
-+        btnReset.disabled = !dirty;
-+        btnReset.setAttribute('aria-disabled', dirty ? 'false' : 'true');
++      function paintPause() {
++        const running = !!auto.raf;
++        const held = running && auto.paused;
++        btnPause.innerHTML =
++          (held ? ICON.play : ICON.pause) +
++          '<span>' + (held ? 'දිගටම' : 'විරාමය') + '</span>';
++        btnPause.disabled = !running;
++        btnPause.setAttribute('aria-pressed', held ? 'true' : 'false');
 +      }
 +
        paint();
-+      paintReset();
-       const offAuto = on('autoscroll', paint);
-+      const offChange = on('change', paintReset);
+-      const offAuto = on('autoscroll', paint);
++      paintPause();
++      const offAuto = on('autoscroll', () => { paint(); paintPause(); });
++      const offPaused = on('autoscrollpaused', paintPause);
        btn.addEventListener('click', toggleAuto);
-+      btnReset.addEventListener('click', () => {
-+        if (btnReset.disabled) return;
-+        stopAuto();
-+        set({ scrollSpeed: DEFAULTS.scrollSpeed }, { immediate: true });
-+        paintReset();
++      btnPause.addEventListener('click', () => {
++        if (!auto.raf) return;
++        if (auto.paused) resumeAuto();
++        else pauseAuto();
 +      });
  
 -      box.appendChild(btn);
-+      box.appendChild(el('div', { class: 'rt-row' }, [btn, btnReset]));
++      box.appendChild(el('div', { class: 'rt-row' }, [btn, btnPause]));
        box.appendChild(el('p', {
          class: 'rt-empty',
--        text: 'අරඹන විට මේ මෙනුව ස්වයංක්‍රීයව වැසෙනවා. නවත්වන්න පහළ මැදින් පෙනෙන රතු බොත්තම ඔබන්න, නැතිනම් තිරය අතින් අනුචලනය කරන්න. පිටුව අවසානයේ තනිවම නවතිනවා.',
-+        text: 'අරඹන කොට මේ මෙනුව තමන්ම වැහෙනවා. නවත්වන්න ඕන නම් පහළ මැද එන රතු බොත්තම ඔබන්න — ඇඟිල්ලෙන් තිරය අදින්නත් පුළුවන්. කතාව ඉවර වුණාම තමන්ම නවතිනවා.',
-       }));
- 
-       let saved = 0;
-@@ -1289,10 +1370,10 @@
-         box.appendChild(el('button', {
-           class: 'rt-btn',
-           type: 'button',
--          html: ICON.up + '<span>කලින් නැවතුණ තැනට (' + Math.round(saved * 100) + '%)</span>',
-+          html: ICON.up + '<span>කලින් හිටපු තැනට යන්න (' + Math.round(saved * 100) + '%)</span>',
+         text: 'අරඹන විට මේ මෙනුව ස්වයංක්‍රීයව වැසෙනවා. නවත්වන්න පහළ මැදින් පෙනෙන රතු බොත්තම ඔබන්න, නැතිනම් තිරය අතින් අනුචලනය කරන්න. පිටුව අවසානයේ තනිවම නවතිනවා.',
+@@ -1292,7 +1443,7 @@
+           html: ICON.up + '<span>කලින් නැවතුණ තැනට (' + Math.round(saved * 100) + '%)</span>',
            onclick: () => {
              stopAuto();
 -            window.scrollTo({ top: scrollMax(true) * saved, behavior: behavior() });
@@ -936,12 +736,8 @@ index 50fd9de..aec477c 100644
              if (isMobile()) close();
            },
          }));
-@@ -1300,28 +1381,26 @@
- 
-       box.appendChild(el('div', { class: 'rt-row' }, [
-         el('button', {
--          class: 'rt-btn', type: 'button', html: ICON.up + '<span>මුලට</span>',
-+          class: 'rt-btn', type: 'button', html: ICON.up + '<span>මුලටම යන්න</span>',
+@@ -1303,21 +1454,19 @@
+           class: 'rt-btn', type: 'button', html: ICON.up + '<span>මුලට</span>',
            onclick: () => {
              stopAuto();
 -            window.scrollTo({ top: 0, behavior: behavior() });
@@ -949,8 +745,7 @@ index 50fd9de..aec477c 100644
            },
          }),
          el('button', {
--          class: 'rt-btn', type: 'button', html: ICON.down + '<span>අන්තිමට</span>',
-+          class: 'rt-btn', type: 'button', html: ICON.down + '<span>අන්තිමටම යන්න</span>',
+           class: 'rt-btn', type: 'button', html: ICON.down + '<span>අන්තිමට</span>',
            onclick: () => {
              stopAuto();
 -            window.scrollTo({ top: scrollMax(true), behavior: behavior() });
@@ -962,16 +757,11 @@ index 50fd9de..aec477c 100644
 -      // cleanup එකෙන් auto-scroll නවත්වන්නේ නෑ — panel එක වැහුණත්
 -      // දිගටම යන්න ඕන. teardown එකෙන් පමණක් නවතිනවා.
 -      return () => { offAuto(); };
-+      return () => { offAuto(); offChange(); };
++      return () => { offAuto(); offPaused(); };
      },
    });
  
--  // ------------------------------------------------------- tool: translate
-+  // ------------------------------------------------------- tool: translate  // ------------------------------------------------------- tool: translate
- 
-   register({
-     id: 'translate',
-@@ -1433,7 +1512,8 @@
+@@ -1433,7 +1582,8 @@
      // යතුරක් එබීමක් එකෙන්ම නවතිනවා. capture phase එකේ බැඳී ඇති නිසා වෙන
      // කිසිම handler එකකට වඩා මුලින්ම දුවනවා.
      const tapStop = (ev) => {
@@ -981,30 +771,12 @@ index 50fd9de..aec477c 100644
        const t = ev ? ev.target : null;
        if (t && ui.stop && (t === ui.stop || ui.stop.contains(t))) {
          stopAuto();
-@@ -1539,9 +1619,6 @@
-       ui.root.removeAttribute('data-scrolling');
-       ui.root.removeAttribute('data-autoscroll');
-     }
--    state.focus = false;
--    clearDim();
--    document.documentElement.setAttribute('data-rt-focus', 'off');
-     document.documentElement.removeAttribute('data-rt-has-article');
-     document.documentElement.removeAttribute('data-rt-scrolling');
-     Object.keys(ui).forEach((k) => { ui[k] = null; });
-@@ -1557,7 +1634,6 @@
-     booted = true;
- 
-     ensureAutoStyle();
--    state.focus = false;
-     maxCache = -1;
- 
-     article = findArticle();
-@@ -1593,7 +1669,7 @@
+@@ -1593,7 +1743,7 @@
    // ---------------------------------------------------------------- api
  
    window.ReaderTools = {
 -    version: 11,
-+    version: 13,
++    version: 12,
      register: register,
      registerVoiceEngine: registerVoiceEngine,
      open: open,
