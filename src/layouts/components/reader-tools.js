@@ -14,17 +14,6 @@
 //  3. අනුචලනය px/second වලින් (dt මත) - කලින් px/frame නිසා වේගය
 //     උපාංගයෙන් උපාංගයට වෙනස් වුණා.
 //
-// v8 හි අලුත් නිවැරදි කිරීම (stop බොත්තම නොක්‍රියාත්මක වී browser එක
-// සම්පූර්ණයෙන් හිර වීම):
-//  4. autoStep() එකේ scrollTo() එකට පස්සෙම window.scrollY ආපහු කියෙව්වා
-//     (forced synchronous layout) - frame එකකට twice, තත්පරයට 60 වතාවක්.
-//     දිග ලිපි වල මේක තියුනු layout-thrashing එකක් හදලා main thread එක
-//     block කළා - stop click එකවත් process කරගන්න බැරි තරමට. දැන් frame
-//     එකකට කියවීම එකක් විතරයි (write එකට පස්සෙ read නෑ). stop බොත්තමත්
-//     click වෙනුවට pointerdown/touchstart එකෙන්ම වහාම නවතිනවා, ඊට අමතරව
-//     rAF එකෙන් සම්පූර්ණයෙන් ස්වාධීන setInterval watchdog එකක් scroll
-//     ප්‍රගතියක් නැත්නම් තනිවම නවත්වනවා.
-//
 // auto-scroll.js වගේ වෙනම ෆයිල් එකක් එකතු කර ඇත්නම් එය මකන්න -
 // rAF loop දෙකක් එකවර දුවනවා නම් උපාංගය ආපහු හිර වෙනවා.
 //
@@ -70,7 +59,6 @@
   const AUTO_MAX_DT = 64;
   const STALL_FRAMES = 45;
   const AUTO_STYLE_ID = 'wk-rt-auto-style';
-  const AUTO_WATCHDOG_MS = 1500;
 
   const DEFAULTS = {
     page: 'dark',
@@ -500,7 +488,6 @@
   // නවතින්නේ නෑ; නමුත් පිටුව මාරු වෙනවිට teardown එකෙන් නවතිනවා.
   const auto = {
     raf: 0, last: 0, carry: 0, expect: -1, stall: 0, armed: false, armTimer: 0,
-    prevY: 0, watchdog: 0, wdY: -1, wdAt: 0,
   };
 
   function autoPps() {
@@ -523,7 +510,6 @@
 
     if (!auto.last) {
       auto.last = ts;
-      auto.prevY = window.scrollY;
       return;
     }
     let dt = ts - auto.last;
@@ -532,15 +518,9 @@
     // tab throttle එකකින් හෝ jank එකකින් පිම්මක් නොපනින්න
     if (dt > AUTO_MAX_DT) dt = AUTO_MAX_DT;
 
-    // frame එකකට window.scrollY කියවීම එකක් විතරයි. scrollTo() එකකට
-    // පස්සෙම ආපහු කියවීම (forced synchronous layout) කලින් frame එකකට
-    // දෙපාරක් සිද්ධ වුණා - දිග ලිපි වල එයම main thread එක choke කරලා
-    // stop click එකවත් process කරගන්න බැරි වුණේ ඒකෙන්.
     const y = window.scrollY;
 
-    // පරිශීලකයා අතින් අනුචලනය කළා නම් (scrollbar drag ඇතුළුව) නවතිනවා.
-    // auto.expect මෙතන කලින් frame එකේ commit කළ ඉලක්කය - ඊළඟ frame එකේ
-    // සත්‍ය y අගය ඒකෙන් බොහෝ දුරින් නම් අත්පොවක් සිද්ධ වෙලා.
+    // පරිශීලකයා අතින් අනුචලනය කළා නම් (scrollbar drag ඇතුළුව) නවතිනවා
     if (auto.armed && auto.expect >= 0 && Math.abs(y - auto.expect) > AUTO_DRIFT) {
       stopAuto();
       return;
@@ -552,10 +532,19 @@
       return;
     }
 
+    auto.carry += (autoPps() * dt) / 1000;
+    const step = Math.floor(auto.carry);
+    if (step < 1) return;
+    auto.carry -= step;
+
+    setY(Math.min(max, y + step));
+
+    const after = window.scrollY;
+    auto.expect = after;
+
     // Stall guard: overflow:hidden (panel lock) වගේ තත්ත්වයක scroll
-    // නොවෙනවා. කලින් frame එකේම read කරලා පිරික්සුවේ; දැන් කලින් frame
-    // එකේ y අගය (auto.prevY) එක්ක සසඳනවා - extra layout read එකක් නෑ.
-    if (auto.expect >= 0 && y <= auto.prevY + 0.5) {
+    // නොවෙනවා. කලින් ඒක අනන්ත rAF loop එකක් වී browser එක හිර වුණා.
+    if (after <= y + 0.5) {
       auto.stall++;
       if (auto.stall > STALL_FRAMES) {
         stopAuto();
@@ -564,20 +553,6 @@
     } else {
       auto.stall = 0;
     }
-
-    auto.carry += (autoPps() * dt) / 1000;
-    const step = Math.floor(auto.carry);
-    if (step < 1) {
-      auto.prevY = y;
-      return;
-    }
-    auto.carry -= step;
-
-    const target = Math.min(max, y + step);
-    setY(target);
-
-    auto.prevY = y;
-    auto.expect = target;
   }
 
   function startAuto() {
@@ -600,32 +575,12 @@
     auto.stall = 0;
     auto.expect = -1;
     auto.armed = false;
-    auto.prevY = window.scrollY;
     if (auto.armTimer) clearTimeout(auto.armTimer);
     // ආරම්භ කළ tap එකේම touchend/click එකෙන් ආපහු නවතින්නේ නැති වෙන්න
     auto.armTimer = setTimeout(() => {
       auto.armTimer = 0;
       auto.armed = true;
     }, AUTO_ARM_MS);
-
-    // rAF loop එකෙන් සම්පූර්ණයෙන් ස්වාධීන failsafe: stop බොත්තමම fail
-    // වුණත්, main thread එක busy වුණත්, scroll ප්‍රගතියක් නැත්නම්
-    // AUTO_WATCHDOG_MS ඇතුළත තනිවම නවතිනවා - browser එක කවදාවත් හිර
-    // වෙන්නේ නෑ.
-    auto.wdY = window.scrollY;
-    auto.wdAt = Date.now();
-    if (auto.watchdog) clearInterval(auto.watchdog);
-    auto.watchdog = setInterval(() => {
-      if (!auto.raf) return;
-      const y = window.scrollY;
-      const now = Date.now();
-      if (y !== auto.wdY) {
-        auto.wdY = y;
-        auto.wdAt = now;
-        return;
-      }
-      if (now - auto.wdAt > AUTO_WATCHDOG_MS) stopAuto();
-    }, 400);
 
     auto.raf = requestAnimationFrame(autoStep);
     emit('autoscroll', true);
@@ -639,18 +594,11 @@
       clearTimeout(auto.armTimer);
       auto.armTimer = 0;
     }
-    if (auto.watchdog) {
-      clearInterval(auto.watchdog);
-      auto.watchdog = 0;
-    }
     auto.armed = false;
     auto.last = 0;
     auto.carry = 0;
     auto.stall = 0;
     auto.expect = -1;
-    auto.prevY = 0;
-    auto.wdY = -1;
-    auto.wdAt = 0;
     document.documentElement.removeAttribute('data-rt-scrolling');
     if (ui.root) {
       ui.root.removeAttribute('data-scrolling');
@@ -1392,21 +1340,13 @@
     listen(ui.close, 'click', close);
     listen(ui.scrim, 'click', close);
 
-    // රතු බොත්තම: click එකට කලින් pointerdown/touchstart එකෙන්ම වහාම
-    // නවතිනවා - main thread එක auto-scroll rAF loop එකෙන් busy වෙලා
-    // click event එක delay වුණත් (synthetic click chain එක) පරිශීලකයාගේ
-    // ඇඟිල්ල screen එකට ගැටෙන ගමන්ම scroll එක නවතිනවා. stopPropagation
-    // නිසා පහළ abortAuto/document handler වලට මේ event යන්නේ නෑ.
-    const hardStopAuto = (ev) => {
-      if (ev) {
-        ev.preventDefault();
-        ev.stopPropagation();
-      }
+    // රතු බොත්තම: stopPropagation නිසා පහළ abortAuto/document handler
+    // වලට මේ click එක යන්නේ නෑ.
+    listen(ui.stop, 'click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
       stopAuto();
-    };
-    listen(ui.stop, 'pointerdown', hardStopAuto);
-    listen(ui.stop, 'touchstart', hardStopAuto, { passive: false });
-    listen(ui.stop, 'click', hardStopAuto);
+    });
 
     listen(window, 'scroll', onScroll, { passive: true });
     listen(window, 'resize', () => {
@@ -1546,7 +1486,7 @@
   // ---------------------------------------------------------------- api
 
   window.ReaderTools = {
-    version: 8,
+    version: 7,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
