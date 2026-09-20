@@ -14,7 +14,15 @@ const { posts } = Astro.props;
 ---
 
 {/* PREMIUM ULTRA-DARK INNER WRAPPER */}
-<div class="w-full py-6 transition-all duration-300 bg-[#050505]" id="similar-posts-wrapper">
+{/* 2026-09 CWV CLS FIX: contain-intrinsic-size + content-visibility:auto.
+    The card grid's height previously resolved only as each card's image
+    decoded during scroll, producing repeated layout shifts (a major
+    contributor to the CLS 0.33 field-data failure). content-visibility:auto
+    lets the browser skip rendering off-screen cards while
+    contain-intrinsic-size reserves their approximate height, so scrollbar
+    and layout stay stable through the whole scroll. contain: layout
+    isolates the grid from page-level reflow. */}
+<div class="w-full py-6 transition-all duration-300 bg-[#050505]" id="similar-posts-wrapper" style="contain: layout; content-visibility: auto; contain-intrinsic-size: auto 500px;">
 
   {/* RESPONSIVE BOOTSTRAP GRID SYSTEM */}
   <div class="row gy-4 gx-2 sm:gx-4 justify-center" id="similar-posts-grid">
@@ -38,6 +46,7 @@ const { posts } = Astro.props;
           <div
             class={`col-6 md:col-4 flex-col justify-between group mb-2 text-center bg-[#0d0d0d] p-2 sm:p-3 rounded-xl border border-[#1a1a1a] similar-post-card transition-all duration-300 ${initialClass}`}
             data-index={index}
+            style="min-height: 280px;"
           >
             {post.data.image && (
               <a
