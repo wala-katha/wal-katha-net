@@ -646,8 +646,19 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     <link rel="preconnect" href="https://comments.wala-katha.workers.dev" crossorigin />
     <link rel="dns-prefetch" href="https://comments.wala-katha.workers.dev" />
 
+    {/* 2026-09 CWV: imagesrcset/imagesizes added so the preload fetches the
+        same mobile variant the <picture> source in FeaturedSlider.astro
+        renders, instead of double-fetching (desktop preload + mobile img).
+        The 640w descriptor matches the "(max-width: 767px)" source file. */}
     {isHomePage && (
-      <link rel="preload" as="image" href="/images/slider/slide-1.webp" fetchpriority="high" />
+      <link
+        rel="preload"
+        as="image"
+        href="/images/slider/slide-1.webp"
+        fetchpriority="high"
+        imagesrcset="/images/slider/slide-1-mobile.webp 640w, /images/slider/slide-1.webp 1200w"
+        imagesizes="100vw"
+      />
     )}
 
     {fontEntries.map(([key]) => {
@@ -714,159 +725,21 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
 
     <slot name="head" />
 
-    <script is:inline>
-      (function registerServiceWorkerEarly() {
-        if (!("serviceWorker" in navigator)) return;
-        navigator.serviceWorker
-          .register("/sw.js")
-          .then((registration) => {
-            console.log("SW registered (early):", registration.scope);
-          })
-          .catch((err) => {
-            console.warn("SW registration failed:", err);
-          });
-      })();
-    </script>
-
+    {/* 2026-09 CWV FIX: the three same-origin scripts that previously sat
+        inline in <head> (service-worker registration, web-vitals monitoring,
+        content protection) moved to /public/scripts/deferred-perf.js, loaded
+        with defer below. Inline <head> scripts are parser-blocking and
+        delayed the hero slider's first paint, which CrUX field data showed
+        as LCP 3.4s / INP 445ms. The 100% identical logic now runs deferred,
+        after HTML parsing, off the critical rendering path. The only value
+        the inline scripts needed from Astro was the GTM enabled flag, which
+        is handed over via window.__wkGtmEnabled right here. The toast CSS
+        (#content-protection-toast) stays in the is:global style block above
+        - deferred-perf.js only creates the DOM node. */}
     <script is:inline define:vars={{ gtmEnabled: config.google_tag_manager.enable }}>
-      (function initWebVitalsMonitoring() {
-        if (typeof PerformanceObserver === "undefined") return;
-
-        function reportMetric(name, value, extra) {
-          const displayValue = name === "CLS" ? value.toFixed(3) : Math.round(value);
-          const analyticsValue = Math.round(name === "CLS" ? value * 1000 : value);
-          console.log(`[Web Vitals] ${name}:`, displayValue, extra || "");
-          if (gtmEnabled && window.dataLayer) {
-            window.dataLayer.push({
-              event: "web_vitals",
-              metric_name: name,
-              metric_value: analyticsValue,
-            });
-          }
-        }
-
-        window.addEventListener("load", function () {
-          try {
-            new PerformanceObserver((list) => {
-              const entries = list.getEntries();
-              const last = entries[entries.length - 1];
-              if (last) reportMetric("LCP", last.renderTime || last.loadTime || last.startTime);
-            }).observe({ type: "largest-contentful-paint", buffered: true });
-
-            let clsValue = 0;
-            new PerformanceObserver((list) => {
-              for (const entry of list.getEntries()) {
-                if (!entry.hadRecentInput) clsValue += entry.value;
-              }
-              reportMetric("CLS", clsValue);
-            }).observe({ type: "layout-shift", buffered: true });
-
-            new PerformanceObserver((list) => {
-              for (const entry of list.getEntries()) {
-                if (entry.duration) reportMetric("INP", entry.duration, entry.name);
-              }
-            }).observe({ type: "event", buffered: true, durationThreshold: 40 });
-          } catch (err) {
-            console.warn("Web Vitals monitoring unavailable:", err);
-          }
-        });
-      })();
+      window.__wkGtmEnabled = !!(gtmEnabled);
     </script>
-
-    <script is:inline>
-      (function initContentProtection() {
-        let lastNoticeAt = 0;
-        const NOTICE_THROTTLE_MS = 2200;
-        const NOTICE_VISIBLE_MS = 2600;
-        const NOTICE_MESSAGE = "මෙම අන්තර්ගතය පිටපත් කිරීම වළක්වා ඇත";
-
-        function isEditableTarget(target) {
-          if (!target || !target.tagName) return false;
-          const tag = target.tagName.toLowerCase();
-          if (tag === "input" || tag === "textarea" || tag === "select" || tag === "option") return true;
-          if (target.isContentEditable) return true;
-          if (target.closest && target.closest("[data-allow-select]")) return true;
-          // + Reader Tools — the panel's own controls must stay interactive.
-          if (target.closest && target.closest(".rt-root")) return true;
-          return false;
-        }
-
-        function buildLockIconSvg() {
-          return (
-            '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-            '<rect x="4" y="10.5" width="16" height="9.5" rx="2.2"></rect>' +
-            '<path d="M7.5 10.5V7.2a4.5 4.5 0 019 0v3.3"></path>' +
-            '<circle cx="12" cy="14.7" r="1.4" fill="currentColor" stroke="none"></circle>' +
-            "</svg>"
-          );
-        }
-
-        function showProtectionNotice() {
-          const now = Date.now();
-          if (now - lastNoticeAt < NOTICE_THROTTLE_MS) return;
-          lastNoticeAt = now;
-
-          let toast = document.getElementById("content-protection-toast");
-          if (!toast) {
-            toast = document.createElement("div");
-            toast.id = "content-protection-toast";
-            toast.setAttribute("role", "status");
-            toast.setAttribute("aria-live", "polite");
-
-            const iconWrap = document.createElement("span");
-            iconWrap.className = "cp-icon-wrap";
-            iconWrap.setAttribute("aria-hidden", "true");
-            iconWrap.innerHTML = buildLockIconSvg();
-
-            const text = document.createElement("span");
-            text.className = "cp-text";
-
-            toast.appendChild(iconWrap);
-            toast.appendChild(text);
-            document.body.appendChild(toast);
-          }
-
-          const textEl = toast.querySelector(".cp-text");
-          if (textEl) textEl.textContent = NOTICE_MESSAGE;
-
-          toast.classList.add("show");
-          clearTimeout(toast._cpHideTimer);
-          toast._cpHideTimer = setTimeout(() => {
-            toast.classList.remove("show");
-          }, NOTICE_VISIBLE_MS);
-        }
-
-        document.addEventListener("contextmenu", function (e) {
-          if (isEditableTarget(e.target)) return;
-          e.preventDefault();
-          showProtectionNotice();
-        });
-
-        document.addEventListener("copy", function (e) {
-          if (isEditableTarget(e.target)) return;
-          e.preventDefault();
-          showProtectionNotice();
-        });
-
-        document.addEventListener("cut", function (e) {
-          if (isEditableTarget(e.target)) return;
-          e.preventDefault();
-        });
-
-        document.addEventListener("selectstart", function (e) {
-          if (isEditableTarget(e.target)) return;
-          e.preventDefault();
-        });
-
-        document.addEventListener("dragstart", function (e) {
-          const target = e.target;
-          if (target && target.tagName && target.tagName.toLowerCase() === "img") {
-            e.preventDefault();
-          }
-        });
-      })();
-    </script>
+    <script src="/scripts/deferred-perf.js" defer></script>
 
     <ClientRouter fallback="swap" />
 
