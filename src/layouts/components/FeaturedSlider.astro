@@ -99,8 +99,18 @@ const demoSlidesWithVersion = demoSlides.map((slide) => ({
 }));
 ---
 
-<div class="relative w-full overflow-hidden rounded-xl bg-[#010203] mb-8 border border-white/10" id="astro-featured-slider">
-  <div class="flex transition-transform duration-500 ease-in-out" id="slider-wrapper" style="width: 400%;">
+<div class="relative w-full overflow-hidden rounded-xl bg-[#010203] mb-8 border border-white/10" id="astro-featured-slider" style="contain: layout;">
+  {/* 2026-09 CWV CLS FIX: min-height reservation on the wrapper. The hero
+      <img> declares width/height attributes, but the wrapper's own height
+      previously collapsed to 0 until the image bytes arrived, so every
+      element below the slider (Posts grid, footer) shifted down once the
+      hero painted - this was the single largest contributor to the CLS 0.33
+      CrUX field-data failure. clamp() reserves the same visual height the
+      md:aspect-[24/8] slide renders at, across every viewport, BEFORE any
+      image data arrives. contain: layout additionally isolates the slider's
+      internal layout from the rest of the page so nothing inside can shift
+      content outside it. */}
+  <div class="flex transition-transform duration-500 ease-in-out" id="slider-wrapper" style="width: 400%; min-height: clamp(220px, 35vw, 360px);">
     {demoSlidesWithVersion.map((slide, index) => (
       <div class="w-full flex-shrink-0 relative" style="width: 25%;">
         {/*
