@@ -1,22 +1,19 @@
 // ==========================================================================
 // Reader Tools - logic only. Chrome + themes live in reader-tools.css
 // --------------------------------------------------------------------------
+// v17:
+//  - toc tab reorganised: every section is now a collapsible accordion.
+//    Only one section is open at a time; all start collapsed.
+//  - each open section has shortcut buttons to its full tool tab
+//    (voice / reading / display) and a "back to toc start" button
+//  - the open section is remembered when the toc tab is re-mounted
 // v16:
-//  - toc tab keeps stats + headings and gains quick buttons below them:
-//    voice, auto-scroll, page colour, size/spacing levels, speeds, language,
-//    jump buttons and reset
+//  - toc tab keeps stats + headings and quick controls
 // v15:
 //  - voice and auto-scroll are mutually exclusive (guards + locked UI)
-//  - voice status card no longer collapses (flex-shrink fix)
-//  - display tab wording simplified to spoken Sinhala
 // v14:
-//  - voice engine moved to module level (state machine: idle/playing/paused)
-//  - language picker (12 languages), voices filtered per language
-//  - non-Sinhala languages: chunk-by-chunk translation with prefetch
-//    (Chrome on-device Translator first, Google web endpoint as fallback)
-//  - pause = cancel + remember chunk (native pause is broken on Android)
-//  - panel closes when speech starts; floating voice pill controls it
-//  - start from visible paragraph, previous/next paragraph, follow highlight
+//  - voice engine at module level (idle/playing/paused), 12 languages,
+//    chunk-by-chunk translation with prefetch, floating voice pill
 //
 // Do not add a second auto-scroll script: two rAF loops freeze low-end phones.
 //
@@ -25,10 +22,13 @@
 // ==========================================================================
 (() => {
   'use strict';
+
   if (window.__wkReaderToolsInit) return;
   window.__wkReaderToolsInit = true;
+
   const STORE_KEY = 'wk:reader:v1';
   const posKey = (p) => 'wk:reader:pos:' + p;
+
   const ARTICLE_CANDIDATES = [
     '[data-rt-article]',
     '.custom-post-content',
@@ -41,13 +41,16 @@
   const BLOCK_SEL = 'p, li, h2, h3, h4, blockquote';
   const MIN_ARTICLE_CHARS = 400;
   const WORDS_PER_MIN = 160;
+
   const TTS_CHUNK = 170;
   const PART_MAX = 170;
   const KICK_MS = 120;
   const PREFETCH = 2;
+
   const POS_SAVE_MS = 1500;
   const STORE_DEBOUNCE_MS = 300;
   const MAX_CACHE_MS = 400;
+
   // auto-scroll tuning
   const AUTO_PPS = [12, 20, 30, 42, 58, 78, 100, 124, 150, 178];
   const AUTO_ARM_MS = 420;
@@ -57,6 +60,7 @@
   const AUTO_STYLE_ID = 'wk-rt-auto-style';
   const RESET_STYLE_ID = 'wk-rt-reset-style';
   const VOICE_STYLE_ID = 'wk-rt-voice-style';
+
   // watchdog: stops the engine if the rAF loop dies silently
   const AUTO_WATCHDOG_MS = 1500;
   const AUTO_WD_POLL_MS = 400;
@@ -67,6 +71,7 @@
   const AUTO_JANK_MS = 50;
   const AUTO_GOV_MIN = 0.4;
   const AUTO_GOV_UP = 0.02;
+
   // voice languages: id, chip label, Sinhala name, BCP47 tag, web translate code
   const VOICE_LANGS = [
     { id: 'si', label: 'සිංහල', name: 'සිංහල', tag: 'si-LK', tr: '' },
@@ -82,6 +87,7 @@
     { id: 'de', label: 'Deutsch', name: 'ජර්මන්', tag: 'de-DE', tr: 'de' },
     { id: 'es', label: 'Español', name: 'ස්පාඤ්ඤ', tag: 'es-ES', tr: 'es' },
   ];
+
   const DEFAULTS = {
     page: 'dark',
     font: 'sinhala',
@@ -96,6 +102,7 @@
     voiceFrom: 'view',
     scrollSpeed: 4,
   };
+
   const LIMITS = {
     fontScale: [0.85, 1.6, 0.05],
     lineHeight: [1.4, 2.4, 0.05],
@@ -104,13 +111,16 @@
     pitch: [0.6, 1.4, 0.05],
     scrollSpeed: [1, 10, 1],
   };
+
   const ENUMS = {
     page: ['dark', 'paper', 'sepia', 'contrast'],
     font: ['sinhala', 'serif', 'system'],
     measure: ['narrow', 'normal', 'wide'],
     voiceFrom: ['view', 'top'],
   };
+
   // ---------------------------------------------------------------- helpers
+
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
   const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
@@ -121,6 +131,7 @@
     !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const isMobile = () => !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
   const behavior = () => (reduceMotion() ? 'auto' : 'smooth');
+
   const synth = (function () {
     try {
       return window.speechSynthesis || null;
@@ -128,12 +139,14 @@
       return null;
     }
   })();
+
   function langInfo(id) {
     for (let i = 0; i < VOICE_LANGS.length; i++) {
       if (VOICE_LANGS[i].id === id) return VOICE_LANGS[i];
     }
     return VOICE_LANGS[0];
   }
+
   function el(tag, attrs, kids) {
     const n = document.createElement(tag);
     if (attrs) {
@@ -156,6 +169,7 @@
     }
     return n;
   }
+
   // one rAF per frame; all scroll consumers share one handler
   function rafOnce(fn) {
     let queued = false;
@@ -168,6 +182,7 @@
       });
     };
   }
+
   // scrollHeight read = forced layout; cached for 400ms
   let maxCache = -1;
   let maxCacheAt = 0;
@@ -179,6 +194,7 @@
     }
     return maxCache;
   }
+
   // tracked listeners: teardown removes every one of them
   const bound = [];
   function listen(target, type, fn, opts) {
@@ -194,7 +210,9 @@
       } catch (e) {}
     }
   }
+
   // ---------------------------------------------------------------- storage
+
   function sanitize(raw) {
     const s = Object.assign({}, DEFAULTS, raw || {});
     Object.keys(ENUMS).forEach((k) => {
@@ -217,6 +235,7 @@
     delete s.voiceURI;
     return s;
   }
+
   function load() {
     try {
       return sanitize(JSON.parse(localStorage.getItem(STORE_KEY) || '{}'));
@@ -224,8 +243,10 @@
       return sanitize(null);
     }
   }
+
   const state = load();
   let storeTimer = null;
+
   function save() {
     if (storeTimer) clearTimeout(storeTimer);
     storeTimer = setTimeout(() => {
@@ -244,7 +265,9 @@
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
     } catch (e) {}
   }
+
   // ------------------------------------------------------------------- bus
+
   const bus = {};
   function on(evt, fn) {
     (bus[evt] = bus[evt] || []).push(fn);
@@ -261,7 +284,9 @@
       }
     });
   }
+
   // ----------------------------------------------------------------- icons
+
   const ICON = {
     list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
     type: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>',
@@ -277,9 +302,14 @@
     down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
     reset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 14.6-5.9"/><path d="M19 3v4.5h-4.5"/></svg>',
     close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+    bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
+    sliders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h8M18 6h2M4 12h2M12 12h8M4 18h10M20 18h0"/><circle cx="15" cy="6" r="2.2"/><circle cx="9" cy="12" r="2.2"/><circle cx="17" cy="18" r="2.2"/></svg>',
+    compass: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5z"/></svg>',
   };
+
   // ------------------------------------------------- injected auto-scroll css
-  // Also lives here (not only in the css file) so a renamed class or a cached
+  // Lives here too (not only in the css file) so a renamed class or a cached
   // old css build can never make the red stop pill invisible.
   function ensureAutoStyle() {
     if (!document.head || document.getElementById(AUTO_STYLE_ID)) return;
@@ -318,6 +348,7 @@
     s.textContent = css;
     document.head.appendChild(s);
   }
+
   // Red "reset speed" button. The wrapper collapses with grid-template-rows so
   // showing/hiding it never makes the panel jump; hidden state uses
   // visibility:hidden so it cannot be focused or tapped.
@@ -362,6 +393,7 @@
     s.textContent = css;
     document.head.appendChild(s);
   }
+
   // Voice tab card, language grid and the floating voice pill.
   function ensureVoiceStyle() {
     if (!document.head || document.getElementById(VOICE_STYLE_ID)) return;
@@ -444,13 +476,32 @@
     s.textContent = css;
     document.head.appendChild(s);
   }
-  // Quick-controls dashboard styles (toc tab).
+
+  // Quick controls + accordion styles (toc tab).
   const QUICK_STYLE_ID = 'wk-rt-quick-style';
   function ensureQuickStyle() {
     if (!document.head || document.getElementById(QUICK_STYLE_ID)) return;
     const css = `
-.rt-root .rt-qsec{display:flex;flex-direction:column;gap:10px;padding-top:14px;border-top:1px solid var(--rt-border);}
-.rt-root .rt-qtitle{margin:0;font-size:11px;font-weight:800;letter-spacing:.04em;color:var(--rt-accent);}
+.rt-root .rt-acc{display:flex;flex-direction:column;gap:8px;}
+.rt-root .rt-accitem{border:1px solid var(--rt-border);border-radius:14px;background:var(--rt-bg2);overflow:hidden;transition:border-color .2s ease,background-color .2s ease;}
+.rt-root .rt-accitem[data-open="1"]{border-color:rgba(1,173,159,.55);background:rgba(1,173,159,.05);}
+.rt-root .rt-acch{display:flex;align-items:center;gap:11px;width:100%;margin:0;padding:12px;border:0;background:transparent;color:var(--rt-fg);font:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.rt-root .rt-acch:focus-visible{outline:2px solid var(--rt-accent);outline-offset:-2px;}
+.rt-root .rt-acci{display:grid;place-items:center;width:34px;height:34px;flex:0 0 auto;border-radius:10px;background:rgba(1,173,159,.12);color:var(--rt-accent);}
+.rt-root .rt-acci svg{display:block;width:18px;height:18px;}
+.rt-root .rt-acct{display:flex;flex-direction:column;gap:2px;flex:1 1 auto;min-width:0;}
+.rt-root .rt-acct b{font-size:12.5px;font-weight:800;line-height:1.35;}
+.rt-root .rt-acct small{font-size:10.5px;font-weight:600;line-height:1.45;color:var(--rt-muted);}
+.rt-root .rt-accv{display:grid;place-items:center;flex:0 0 auto;color:var(--rt-muted);transition:transform .25s ease,color .2s ease;}
+.rt-root .rt-accv svg{display:block;width:16px;height:16px;}
+.rt-root .rt-accitem[data-open="1"] .rt-accv{transform:rotate(180deg);color:var(--rt-accent);}
+.rt-root .rt-accb{display:grid;grid-template-rows:0fr;visibility:hidden;transition:grid-template-rows .3s ease,visibility 0s linear .3s;}
+.rt-root .rt-accitem[data-open="1"] .rt-accb{grid-template-rows:1fr;visibility:visible;transition:grid-template-rows .3s ease,visibility 0s;}
+.rt-root .rt-accw{min-height:0;overflow:hidden;}
+.rt-root .rt-accin{display:flex;flex-direction:column;gap:12px;padding:2px 12px 14px;}
+.rt-root .rt-accfoot{display:flex;flex-wrap:wrap;gap:6px;padding-top:12px;border-top:1px solid var(--rt-border);}
+.rt-root .rt-accfoot .rt-btn{flex:1 1 130px;padding:8px 10px;font-size:11px;}
+.rt-root .rt-accfoot .rt-btn[data-ghost="1"]{background:transparent;}
 .rt-root .rt-qmain{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
 .rt-root .rt-qbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:78px;padding:12px 8px;border:1px solid var(--rt-border);border-radius:14px;background:var(--rt-bg2);color:var(--rt-fg);font:inherit;font-size:12px;font-weight:800;line-height:1.3;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .18s ease,border-color .18s ease,transform .12s ease;}
 .rt-root .rt-qbtn:hover{border-color:rgba(1,173,159,.55);}
@@ -477,7 +528,7 @@
 .rt-root .rt-qstep:disabled{opacity:.35;cursor:not-allowed;}
 .rt-root .rt-qval{flex:1 1 auto;min-width:0;text-align:center;font-size:11.5px;font-weight:800;color:var(--rt-accent);font-variant-numeric:tabular-nums;white-space:nowrap;}
 .rt-root .rt-qbtn:focus-visible,.rt-root .rt-sw:focus-visible,.rt-root .rt-qstep:focus-visible{outline:2px solid var(--rt-accent);outline-offset:2px;}
-@media (prefers-reduced-motion:reduce){.rt-root .rt-qbtn,.rt-root .rt-sw,.rt-root .rt-qstep{transition:none !important;}}
+@media (prefers-reduced-motion:reduce){.rt-root .rt-qbtn,.rt-root .rt-sw,.rt-root .rt-qstep,.rt-root .rt-accitem,.rt-root .rt-accb,.rt-root .rt-accv{transition:none !important;}}
 `;
     const s = document.createElement('style');
     s.id = QUICK_STYLE_ID;
@@ -486,12 +537,14 @@
   }
 
   // --------------------------------------------------------------- elements
+
   const ui = {
     root: null, bar: null, fab: null, stop: null, stopPct: null,
     voice: null, voiceMain: null, voiceBadge: null, voiceTxt: null, voicePct: null,
     voiceStop: null,
     scrim: null, panel: null, tabs: null, body: null, sub: null, close: null,
   };
+
   let article = null;
   let isOpen = false;
   let activeTab = null;
@@ -499,7 +552,9 @@
   let lastFocus = null;
   let pctEl = null;
   let curPath = typeof location !== 'undefined' ? location.pathname : '/';
+
   // ------------------------------------------------------------ build chrome
+
   function ensureRoot() {
     const found = $$('[data-rt-root], .rt-root');
     if (!found.length) {
@@ -515,6 +570,7 @@
     root.setAttribute('data-rt-root', '');
     return root;
   }
+
   function buildChrome() {
     if (!document.body) return false;
     const root = ensureRoot();
@@ -525,8 +581,10 @@
     root.removeAttribute('data-autoscroll');
     // escape the global copy-protection selectstart blocker
     root.setAttribute('data-allow-select', '');
+
     const bar = el('i');
     const progress = el('div', { class: 'rt-progress', 'aria-hidden': 'true' }, bar);
+
     const fab = el('button', {
       class: 'rt-fab',
       type: 'button',
@@ -539,6 +597,7 @@
       el('span', { class: 'rt-fab-ico', html: ICON.type, 'aria-hidden': 'true' }),
       el('span', { class: 'rt-fab-txt', text: 'මෙවලම්' }),
     ]);
+
     // red stop pill: visible only while auto-scroll runs
     const stopFab = el('button', {
       class: 'rt-stopfab',
@@ -551,6 +610,7 @@
         '<span class="rt-stopfab-txt">නවත්වන්න</span>' +
         '<span class="rt-stopfab-pct" data-rt-stop-pct>0%</span>',
     });
+
     // teal voice pill: visible while speech is playing or paused
     const vfBadge = el('span', { class: 'rt-vf-badge', 'aria-hidden': 'true', html: ICON.pause });
     const vfTxt = el('span', { class: 'rt-vf-txt', text: 'විරාමය' });
@@ -574,7 +634,9 @@
       role: 'group',
       'aria-label': 'හඬ කියවීම පාලනය',
     }, [vfMain, vfPct, vfStop]);
+
     const scrim = el('div', { class: 'rt-scrim', 'data-rt-scrim': '', 'aria-hidden': 'true' });
+
     const sub = el('span', { class: 'rt-sub', 'data-rt-sub': '' });
     const closeBtn = el('button', {
       class: 'rt-iconbtn rt-close',
@@ -599,12 +661,14 @@
       'aria-label': 'කියවීමේ මෙවලම්',
       tabindex: '-1',
     }, [head, tabs, body]);
+
     root.appendChild(progress);
     root.appendChild(fab);
     root.appendChild(stopFab);
     root.appendChild(voicePill);
     root.appendChild(scrim);
     root.appendChild(panel);
+
     ui.root = root;
     ui.bar = bar;
     ui.fab = fab;
@@ -624,7 +688,9 @@
     ui.close = closeBtn;
     return true;
   }
+
   // --------------------------------------------------------------- article
+
   function findArticle() {
     for (let i = 0; i < ARTICLE_CANDIDATES.length; i++) {
       const n = $(ARTICLE_CANDIDATES[i]);
@@ -634,19 +700,24 @@
     }
     return null;
   }
+
   // removes stale dim flags left by the retired focus mode
   function clearDim() {
     $$('[data-rt-dim]').forEach((n) => n.removeAttribute('data-rt-dim'));
   }
+
   function words() {
     if (!article) return 0;
     const t = (article.textContent || '').replace(/\s+/g, ' ').trim();
     return t ? t.split(' ').length : 0;
   }
+
   function minutes() {
     return Math.max(1, Math.round(words() / WORDS_PER_MIN));
   }
+
   // ----------------------------------------------------------------- apply
+
   function apply() {
     const r = document.documentElement;
     r.setAttribute('data-rt-page', state.page);
@@ -665,6 +736,7 @@
     // font/line-height changes alter the document height
     scrollMax(true);
   }
+
   function set(patch, opts) {
     Object.assign(state, patch || {});
     apply();
@@ -672,13 +744,16 @@
     else save();
     emit('change', state);
   }
+
   // -------------------------------------------------------- auto scroll
   // Module level: keeps running when the panel closes; teardown stops it.
+
   const auto = {
     raf: 0, last: 0, carry: 0, expect: -1, stall: 0, armed: false, armTimer: 0,
     prevY: 0, watchdog: 0, wdY: -1, wdAt: 0,
     ms: 0, gov: 1, stopFlag: false, pctAt: 0, pctShow: -1,
   };
+
   function autoWatchdog() {
     if (!auto.raf) return;
     const now = Date.now();
@@ -692,14 +767,17 @@
       auto.wdAt = now;
     }
   }
+
   function autoPps() {
     return AUTO_PPS[clamp(Math.round(state.scrollSpeed), 1, 10) - 1] * auto.gov;
   }
+
   // jank governor: a long frame slows the scroll down, protecting weak phones
   function autoGovern(dt) {
     if (dt > AUTO_JANK_MS) auto.gov = Math.max(AUTO_GOV_MIN, auto.gov - 0.08);
     else if (auto.gov < 1) auto.gov = Math.min(1, auto.gov + AUTO_GOV_UP);
   }
+
   function setY(y) {
     try {
       window.scrollTo({ top: y, left: 0, behavior: 'instant' });
@@ -707,9 +785,11 @@
       window.scrollTo(0, y);
     }
   }
+
   function autoStep(ts) {
     if (!auto.raf) return;
     auto.raf = requestAnimationFrame(autoStep);
+
     if (!auto.last) {
       auto.last = ts;
       auto.prevY = window.scrollY;
@@ -719,20 +799,25 @@
     auto.last = ts;
     if (dt <= 0) return;
     if (dt > AUTO_MAX_DT) dt = AUTO_MAX_DT;
+
     // watchdog heartbeat
     auto.wdAt = Date.now();
     autoGovern(dt);
+
     const y = window.scrollY;
+
     // user scrolled by hand (scrollbar drag included)
     if (auto.armed && auto.expect >= 0 && Math.abs(y - auto.expect) > AUTO_DRIFT) {
       stopAuto();
       return;
     }
+
     const max = scrollMax();
     if (max <= 4 || y >= max - 1) {
       stopAuto();
       return;
     }
+
     // stall guard: compares only against the value we wrote last
     if (auto.expect >= 0) {
       if (y < auto.expect - AUTO_WRITE_EPS) auto.stall++;
@@ -743,17 +828,22 @@
       }
     }
     auto.prevY = y;
+
     auto.ms += dt;
     auto.carry += (autoPps() * dt) / 1000;
     if (auto.carry > 320) auto.carry = 320;
+
     if (auto.ms < AUTO_WRITE_MS || auto.carry < AUTO_MIN_WRITE_PX) return;
     auto.ms -= AUTO_WRITE_MS;
     if (auto.ms > AUTO_WRITE_MS * 4) auto.ms = AUTO_WRITE_MS * 4;
+
     const step = Math.floor(auto.carry);
     auto.carry -= step;
+
     const target = Math.min(max, y + step);
     setY(target);
     auto.expect = target;
+
     if (ui.stopPct && ts - auto.pctAt > 500) {
       auto.pctAt = ts;
       const pct = max > 0 ? Math.min(100, Math.round((target / max) * 100)) : 100;
@@ -763,20 +853,24 @@
       }
     }
   }
+
   function startAuto() {
     if (auto.raf || !article) return;
     // voice (playing or paused) and auto-scroll never run together
     if (voice.status !== 'idle') return;
     if (scrollMax(true) <= 8) return;
+
     // panel closes: scroll lock and scrim both go away
     close();
     document.documentElement.classList.remove('rt-locked');
     ensureAutoStyle();
+
     document.documentElement.setAttribute('data-rt-scrolling', '1');
     if (ui.root) {
       ui.root.setAttribute('data-scrolling', '1');
       ui.root.setAttribute('data-autoscroll', '1');
     }
+
     auto.last = 0;
     auto.carry = 0;
     auto.ms = 0;
@@ -798,17 +892,21 @@
       auto.armTimer = 0;
       auto.armed = true;
     }, AUTO_ARM_MS);
+
     auto.wdY = window.scrollY;
     auto.wdAt = Date.now();
     if (auto.watchdog) clearInterval(auto.watchdog);
     auto.watchdog = setInterval(autoWatchdog, AUTO_WD_POLL_MS);
+
     auto.raf = requestAnimationFrame(autoStep);
+
     // the FAB turns visibility:hidden; move keyboard focus to the stop pill
     if (ui.fab && ui.stop && document.activeElement === ui.fab) {
       try { ui.stop.focus({ preventScroll: true }); } catch (e) {}
     }
     emit('autoscroll', true);
   }
+
   function stopAuto() {
     if (auto.stopFlag) return;
     auto.stopFlag = true;
@@ -844,21 +942,35 @@
       emit('autoscroll', false);
     }
   }
+
   function toggleAuto() {
     if (auto.raf) stopAuto();
     else startAuto();
   }
+
   // ------------------------------------------------------------ open/close
+
   function lockScroll(lock) {
     const r = document.documentElement;
     if (lock && isMobile()) r.classList.add('rt-locked');
     else r.classList.remove('rt-locked');
   }
+
+  // collapsed accordion bodies use visibility:hidden, so they must not be
+  // part of the focus trap (focus() on them is a silent no-op)
   function focusables() {
     if (!ui.panel) return [];
     return $$('button, [href], select, input, [tabindex]:not([tabindex="-1"])', ui.panel)
-      .filter((n) => !n.disabled && n.offsetParent !== null);
+      .filter((n) => {
+        if (n.disabled || n.offsetParent === null) return false;
+        try {
+          return getComputedStyle(n).visibility !== 'hidden';
+        } catch (e) {
+          return true;
+        }
+      });
   }
+
   function trap(e) {
     if (!isOpen || e.key !== 'Tab' || !ui.panel) return;
     const f = focusables();
@@ -873,6 +985,7 @@
       first.focus();
     }
   }
+
   function open() {
     if (!ui.root || isOpen || !article) return;
     if (document.documentElement.classList.contains('age-gate-pending')) return;
@@ -891,6 +1004,7 @@
     }, reduceMotion() ? 0 : 80);
     emit('open');
   }
+
   function close() {
     if (!ui.root || !isOpen) return;
     isOpen = false;
@@ -905,12 +1019,16 @@
     lastFocus = null;
     emit('close');
   }
+
   function toggle() {
     if (isOpen) close();
     else open();
   }
+
   // -------------------------------------------------------------- registry
+
   const tools = [];
+
   function register(tool) {
     if (!tool || !tool.id || typeof tool.mount !== 'function') {
       console.warn('[reader-tools] invalid tool', tool);
@@ -921,6 +1039,7 @@
     tools.sort((a, b) => a.order - b.order);
     if (ui.tabs) renderTabs();
   }
+
   function renderTabs() {
     if (!ui.tabs) return;
     ui.tabs.textContent = '';
@@ -940,6 +1059,7 @@
       );
     });
   }
+
   function runCleanup() {
     if (typeof cleanupTab === 'function') {
       try { cleanupTab(); } catch (e) { console.warn('[reader-tools] cleanup', e); }
@@ -947,6 +1067,7 @@
     cleanupTab = null;
     pctEl = null;
   }
+
   function showTab(id) {
     const tool = tools.filter((t) => t.id === id)[0];
     if (!tool || !ui.body) return;
@@ -967,7 +1088,9 @@
     }
     emit('tab', id);
   }
+
   // ------------------------------------------------------------- ui bits
+
   function segment(label, value, options, pick) {
     const seg = el('div', { class: 'rt-seg' });
     options.forEach((o) => {
@@ -989,6 +1112,7 @@
       seg,
     ]);
   }
+
   // returns the group element; group.rtSync(v) updates the thumb and label
   // from code (used by the speed reset button)
   function slider(label, key, fmt, onLive) {
@@ -1026,7 +1150,116 @@
     };
     return group;
   }
+
+  // ------------------------------------------------- toc accordion
+  // tocOpen: id of the currently open toc section (null = all collapsed).
+  // Kept at module level so a re-mount of the toc tab restores it.
+
+  let tocOpen = null;
+
+  function buildAccordion() {
+    const root = el('div', { class: 'rt-acc' });
+    const items = [];
+    let timer = 0;
+
+    function setOpen(id, openIt, scroll) {
+      tocOpen = openIt ? id : null;
+      let target = null;
+      items.forEach((it) => {
+        const isOn = !!openIt && it.id === id;
+        it.open = isOn;
+        it.node.setAttribute('data-open', isOn ? '1' : '0');
+        it.head.setAttribute('aria-expanded', isOn ? 'true' : 'false');
+        if (isOn) target = it;
+      });
+      if (!target) return;
+      const t = target;
+      if (typeof t.onOpen === 'function') t.onOpen();
+      if (scroll) {
+        if (timer) clearTimeout(timer);
+        // wait for the previous section to finish collapsing, then align
+        timer = setTimeout(() => {
+          timer = 0;
+          if (!ui.body || !t.node.isConnected) return;
+          const d = t.node.getBoundingClientRect().top - ui.body.getBoundingClientRect().top - 6;
+          ui.body.scrollTo({ top: Math.max(0, ui.body.scrollTop + d), behavior: behavior() });
+        }, reduceMotion() ? 0 : 320);
+      }
+    }
+
+    // collapse everything and return to the top of the toc tab
+    function toTop() {
+      setOpen(null, false, false);
+      if (ui.body) ui.body.scrollTo({ top: 0, behavior: behavior() });
+    }
+
+    // def: { id, title, hint, icon, kids[], links[{tab,icon,label}], onOpen }
+    function add(def) {
+      const hid = 'rt-acch-' + def.id;
+      const bid = 'rt-accb-' + def.id;
+      const head = el('button', {
+        class: 'rt-acch',
+        type: 'button',
+        id: hid,
+        'aria-expanded': 'false',
+        'aria-controls': bid,
+      }, [
+        el('span', { class: 'rt-acci', 'aria-hidden': 'true', html: def.icon }),
+        el('span', { class: 'rt-acct' }, [
+          el('b', { text: def.title }),
+          el('small', { text: def.hint || '' }),
+        ]),
+        el('span', { class: 'rt-accv', 'aria-hidden': 'true', html: ICON.chev }),
+      ]);
+
+      const foot = el('div', { class: 'rt-accfoot' });
+      (def.links || []).forEach((l) => {
+        foot.appendChild(el('button', {
+          class: 'rt-btn',
+          type: 'button',
+          html: l.icon + '<span>' + l.label + '</span>',
+          onclick: () => showTab(l.tab),
+        }));
+      });
+      foot.appendChild(el('button', {
+        class: 'rt-btn',
+        type: 'button',
+        'data-ghost': '1',
+        html: ICON.up + '<span>පටුනේ මුලට</span>',
+        onclick: toTop,
+      }));
+
+      const inner = el('div', { class: 'rt-accin' }, (def.kids || []).concat([foot]));
+      const bodyWrap = el('div', {
+        class: 'rt-accb',
+        id: bid,
+        role: 'region',
+        'aria-labelledby': hid,
+      }, el('div', { class: 'rt-accw' }, inner));
+      const node = el('div', { class: 'rt-accitem', 'data-open': '0' }, [head, bodyWrap]);
+
+      const item = { id: def.id, node: node, head: head, open: false, onOpen: def.onOpen };
+      head.addEventListener('click', () => setOpen(def.id, !item.open, true));
+      items.push(item);
+      root.appendChild(node);
+      return item;
+    }
+
+    // restore the remembered open section once every item exists
+    function finish() {
+      if (tocOpen && items.some((i) => i.id === tocOpen)) setOpen(tocOpen, true, false);
+      else tocOpen = null;
+    }
+
+    function destroy() {
+      if (timer) { clearTimeout(timer); timer = 0; }
+    }
+
+    return { root: root, add: add, finish: finish, destroy: destroy };
+  }
+
   // ------------------------------------------------- quick controls (toc tab)
+
   const SWATCHES = [
     { value: 'dark', label: 'කළු', bg: '#0c0d10' },
     { value: 'paper', label: 'සුදු', bg: '#fdfcf9' },
@@ -1050,10 +1283,7 @@
   const SIZE_LEVELS = [[0.9, 'කුඩා'], [1, 'සාමාන්‍ය'], [1.2, 'ලොකු'], [1.45, 'විශාල']];
   const LINE_LEVELS = [[1.55, 'ළං'], [1.85, 'සාමාන්‍ය'], [2.2, 'ඈත']];
   const LETTER_LEVELS = [[0, 'සාමාන්‍ය'], [0.02, 'ටිකක් ඈත'], [0.04, 'ඈත']];
-  function qsec(title, kids) {
-    return el('section', { class: 'rt-qsec', 'aria-label': title },
-      [el('p', { class: 'rt-qtitle', text: title })].concat(kids));
-  }
+
   // row of level buttons for one numeric setting; the nearest level is pressed
   function qlevels(label, key, levels) {
     const seg = el('div', { class: 'rt-seg', role: 'group', 'aria-label': label });
@@ -1081,6 +1311,7 @@
     paint();
     return el('div', { class: 'rt-group' }, [el('p', { class: 'rt-label', text: label }), seg]);
   }
+
   // minus / value / plus control for one numeric setting
   function qstepper(label, key, inc, fmt) {
     const l = LIMITS[key];
@@ -1112,14 +1343,22 @@
       el('div', { class: 'rt-qstepper' }, [minus, val, plus]),
     ]);
   }
+
   function qgrid(defs) {
     const cells = defs.map((d) => qstepper(d[0], d[1], d[2], d[3]));
     if (cells.length % 2 === 1) cells[cells.length - 1].setAttribute('data-wide', '1');
     return el('div', { class: 'rt-qgrid' }, cells);
   }
-  function mountQuickControls(box) {
+
+  // adds the four control sections to the toc accordion; returns a cleanup fn
+  function mountQuickControls(acc) {
     const cleanups = [];
-    // ---- 1. main action buttons
+    const linkVoice = synth
+      ? [{ tab: 'voice', icon: ICON.voice, label: 'හඬ මෙවලමට යන්න' }]
+      : [];
+    const linkReading = [{ tab: 'reading', icon: ICON.eye, label: 'කියවීම මෙවලමට යන්න' }];
+
+    // ---- 1. quick actions
     const vIcon = el('span', { class: 'rt-qico', 'aria-hidden': 'true' });
     const vLabel = el('span');
     const vBtn = el('button', { class: 'rt-qbtn', type: 'button' }, [vIcon, vLabel]);
@@ -1128,6 +1367,7 @@
     const aBtn = el('button', { class: 'rt-qbtn', type: 'button' }, [aIcon, aLabel]);
     vBtn.addEventListener('click', voiceToggle);
     aBtn.addEventListener('click', toggleAuto);
+
     const tPrev = el('button', {
       class: 'rt-btn', type: 'button', 'aria-label': 'පෙර ඡේදය', title: 'පෙර ඡේදය',
       html: ICON.prev + '<span>පෙර</span>',
@@ -1144,13 +1384,15 @@
     tNext.addEventListener('click', () => voiceSkip(1));
     tStop.addEventListener('click', voiceStop);
     const transport = el('div', { class: 'rt-row rt-vnav' }, [tPrev, tNext, tStop]);
+
     const vNote = el('p', { class: 'rt-note', 'data-warn': '1' });
     const lockNote = el('p', {
       class: 'rt-note',
       'data-warn': '1',
       text: 'හඬ ක්‍රියාත්මක නිසා ඉබේම පහළට යාම දැන් බැහැ. මුලින් හඬ නවත්වන්න.',
     });
-    // ---- language + start position (only when speech exists)
+
+    // language + start position (only when speech exists)
     let langSel = null;
     let langHint = null;
     const voiceKids = [];
@@ -1174,7 +1416,8 @@
           (v) => set({ voiceFrom: v }, { immediate: true }))
       );
     }
-    // ---- painters
+
+    // painters
     function paintAuto() {
       const running = !!auto.raf;
       const locked = !running && voice.status !== 'idle';
@@ -1206,12 +1449,16 @@
     cleanups.push(on('voice', paintAll));
     cleanups.push(on('autoscroll', paintAuto));
     paintAll();
-    box.appendChild(qsec('ඉක්මන් පාලන', [
-      el('div', { class: 'rt-qmain' }, [vBtn, aBtn]),
-      transport,
-      vNote,
-      lockNote,
-    ]));
+
+    acc.add({
+      id: 'quick',
+      title: 'ඉක්මන් පාලන',
+      hint: 'හඬින් කියවන්න, ඉබේම පහළට යන්න',
+      icon: ICON.bolt,
+      kids: [el('div', { class: 'rt-qmain' }, [vBtn, aBtn]), transport, vNote, lockNote],
+      links: linkVoice.concat(linkReading),
+    });
+
     // ---- 2. page look
     const swBtns = [];
     const swRow = el('div', { class: 'rt-swrow', role: 'group', 'aria-label': 'පිටුවේ පාට' });
@@ -1231,6 +1478,7 @@
       swRow.appendChild(btn);
     });
     paintSw();
+
     const btnReset = el('button', {
       class: 'rt-btn', type: 'button',
       html: ICON.reset + '<span>පෙනුම මුල් විදිහටම හදන්න</span>',
@@ -1244,29 +1492,47 @@
         letter: DEFAULTS.letter,
         measure: DEFAULTS.measure,
       }, { immediate: true });
+      // re-mount to repaint every control; tocOpen keeps this section open
       const y = ui.body ? ui.body.scrollTop : 0;
       showTab('toc');
       if (ui.body) ui.body.scrollTop = y;
     });
-    box.appendChild(qsec('පිටුවේ පෙනුම', [
-      el('div', { class: 'rt-group' }, [el('p', { class: 'rt-label', text: 'පිටුවේ පාට' }), swRow]),
-      qlevels('අකුරු ලොකුකම', 'fontScale', SIZE_LEVELS),
-      qlevels('පේළි අතර ඉඩ', 'lineHeight', LINE_LEVELS),
-      qlevels('අකුරු අතර ඉඩ', 'letter', LETTER_LEVELS),
-      segment('අකුරු වර්ගය', state.font, FONT_OPTS, (v) => set({ font: v }, { immediate: true })),
-      segment('පේළියක දිග', state.measure, MEASURE_OPTS, (v) => set({ measure: v }, { immediate: true })),
-      btnReset,
-    ]));
+
+    acc.add({
+      id: 'look',
+      title: 'පිටුවේ පෙනුම',
+      hint: 'පාට, අකුරු ලොකුකම, පේළි ඉඩ',
+      icon: ICON.type,
+      kids: [
+        el('div', { class: 'rt-group' }, [el('p', { class: 'rt-label', text: 'පිටුවේ පාට' }), swRow]),
+        qlevels('අකුරු ලොකුකම', 'fontScale', SIZE_LEVELS),
+        qlevels('පේළි අතර ඉඩ', 'lineHeight', LINE_LEVELS),
+        qlevels('අකුරු අතර ඉඩ', 'letter', LETTER_LEVELS),
+        segment('අකුරු වර්ගය', state.font, FONT_OPTS, (v) => set({ font: v }, { immediate: true })),
+        segment('පේළියක දිග', state.measure, MEASURE_OPTS, (v) => set({ measure: v }, { immediate: true })),
+        btnReset,
+      ],
+      links: [{ tab: 'display', icon: ICON.type, label: 'පෙනුම මෙවලමට යන්න' }],
+    });
+
     // ---- 3. speeds + voice options
     const speedDefs = [['ඉබේම යන වේගය', 'scrollSpeed', 1, (v) => Math.round(v) + ' / 10']];
     if (synth) {
       speedDefs.push(['හඬ වේගය', 'rate', 0.1, (v) => v.toFixed(2) + 'x']);
       speedDefs.push(['හඬේ ස්වරය', 'pitch', 0.1, (v) => v.toFixed(2)]);
     }
-    box.appendChild(qsec('වේගය සහ හඬ', [qgrid(speedDefs)].concat(voiceKids)));
+    acc.add({
+      id: 'speed',
+      title: 'වේගය සහ හඬ',
+      hint: 'වේගය, භාෂාව, හඬේ ස්වරය',
+      icon: ICON.sliders,
+      kids: [qgrid(speedDefs)].concat(voiceKids),
+      links: linkVoice.concat(linkReading),
+    });
+
     // ---- 4. jump buttons
-    const goTop = el('button', { class: 'rt-btn', type: 'button', html: ICON.up + '<span>මුලට</span>' });
-    const goEnd = el('button', { class: 'rt-btn', type: 'button', html: ICON.down + '<span>අන්තිමට</span>' });
+    const goTop = el('button', { class: 'rt-btn', type: 'button', html: ICON.up + '<span>ලිපියේ මුලට</span>' });
+    const goEnd = el('button', { class: 'rt-btn', type: 'button', html: ICON.down + '<span>ලිපියේ අන්තිමට</span>' });
     goTop.addEventListener('click', () => {
       stopAuto();
       window.scrollTo({ top: 0, behavior: isMobile() ? 'auto' : behavior() });
@@ -1278,6 +1544,7 @@
       if (isMobile()) close();
     });
     const goKids = [el('div', { class: 'rt-row' }, [goTop, goEnd])];
+
     let saved = 0;
     try {
       saved = parseFloat(localStorage.getItem(posKey(curPath)) || '0') || 0;
@@ -1294,6 +1561,7 @@
       });
       goKids.unshift(el('div', { class: 'rt-row' }, [goSaved]));
     }
+
     const moreKids = [];
     if (synth) {
       const goVoice = el('button', { class: 'rt-btn', type: 'button', html: ICON.voice + '<span>හඬ සැකසුම්</span>' });
@@ -1304,11 +1572,22 @@
     goTr.addEventListener('click', () => showTab('translate'));
     moreKids.push(goTr);
     goKids.push(el('div', { class: 'rt-row' }, moreKids));
-    box.appendChild(qsec('යන්න', goKids));
+
+    acc.add({
+      id: 'go',
+      title: 'යන්න',
+      hint: 'මුලට, අන්තිමට, කලින් නැවතුණ තැනට',
+      icon: ICON.compass,
+      kids: goKids,
+    });
+
     return () => { cleanups.forEach((f) => f()); };
   }
+
   // ------------------------------------------------------------- tool: toc
+
   let tocSync = null;
+
   register({
     id: 'toc',
     label: 'පටුන',
@@ -1332,18 +1611,21 @@
       ]));
       pctEl = $('[data-rt-pct]', box);
       if (pctEl) pctEl.textContent = Math.round(lastPct * 100) + '%';
-      const group = el('div', { class: 'rt-group' }, [
-        el('p', { class: 'rt-label', text: 'කොටස්' }),
-      ]);
+
+      const acc = buildAccordion();
+      box.appendChild(acc.root);
+
+      // ---- section 0: article headings (the actual table of contents)
+      let headItem = null;
       const heads = article
         ? $$(HEADING_SEL, article).filter((h) => (h.textContent || '').trim())
         : [];
+      let headKids;
       if (!heads.length) {
-        group.appendChild(el('p', {
+        headKids = [el('p', {
           class: 'rt-empty',
-          text: 'මේ ලිපියේ උපශීර්ෂ නැහැ. පහළ බටන් වලින් කියවීම පාලනය කරගන්න පුළුවන්.',
-        }));
-        box.appendChild(group);
+          text: 'මේ ලිපියේ උපශීර්ෂ නැහැ. පහළ තියෙන කොටස් වලින් කියවීම පාලනය කරගන්න පුළුවන්.',
+        })];
       } else {
         const list = el('ul', { class: 'rt-toc' });
         const pairs = [];
@@ -1362,26 +1644,41 @@
           pairs.push({ a: a, h: h });
           list.appendChild(el('li', { 'data-lvl': h.tagName.slice(1) }, a));
         });
-        group.appendChild(list);
-        box.appendChild(group);
+        headKids = [list];
+        // highlight the current heading; skipped while the section is collapsed
         tocSync = () => {
+          if (!headItem || !headItem.open) return;
           let cur = null;
           for (let i = 0; i < pairs.length; i++) {
             if (pairs[i].h.getBoundingClientRect().top <= 130) cur = pairs[i];
           }
           pairs.forEach((p) => p.a.setAttribute('data-active', p === cur ? '1' : '0'));
         };
-        tocSync();
       }
-      const offQuick = mountQuickControls(box);
+      headItem = acc.add({
+        id: 'heads',
+        title: 'කතාවේ කොටස් (පටුන)',
+        hint: heads.length ? 'උපශීර්ෂ ' + heads.length + 'ක් - කැමති තැනකට යන්න' : 'උපශීර්ෂ නැහැ',
+        icon: ICON.list,
+        kids: headKids,
+        onOpen: () => { if (tocSync) tocSync(); },
+      });
+
+      // ---- sections 1-4: quick controls, look, speeds, jump
+      const offQuick = mountQuickControls(acc);
+      acc.finish();
+
       return () => {
         tocSync = null;
         pctEl = null;
         offQuick();
+        acc.destroy();
       };
     },
   });
+
   // --------------------------------------------------------- tool: display
+
   // slider values shown as plain Sinhala words instead of raw numbers
   function lineWord(v) {
     if (v < 1.6) return 'අඩු';
@@ -1395,6 +1692,7 @@
     if (v < 0.035) return 'වැඩි';
     return 'ගොඩක් වැඩි';
   }
+
   register({
     id: 'display',
     label: 'පෙනුම',
@@ -1407,23 +1705,28 @@
         { value: 'sepia', label: 'කහ පාට' },
         { value: 'contrast', label: 'ඉතා පැහැදිලි' },
       ], (v) => set({ page: v }, { immediate: true })));
+
       box.appendChild(segment('අකුරු වර්ගය', state.font, [
         { value: 'sinhala', label: 'සාමාන්‍ය' },
         { value: 'serif', label: 'පොතක අකුරු' },
         { value: 'system', label: 'ෆෝන් එකේ අකුරු' },
       ], (v) => set({ font: v }, { immediate: true })));
+
       box.appendChild(slider('අකුරු ලොකුකම', 'fontScale', (v) => Math.round(v * 100) + '%'));
       box.appendChild(slider('පේළි අතර ඉඩ', 'lineHeight', lineWord));
       box.appendChild(slider('අකුරු අතර ඉඩ', 'letter', letterWord));
+
       box.appendChild(segment('පේළියක දිග', state.measure, [
         { value: 'narrow', label: 'කෙටි' },
         { value: 'normal', label: 'සාමාන්‍ය' },
         { value: 'wide', label: 'දිගු' },
       ], (v) => set({ measure: v }, { immediate: true })));
+
       box.appendChild(el('p', {
         class: 'rt-empty',
         text: 'ඔබ තෝරන දේවල් ඉබේම මතක තියාගන්නවා. ඊළඟ කතාවලදීත් ඒ විදිහමයි.',
       }));
+
       box.appendChild(el('button', {
         class: 'rt-btn',
         type: 'button',
@@ -1442,20 +1745,25 @@
       }));
     },
   });
+
   // ------------------------------------------------------------ voice engine
   // Module level, so it survives tab switches and panel close.
   // status: idle | playing | paused. Every async callback is guarded by the
   // generation counter (voice.gen), so stale callbacks can never speak.
+
   const voice = {
     status: 'idle', gen: 0, queue: [], i: 0, p: 0,
     kick: 0, guard: 0, utter: null, hl: null, cache: {},
     busy: false, error: '', done: false,
   };
+
   const engines = {};
   function registerVoiceEngine(id, engine) {
     if (id && engine && typeof engine.speak === 'function') engines[id] = engine;
   }
+
   const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu;
+
   // note: U+200D (ZWJ) is kept on purpose, Sinhala conjuncts need it
   function cleanSpeech(t) {
     return String(t || '')
@@ -1464,6 +1772,7 @@
       .replace(/\s+/g, ' ')
       .trim();
   }
+
   function chunk(text, limit) {
     const out = [];
     let rest = (text || '').replace(/\s+/g, ' ').trim();
@@ -1482,6 +1791,7 @@
     if (rest) out.push(rest);
     return out;
   }
+
   function voiceBuildQueue() {
     const out = [];
     if (!article) return out;
@@ -1495,9 +1805,11 @@
     });
     return out;
   }
+
   function voiceLangOf(v) {
     return String(v.lang || '').toLowerCase().replace(/_/g, '-');
   }
+
   function voicesFor(code) {
     if (!synth) return [];
     let all = [];
@@ -1511,28 +1823,34 @@
       })
       .sort((a, b) => (b.default ? 1 : 0) - (a.default ? 1 : 0));
   }
+
   function pickVoice() {
     const list = voicesFor(state.voiceLang);
     const want = state.voiceMap[state.voiceLang];
     return list.filter((v) => v.voiceURI === want)[0] || list[0] || null;
   }
+
   // cancel + resume: avoids the Chrome state where speech stays stuck after cancel
   function hardCancel() {
     if (!synth) return;
     try { synth.cancel(); } catch (e) {}
     try { if (synth.paused) synth.resume(); } catch (e) {}
   }
+
   function clearVoiceTimers() {
     if (voice.kick) { clearTimeout(voice.kick); voice.kick = 0; }
     if (voice.guard) { clearTimeout(voice.guard); voice.guard = 0; }
   }
+
   function stale(gen) {
     return voice.gen !== gen || voice.status !== 'playing';
   }
+
   function inView(n) {
     const r = n.getBoundingClientRect();
     return r.bottom > 60 && r.top < window.innerHeight - 60;
   }
+
   // highlight the spoken block; follow it only if the reader was following
   function setHighlight(node) {
     const prev = voice.hl;
@@ -1547,10 +1865,12 @@
       window.scrollTo({ top: window.scrollY + r.top - 110, behavior: behavior() });
     }
   }
+
   function voicePct() {
     const n = voice.queue.length;
     return n ? Math.min(100, Math.round((voice.i / n) * 100)) : 0;
   }
+
   function paintVoicePill() {
     if (!ui.voice) return;
     const s = voice.status;
@@ -1561,10 +1881,12 @@
       s === 'paused' ? 'දිගටම' : voice.busy ? 'පරිවර්තනය...' : 'විරාමය';
     ui.voicePct.textContent = voicePct() + '%';
   }
+
   function voiceChanged() {
     paintVoicePill();
     emit('voice');
   }
+
   function voiceHalt() {
     voice.status = 'idle';
     voice.gen++;
@@ -1574,6 +1896,7 @@
     voice.utter = null;
     setHighlight(null);
   }
+
   function voiceFail(msg) {
     voiceHalt();
     voice.error = msg;
@@ -1584,6 +1907,7 @@
       open();
     }
   }
+
   function voiceFinish() {
     voiceHalt();
     voice.i = 0;
@@ -1591,8 +1915,11 @@
     voice.done = true;
     voiceChanged();
   }
+
   // ---- translation (non-Sinhala languages)
+
   const trEngine = {};
+
   async function chromeTranslator(lang) {
     try {
       const T = self.Translator;
@@ -1604,6 +1931,7 @@
       return null;
     }
   }
+
   // unofficial Google web endpoint; needs connect-src in public/_headers
   async function webTranslate(text, lang) {
     const code = langInfo(lang).tr;
@@ -1629,6 +1957,7 @@
       if (timer) clearTimeout(timer);
     }
   }
+
   function getTranslator(lang) {
     if (!trEngine[lang]) {
       trEngine[lang] = (async () => {
@@ -1647,6 +1976,7 @@
     }
     return trEngine[lang];
   }
+
   // text of chunk i in the selected language (cached, failures are not cached)
   function getText(i) {
     const item = voice.queue[i];
@@ -1670,13 +2000,16 @@
     voice.cache[key] = p;
     return p;
   }
+
   function prefetch(from) {
     if (state.voiceLang === 'si') return;
     for (let k = 0; k < PREFETCH; k++) {
       if (from + k < voice.queue.length) getText(from + k);
     }
   }
+
   // ---- playback chain
+
   function armGuard(gen, len, next) {
     if (voice.guard) clearTimeout(voice.guard);
     const est = clamp(
@@ -1697,6 +2030,7 @@
     };
     voice.guard = setTimeout(tick, est);
   }
+
   function speakPart(i, parts, k, gen) {
     if (stale(gen)) return;
     if (k >= parts.length) {
@@ -1712,6 +2046,7 @@
     u.rate = state.rate;
     u.pitch = state.pitch;
     voice.utter = u; // keep a reference: a collected utterance never fires onend
+
     let advanced = false;
     const next = () => {
       if (advanced) return;
@@ -1738,6 +2073,7 @@
       voiceFail('හඬ කියවීම ආරම්භ කරන්න බැරි වුණා. පිටුව refresh කරලා නැවත උත්සාහ කරන්න.');
     }
   }
+
   function playItem(i, gen, startPart) {
     if (stale(gen)) return;
     const item = voice.queue[i];
@@ -1763,6 +2099,7 @@
       speakPart(i, parts, clamp(startPart, 0, Math.max(0, parts.length - 1)), gen);
     });
   }
+
   function advance(i, gen) {
     if (stale(gen)) return;
     if (i >= voice.queue.length) {
@@ -1772,6 +2109,7 @@
     voice.p = 0;
     playItem(i, gen, 0);
   }
+
   // start (or restart from voice.i / voice.p) after a short settle delay
   function beginPlayback() {
     voice.status = 'playing';
@@ -1786,6 +2124,7 @@
       playItem(voice.i, gen, voice.p);
     }, KICK_MS);
   }
+
   function voiceStartIndex() {
     if (state.voiceFrom !== 'view') return 0;
     const q = voice.queue;
@@ -1794,6 +2133,7 @@
     }
     return 0;
   }
+
   function voiceStart() {
     if (!synth || !article) return;
     if (auto.raf) return;
@@ -1813,6 +2153,7 @@
     voice.hl = null;
     beginPlayback();
   }
+
   function voicePause() {
     if (voice.status !== 'playing') return;
     // native pause is unreliable (Android): cancel and remember the position
@@ -1823,10 +2164,12 @@
     voice.busy = false;
     voiceChanged();
   }
+
   function voiceResume() {
     if (voice.status !== 'paused') return;
     beginPlayback();
   }
+
   function voiceStop() {
     voiceHalt();
     voice.i = 0;
@@ -1835,11 +2178,13 @@
     voice.error = '';
     voiceChanged();
   }
+
   function voiceToggle() {
     if (voice.status === 'playing') voicePause();
     else if (voice.status === 'paused') voiceResume();
     else voiceStart();
   }
+
   // language or voice changed: restart the current chunk with the new setting
   function voiceSettingChanged() {
     voice.p = 0;
@@ -1855,6 +2200,7 @@
     }
     voiceChanged();
   }
+
   // language change from any tab: save, then restart the current chunk
   function voiceSetLang(id) {
     if (id === state.voiceLang) return;
@@ -1862,6 +2208,7 @@
     set({ voiceLang: id }, { immediate: true });
     voiceSettingChanged();
   }
+
   // jump to previous / next paragraph
   function voiceSkip(dir) {
     const q = voice.queue;
@@ -1898,11 +2245,14 @@
     }
     voiceChanged();
   }
+
   // ----------------------------------------------------------- tool: voice
+
   const INSTALL_HELP =
     'Android: Settings → Text-to-speech (හෝ Language & input) → Google Speech Services → Install voice data. ' +
     'iPhone/iPad: Settings → Accessibility → Spoken Content → Voices. ' +
     'Windows: Settings → Time & language → Speech → Add voices.';
+
   register({
     id: 'voice',
     label: 'හඬ',
@@ -1924,6 +2274,7 @@
         }));
         return;
       }
+
       // ---- status card
       const title = el('span', { class: 'rt-vtitle' });
       const sub = el('span', { class: 'rt-vsub' });
@@ -1938,6 +2289,7 @@
         el('div', { class: 'rt-vbar', 'aria-hidden': 'true' }, bar),
       ]);
       box.appendChild(card);
+
       // ---- language chips
       const langBtns = {};
       const langWrap = el('div', {
@@ -1958,18 +2310,22 @@
         el('p', { class: 'rt-label', text: 'කියවන භාෂාව' }),
         langWrap,
       ]));
+
       // ---- voice select
       const voiceLabel = el('p', { class: 'rt-label', text: 'හඬ තෝරන්න' });
       const select = el('select', { class: 'rt-select', 'aria-label': 'හඬ තෝරන්න' });
       box.appendChild(el('div', { class: 'rt-group' }, [voiceLabel, select]));
+
       // ---- sliders
       box.appendChild(slider('කියවන වේගය', 'rate', (v) => v.toFixed(2) + 'x'));
       box.appendChild(slider('හඬේ ස්වරය (උස / පහත)', 'pitch', (v) => v.toFixed(2)));
+
       // ---- start position
       box.appendChild(segment('පටන් ගන්නේ කොහෙන්ද?', state.voiceFrom, [
         { value: 'view', label: 'තිරයේ පෙනෙන තැනින්' },
         { value: 'top', label: 'ලිපියේ මුල සිට' },
       ], (v) => set({ voiceFrom: v }, { immediate: true })));
+
       // ---- controls
       const btnMain = el('button', { class: 'rt-btn rt-vmain', type: 'button' });
       const btnStop = el('button', {
@@ -1988,18 +2344,21 @@
       btnNext.addEventListener('click', () => voiceSkip(1));
       box.appendChild(el('div', { class: 'rt-row' }, [btnMain, btnStop]));
       box.appendChild(el('div', { class: 'rt-row rt-vnav' }, [btnPrev, btnNext]));
+
       const note = el('p', { class: 'rt-note' });
       box.appendChild(note);
       box.appendChild(el('p', {
         class: 'rt-empty',
         text: 'කියවන්න පටන් ගත්තම මේ මෙනුව ඉබේම වැහෙනවා. කියවන ඡේදය ඉස්මතු වෙලා පෙනෙනවා. විරාමයට දාන්න හෝ නවත්වන්න ඕන නම් තිරයේ පහළ මැද තියෙන පාලන බොත්තම් පාවිච්චි කරන්න.',
       }));
+
       // ---- painters
       function paintLangs() {
         VOICE_LANGS.forEach((l) => {
           langBtns[l.id].setAttribute('aria-pressed', l.id === state.voiceLang ? 'true' : 'false');
         });
       }
+
       function paintNote() {
         const L = langInfo(state.voiceLang);
         const has = voicesFor(state.voiceLang).length > 0;
@@ -2025,6 +2384,7 @@
             'මේ ලිපිය මුලින්ම සිංහලෙන් තියෙන්නේ. ඔබ තෝරපු භාෂාවට කොටස් කොටස් පරිවර්තනය කරලා තමයි කියවන්නේ. පරිවර්තනය යන්ත්‍රයකින් කරන නිසා අර්ථයේ පොඩි වෙනස්කම් තියෙන්න පුළුවන්, ඒ වගේම ඉන්ටර්නෙට් සම්බන්ධතාවයක් අවශ්‍යයි.';
         }
       }
+
       function paint() {
         const s = voice.status;
         const n = voice.queue.length;
@@ -2047,6 +2407,7 @@
           sub.textContent = L.label + ' · කොටස් ' + n + 'කට බෙදා ඇත';
         }
         bar.style.transform = 'scaleX(' + (s === 'idle' ? 0 : voicePct() / 100).toFixed(3) + ')';
+
         if (s === 'playing') {
           btnMain.innerHTML = ICON.pause + '<span>විරාමය</span>';
           btnMain.removeAttribute('data-primary');
@@ -2065,6 +2426,7 @@
         else btnStop.setAttribute('data-danger', '1');
         paintNote();
       }
+
       function fillVoices() {
         const list = voicesFor(state.voiceLang);
         select.textContent = '';
@@ -2084,6 +2446,7 @@
         voiceLabel.textContent = 'හඬ තෝරන්න' + (list.length ? ' (' + list.length + ')' : '');
         paintNote();
       }
+
       function chooseLang(id) {
         if (id === state.voiceLang) return;
         set({ voiceLang: id }, { immediate: true });
@@ -2091,6 +2454,7 @@
         fillVoices();
         voiceSettingChanged();
       }
+
       select.addEventListener('change', () => {
         if (!select.value) return;
         const map = Object.assign({}, state.voiceMap);
@@ -2098,6 +2462,7 @@
         set({ voiceMap: map }, { immediate: true });
         voiceSettingChanged();
       });
+
       const off = on('voice', paint);
       synth.addEventListener('voiceschanged', fillVoices);
       // voices load late on some browsers
@@ -2106,6 +2471,7 @@
       paintLangs();
       fillVoices();
       paint();
+
       // speech keeps running after this tab is left: it lives at module level
       return () => {
         off();
@@ -2115,7 +2481,9 @@
       };
     },
   });
+
   // --------------------------------------------------------- tool: reading
+
   // short spoken-Sinhala description that follows the speed slider
   function speedHint(v) {
     const n = clamp(Math.round(v), 1, 10);
@@ -2124,6 +2492,7 @@
     if (n <= 8) return 'ටිකක් වේගයි. ඉක්මනට කියවන අයට.';
     return 'හරිම වේගයි. පිටුව ඉක්මනින් පහළට යනවා.';
   }
+
   register({
     id: 'reading',
     label: 'කියවීම',
@@ -2132,6 +2501,7 @@
     mount(box) {
       const defSpeed = DEFAULTS.scrollSpeed;
       const hintEl = el('p', { class: 'rt-empty' });
+
       // red reset button: shown only while the speed differs from default
       const btnReset = el('button', {
         class: 'rt-reset-btn',
@@ -2147,6 +2517,7 @@
         'data-show': '0',
         'aria-hidden': 'true',
       }, el('div', { class: 'rt-reset-inner' }, btnReset));
+
       function paintHint() {
         hintEl.textContent = speedHint(state.scrollSpeed);
       }
@@ -2155,6 +2526,7 @@
         resetWrap.setAttribute('data-show', changed ? '1' : '0');
         resetWrap.setAttribute('aria-hidden', changed ? 'false' : 'true');
       }
+
       // speed can be changed while running too: autoStep reads state each frame
       const speedGroup = slider(
         'ස්වයං-අනුචලන වේගය',
@@ -2170,13 +2542,16 @@
       box.appendChild(resetWrap);
       paintHint();
       paintReset();
+
       btnReset.addEventListener('click', () => {
         set({ scrollSpeed: defSpeed }, { immediate: true });
         speedGroup.rtSync(defSpeed);
         paintHint();
         paintReset();
       });
+
       const btn = el('button', { class: 'rt-btn', type: 'button' });
+
       const lockBtn = el('button', {
         class: 'rt-btn',
         type: 'button',
@@ -2192,6 +2567,7 @@
         }),
         el('div', { class: 'rt-row' }, [lockBtn]),
       ]);
+
       function paint() {
         const running = !!auto.raf;
         const locked = !running && voice.status !== 'idle';
@@ -2212,12 +2588,14 @@
       const offAuto = on('autoscroll', paint);
       const offVoice = on('voice', paint);
       btn.addEventListener('click', toggleAuto);
+
       box.appendChild(el('div', { class: 'rt-row' }, [btn]));
       box.appendChild(lockBox);
       box.appendChild(el('p', {
         class: 'rt-empty',
-        text: 'පටන් ගත්තම මේ මෙනුව ඉබේම වැහෙනවා. නවත්වන්න ඕන නම් පහළ මැද තියෙන රතු බොත්තම ඔබන්න, නැත්නම් තිරය ඇඟිල්ලෙන් ඇදන්න. කතාව අවසාන වුනාම තනියම නවතිනවා.',
+        text: 'පටන් ගත්තම මේ මෙනුව ඉබේම වැහෙනවා. නවත්වන්න ඕන නම් පහළ මැද තියෙන රතු බොත්තම ඔබන්න, නැත්නම් තිරය ඇඟිල්ලෙන් ඇදන්න. කතාව අවසාන වුනාම තනිවම නවතිනවා.',
       }));
+
       let saved = 0;
       try {
         saved = parseFloat(localStorage.getItem(posKey(curPath)) || '0') || 0;
@@ -2240,6 +2618,7 @@
           }),
         ]));
       }
+
       box.appendChild(el('div', { class: 'rt-row' }, [
         el('button', {
           class: 'rt-btn', type: 'button', html: ICON.up + '<span>මුලට</span>',
@@ -2256,10 +2635,13 @@
           },
         }),
       ]));
+
       return () => { offAuto(); offVoice(); };
     },
   });
+
   // ------------------------------------------------------- tool: translate
+
   register({
     id: 'translate',
     label: 'පරිවර්තනය',
@@ -2275,237 +2657,4 @@
         { code: 'zh-CN', label: '中文' },
         { code: 'ar', label: 'العربية' },
       ].forEach((l) => {
-        seg.appendChild(el('button', {
-          class: 'rt-chip',
-          type: 'button',
-          text: l.label,
-          onclick: () => {
-            const u = 'https://translate.google.com/translate?sl=si&tl=' +
-              encodeURIComponent(l.code) + '&u=' + encodeURIComponent(location.href);
-            window.open(u, '_blank', 'noopener,noreferrer');
-          },
-        }));
-      });
-      box.appendChild(el('div', { class: 'rt-group' }, [
-        el('p', { class: 'rt-label', text: 'භාෂාව තෝරන්න' }),
-        seg,
-      ]));
-      box.appendChild(el('p', {
-        class: 'rt-note',
-        text: 'Google Translate හි පිටු-පරිවර්තනය අලුත් කවුළුවක විවෘත වේ.',
-      }));
-    },
-  });
-  // -------------------------------------------------------- shared scroll
-  let lastSave = 0;
-  let lastPct = 0;
-  const onScroll = rafOnce(() => {
-    const max = scrollMax();
-    const pct = max > 4 ? clamp(window.scrollY / max, 0, 1) : 0;
-    lastPct = pct;
-    if (ui.bar) ui.bar.style.transform = 'scaleX(' + pct.toFixed(4) + ')';
-    if (isOpen) {
-      if (pctEl) pctEl.textContent = Math.round(pct * 100) + '%';
-      if (tocSync) tocSync();
-    }
-    const now = Date.now();
-    // localStorage is synchronous I/O: never write it while auto-scroll runs
-    if (!auto.raf && pct > 0.02 && now - lastSave > POS_SAVE_MS) {
-      lastSave = now;
-      savePos();
-    }
-  });
-  function savePos() {
-    try {
-      if (lastPct <= 0.02) return;
-      localStorage.setItem(posKey(curPath), lastPct.toFixed(3));
-    } catch (e) {}
-  }
-  function flushPos() {
-    savePos();
-    saveNow();
-  }
-  // -------------------------------------------------------- boot/teardown
-  let booted = false;
-  function bindGlobal() {
-    listen(ui.fab, 'click', toggle);
-    listen(ui.close, 'click', close);
-    listen(ui.scrim, 'click', close);
-    // voice pill controls
-    listen(ui.voiceMain, 'click', voiceToggle);
-    listen(ui.voiceStop, 'click', voiceStop);
-    // stop pill: act on the very first event (pointerdown / touchstart);
-    // a finger press can turn into a scroll gesture and cancel the click
-    const hardStopAuto = (ev) => {
-      if (ev) {
-        if (ev.cancelable) ev.preventDefault();
-        ev.stopPropagation();
-      }
-      stopAuto();
-    };
-    listen(ui.stop, 'pointerdown', hardStopAuto);
-    listen(ui.stop, 'touchstart', hardStopAuto, { passive: false });
-    listen(ui.stop, 'click', hardStopAuto);
-    // on a long page the scroll writes can delay event dispatch, so any tap
-    // outside the panel also stops auto-scroll (capture phase, runs first)
-    const tapStop = (ev) => {
-      if (!auto.raf) return;
-      const t = ev ? ev.target : null;
-      if (t && ui.stop && (t === ui.stop || ui.stop.contains(t))) {
-        stopAuto();
-        return;
-      }
-      if (t && ui.root && ui.root.contains(t)) return;
-      stopAuto();
-    };
-    listen(window, 'pointerdown', tapStop, { capture: true, passive: true });
-    listen(window, 'touchstart', tapStop, { capture: true, passive: true });
-    listen(window, 'mousedown', tapStop, { capture: true, passive: true });
-    listen(window, 'scroll', onScroll, { passive: true });
-    listen(window, 'resize', () => {
-      scrollMax(true);
-      onScroll();
-    }, { passive: true });
-    // manual input stops auto-scroll; events inside the panel are ignored,
-    // and the 420ms arm delay protects the tap that started it
-    const abortAuto = (ev) => {
-      if (!auto.raf || !auto.armed) return;
-      if (ui.root && ev && ev.target && ev.target.nodeType && ui.root.contains(ev.target)) return;
-      stopAuto();
-    };
-    listen(window, 'wheel', abortAuto, { passive: true });
-    listen(window, 'touchmove', abortAuto, { passive: true });
-    listen(document, 'keydown', (e) => {
-      if (e.key === 'Escape') {
-        if (auto.raf) stopAuto();
-        if (isOpen) {
-          e.stopPropagation();
-          close();
-        }
-        return;
-      }
-      if (e.altKey && (e.key === 'r' || e.key === 'R')) {
-        e.preventDefault();
-        toggle();
-        return;
-      }
-      // only scroll keys stop auto-scroll
-      if (auto.raf && !e.altKey && !e.ctrlKey && !e.metaKey) {
-        const k = e.key;
-        if (k === ' ' || k === 'Spacebar' || k === 'ArrowUp' || k === 'ArrowDown' ||
-            k === 'PageUp' || k === 'PageDown' || k === 'Home' || k === 'End') {
-          stopAuto();
-        }
-      }
-      trap(e);
-    });
-    listen(window, 'pagehide', () => {
-      stopAuto();
-      voiceHalt();
-      flushPos();
-    });
-    listen(document, 'visibilitychange', () => {
-      if (document.visibilityState === 'hidden') {
-        stopAuto();
-        voicePause();
-        flushPos();
-      }
-    });
-  }
-  function teardown() {
-    stopAuto();
-    runCleanup();
-    voiceHalt();
-    voice.queue = [];
-    voice.cache = {};
-    voice.i = 0;
-    voice.p = 0;
-    voice.error = '';
-    voice.done = false;
-    tocSync = null;
-    pctEl = null;
-    flushPos();
-    unlistenAll();
-    lockScroll(false);
-    isOpen = false;
-    activeTab = null;
-    lastFocus = null;
-    lastPct = 0;
-    maxCache = -1;
-    if (ui.root) {
-      ui.root.setAttribute('data-open', '0');
-      ui.root.setAttribute('data-rt-ready', '0');
-      ui.root.removeAttribute('data-scrolling');
-      ui.root.removeAttribute('data-autoscroll');
-    }
-    clearDim();
-    document.documentElement.setAttribute('data-rt-focus', 'off');
-    document.documentElement.removeAttribute('data-rt-has-article');
-    document.documentElement.removeAttribute('data-rt-scrolling');
-    Object.keys(ui).forEach((k) => { ui[k] = null; });
-    article = null;
-    booted = false;
-  }
-  function boot() {
-    if (booted) return;
-    if (!document.body) return;
-    curPath = location.pathname;
-    if (!buildChrome()) return;
-    booted = true;
-    ensureAutoStyle();
-    ensureResetStyle();
-    ensureVoiceStyle();
-    ensureQuickStyle();
-    clearDim();
-    maxCache = -1;
-    article = findArticle();
-    apply();
-    if (!article) {
-      ui.root.setAttribute('data-rt-ready', '0');
-      if (ui.bar) ui.bar.style.transform = 'scaleX(0)';
-      emit('boot', { article: null });
-      return;
-    }
-    ui.root.setAttribute('data-rt-ready', '1');
-    if (ui.sub) {
-      ui.sub.textContent = words().toLocaleString('en-US') + ' වචන · ' + minutes() + ' මිනිත්තු';
-    }
-    renderTabs();
-    bindGlobal();
-    onScroll();
-    emit('boot', { article: article });
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot, { once: true });
-  } else {
-    boot();
-  }
-  document.addEventListener('astro:before-swap', teardown);
-  document.addEventListener('astro:page-load', boot);
-  // ---------------------------------------------------------------- api
-  window.ReaderTools = {
-    version: 16,
-    register: register,
-    registerVoiceEngine: registerVoiceEngine,
-    open: open,
-    close: close,
-    toggle: toggle,
-    showTab: showTab,
-    set: set,
-    on: on,
-    boot: boot,
-    teardown: teardown,
-    startAutoScroll: startAuto,
-    stopAutoScroll: stopAuto,
-    toggleAutoScroll: toggleAuto,
-    startVoice: voiceStart,
-    pauseVoice: voicePause,
-    stopVoice: voiceStop,
-    get scrolling() { return !!auto.raf; },
-    get speaking() { return voice.status === 'playing'; },
-    get state() { return Object.assign({}, state); },
-    get article() { return article; },
-    get tools() { return tools.map((t) => t.id); },
-    get engines() { return Object.keys(engines); },
-  };
-})();
+        seg.appendChild(
