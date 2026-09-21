@@ -1,6 +1,8 @@
 // ==========================================================================
 // Reader Tools - logic only. Chrome + themes live in reader-tools.css
 // --------------------------------------------------------------------------
+// v16:
+//  - TOC tab now includes quick-jump buttons to every other tool tab
 // v15:
 //  - voice and auto-scroll are mutually exclusive (guards + locked UI)
 //  - voice status card no longer collapses (flex-shrink fix)
@@ -23,8 +25,10 @@
   'use strict';
   if (window.__wkReaderToolsInit) return;
   window.__wkReaderToolsInit = true;
+
   const STORE_KEY = 'wk:reader:v1';
   const posKey = (p) => 'wk:reader:pos:' + p;
+
   const ARTICLE_CANDIDATES = [
     '[data-rt-article]',
     '.custom-post-content',
@@ -37,13 +41,16 @@
   const BLOCK_SEL = 'p, li, h2, h3, h4, blockquote';
   const MIN_ARTICLE_CHARS = 400;
   const WORDS_PER_MIN = 160;
+
   const TTS_CHUNK = 170;
   const PART_MAX = 170;
   const KICK_MS = 120;
   const PREFETCH = 2;
+
   const POS_SAVE_MS = 1500;
   const STORE_DEBOUNCE_MS = 300;
   const MAX_CACHE_MS = 400;
+
   // auto-scroll tuning
   const AUTO_PPS = [12, 20, 30, 42, 58, 78, 100, 124, 150, 178];
   const AUTO_ARM_MS = 420;
@@ -63,6 +70,7 @@
   const AUTO_JANK_MS = 50;
   const AUTO_GOV_MIN = 0.4;
   const AUTO_GOV_UP = 0.02;
+
   // voice languages: id, chip label, Sinhala name, BCP47 tag, web translate code
   const VOICE_LANGS = [
     { id: 'si', label: 'සිංහල', name: 'සිංහල', tag: 'si-LK', tr: '' },
@@ -78,6 +86,7 @@
     { id: 'de', label: 'Deutsch', name: 'ජර්මන්', tag: 'de-DE', tr: 'de' },
     { id: 'es', label: 'Español', name: 'ස්පාඤ්ඤ', tag: 'es-ES', tr: 'es' },
   ];
+
   const DEFAULTS = {
     page: 'dark',
     font: 'sinhala',
@@ -106,6 +115,7 @@
     measure: ['narrow', 'normal', 'wide'],
     voiceFrom: ['view', 'top'],
   };
+
   // ---------------------------------------------------------------- helpers
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
@@ -117,6 +127,7 @@
     !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const isMobile = () => !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
   const behavior = () => (reduceMotion() ? 'auto' : 'smooth');
+
   const synth = (function () {
     try {
       return window.speechSynthesis || null;
@@ -124,12 +135,14 @@
       return null;
     }
   })();
+
   function langInfo(id) {
     for (let i = 0; i < VOICE_LANGS.length; i++) {
       if (VOICE_LANGS[i].id === id) return VOICE_LANGS[i];
     }
     return VOICE_LANGS[0];
   }
+
   function el(tag, attrs, kids) {
     const n = document.createElement(tag);
     if (attrs) {
@@ -152,6 +165,7 @@
     }
     return n;
   }
+
   // one rAF per frame; all scroll consumers share one handler
   function rafOnce(fn) {
     let queued = false;
@@ -164,6 +178,7 @@
       });
     };
   }
+
   // scrollHeight read = forced layout; cached for 400ms
   let maxCache = -1;
   let maxCacheAt = 0;
@@ -175,6 +190,7 @@
     }
     return maxCache;
   }
+
   // tracked listeners: teardown removes every one of them
   const bound = [];
   function listen(target, type, fn, opts) {
@@ -190,6 +206,7 @@
       } catch (e) {}
     }
   }
+
   // ---------------------------------------------------------------- storage
   function sanitize(raw) {
     const s = Object.assign({}, DEFAULTS, raw || {});
@@ -240,6 +257,7 @@
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
     } catch (e) {}
   }
+
   // ------------------------------------------------------------------- bus
   const bus = {};
   function on(evt, fn) {
@@ -257,6 +275,7 @@
       }
     });
   }
+
   // ----------------------------------------------------------------- icons
   const ICON = {
     list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
@@ -274,6 +293,7 @@
     reset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 14.6-5.9"/><path d="M19 3v4.5h-4.5"/></svg>',
     close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   };
+
   // ------------------------------------------------- injected auto-scroll css
   // Also lives here (not only in the css file) so a renamed class or a cached
   // old css build can never make the red stop pill invisible.
@@ -314,6 +334,7 @@
     s.textContent = css;
     document.head.appendChild(s);
   }
+
   // Red "reset speed" button. The wrapper collapses with grid-template-rows so
   // showing/hiding it never makes the panel jump; hidden state uses
   // visibility:hidden so it cannot be focused or tapped.
@@ -358,6 +379,7 @@
     s.textContent = css;
     document.head.appendChild(s);
   }
+
   // Voice tab card, language grid and the floating voice pill.
   function ensureVoiceStyle() {
     if (!document.head || document.getElementById(VOICE_STYLE_ID)) return;
@@ -440,6 +462,7 @@
     s.textContent = css;
     document.head.appendChild(s);
   }
+
   // --------------------------------------------------------------- elements
   const ui = {
     root: null, bar: null, fab: null, stop: null, stopPct: null,
@@ -454,6 +477,7 @@
   let lastFocus = null;
   let pctEl = null;
   let curPath = typeof location !== 'undefined' ? location.pathname : '/';
+
   // ------------------------------------------------------------ build chrome
   function ensureRoot() {
     const found = $$('[data-rt-root], .rt-root');
@@ -470,6 +494,7 @@
     root.setAttribute('data-rt-root', '');
     return root;
   }
+
   function buildChrome() {
     if (!document.body) return false;
     const root = ensureRoot();
@@ -480,8 +505,10 @@
     root.removeAttribute('data-autoscroll');
     // escape the global copy-protection selectstart blocker
     root.setAttribute('data-allow-select', '');
+
     const bar = el('i');
     const progress = el('div', { class: 'rt-progress', 'aria-hidden': 'true' }, bar);
+
     const fab = el('button', {
       class: 'rt-fab',
       type: 'button',
@@ -494,6 +521,7 @@
       el('span', { class: 'rt-fab-ico', html: ICON.type, 'aria-hidden': 'true' }),
       el('span', { class: 'rt-fab-txt', text: 'මෙවලම්' }),
     ]);
+
     // red stop pill: visible only while auto-scroll runs
     const stopFab = el('button', {
       class: 'rt-stopfab',
@@ -506,6 +534,7 @@
         '<span class="rt-stopfab-txt">නවත්වන්න</span>' +
         '<span class="rt-stopfab-pct" data-rt-stop-pct>0%</span>',
     });
+
     // teal voice pill: visible while speech is playing or paused
     const vfBadge = el('span', { class: 'rt-vf-badge', 'aria-hidden': 'true', html: ICON.pause });
     const vfTxt = el('span', { class: 'rt-vf-txt', text: 'විරාමය' });
@@ -529,7 +558,9 @@
       role: 'group',
       'aria-label': 'හඬ කියවීම පාලනය',
     }, [vfMain, vfPct, vfStop]);
+
     const scrim = el('div', { class: 'rt-scrim', 'data-rt-scrim': '', 'aria-hidden': 'true' });
+
     const sub = el('span', { class: 'rt-sub', 'data-rt-sub': '' });
     const closeBtn = el('button', {
       class: 'rt-iconbtn rt-close',
@@ -545,8 +576,10 @@
       ]),
       closeBtn,
     ]);
+
     const tabs = el('div', { class: 'rt-tabs', role: 'tablist', 'aria-label': 'මෙවලම්' });
     const body = el('div', { class: 'rt-body', role: 'tabpanel', tabindex: '-1' });
+
     const panel = el('aside', {
       class: 'rt-panel',
       id: 'rt-panel',
@@ -554,12 +587,14 @@
       'aria-label': 'කියවීමේ මෙවලම්',
       tabindex: '-1',
     }, [head, tabs, body]);
+
     root.appendChild(progress);
     root.appendChild(fab);
     root.appendChild(stopFab);
     root.appendChild(voicePill);
     root.appendChild(scrim);
     root.appendChild(panel);
+
     ui.root = root;
     ui.bar = bar;
     ui.fab = fab;
@@ -579,6 +614,7 @@
     ui.close = closeBtn;
     return true;
   }
+
   // --------------------------------------------------------------- article
   function findArticle() {
     for (let i = 0; i < ARTICLE_CANDIDATES.length; i++) {
@@ -589,10 +625,12 @@
     }
     return null;
   }
+
   // removes stale dim flags left by the retired focus mode
   function clearDim() {
     $$('[data-rt-dim]').forEach((n) => n.removeAttribute('data-rt-dim'));
   }
+
   function words() {
     if (!article) return 0;
     const t = (article.textContent || '').replace(/\s+/g, ' ').trim();
@@ -601,6 +639,7 @@
   function minutes() {
     return Math.max(1, Math.round(words() / WORDS_PER_MIN));
   }
+
   // ----------------------------------------------------------------- apply
   function apply() {
     const r = document.documentElement;
@@ -620,6 +659,7 @@
     // font/line-height changes alter the document height
     scrollMax(true);
   }
+
   function set(patch, opts) {
     Object.assign(state, patch || {});
     apply();
@@ -627,6 +667,7 @@
     else save();
     emit('change', state);
   }
+
   // -------------------------------------------------------- auto scroll
   // Module level: keeps running when the panel closes; teardown stops it.
   const auto = {
@@ -634,6 +675,7 @@
     prevY: 0, watchdog: 0, wdY: -1, wdAt: 0,
     ms: 0, gov: 1, stopFlag: false, pctAt: 0, pctShow: -1,
   };
+
   function autoWatchdog() {
     if (!auto.raf) return;
     const now = Date.now();
@@ -647,6 +689,7 @@
       auto.wdAt = now;
     }
   }
+
   function autoPps() {
     return AUTO_PPS[clamp(Math.round(state.scrollSpeed), 1, 10) - 1] * auto.gov;
   }
@@ -655,6 +698,7 @@
     if (dt > AUTO_JANK_MS) auto.gov = Math.max(AUTO_GOV_MIN, auto.gov - 0.08);
     else if (auto.gov < 1) auto.gov = Math.min(1, auto.gov + AUTO_GOV_UP);
   }
+
   function setY(y) {
     try {
       window.scrollTo({ top: y, left: 0, behavior: 'instant' });
@@ -662,6 +706,7 @@
       window.scrollTo(0, y);
     }
   }
+
   function autoStep(ts) {
     if (!auto.raf) return;
     auto.raf = requestAnimationFrame(autoStep);
@@ -674,20 +719,26 @@
     auto.last = ts;
     if (dt <= 0) return;
     if (dt > AUTO_MAX_DT) dt = AUTO_MAX_DT;
+
     // watchdog heartbeat
     auto.wdAt = Date.now();
+
     autoGovern(dt);
+
     const y = window.scrollY;
+
     // user scrolled by hand (scrollbar drag included)
     if (auto.armed && auto.expect >= 0 && Math.abs(y - auto.expect) > AUTO_DRIFT) {
       stopAuto();
       return;
     }
+
     const max = scrollMax();
     if (max <= 4 || y >= max - 1) {
       stopAuto();
       return;
     }
+
     // stall guard: compares only against the value we wrote last
     if (auto.expect >= 0) {
       if (y < auto.expect - AUTO_WRITE_EPS) auto.stall++;
@@ -698,17 +749,22 @@
       }
     }
     auto.prevY = y;
+
     auto.ms += dt;
     auto.carry += (autoPps() * dt) / 1000;
     if (auto.carry > 320) auto.carry = 320;
+
     if (auto.ms < AUTO_WRITE_MS || auto.carry < AUTO_MIN_WRITE_PX) return;
     auto.ms -= AUTO_WRITE_MS;
     if (auto.ms > AUTO_WRITE_MS * 4) auto.ms = AUTO_WRITE_MS * 4;
+
     const step = Math.floor(auto.carry);
     auto.carry -= step;
+
     const target = Math.min(max, y + step);
     setY(target);
     auto.expect = target;
+
     if (ui.stopPct && ts - auto.pctAt > 500) {
       auto.pctAt = ts;
       const pct = max > 0 ? Math.min(100, Math.round((target / max) * 100)) : 100;
@@ -718,20 +774,24 @@
       }
     }
   }
+
   function startAuto() {
     if (auto.raf || !article) return;
     // voice (playing or paused) and auto-scroll never run together
     if (voice.status !== 'idle') return;
     if (scrollMax(true) <= 8) return;
+
     // panel closes: scroll lock and scrim both go away
     close();
     document.documentElement.classList.remove('rt-locked');
+
     ensureAutoStyle();
     document.documentElement.setAttribute('data-rt-scrolling', '1');
     if (ui.root) {
       ui.root.setAttribute('data-scrolling', '1');
       ui.root.setAttribute('data-autoscroll', '1');
     }
+
     auto.last = 0;
     auto.carry = 0;
     auto.ms = 0;
@@ -753,17 +813,21 @@
       auto.armTimer = 0;
       auto.armed = true;
     }, AUTO_ARM_MS);
+
     auto.wdY = window.scrollY;
     auto.wdAt = Date.now();
     if (auto.watchdog) clearInterval(auto.watchdog);
     auto.watchdog = setInterval(autoWatchdog, AUTO_WD_POLL_MS);
+
     auto.raf = requestAnimationFrame(autoStep);
+
     // the FAB turns visibility:hidden; move keyboard focus to the stop pill
     if (ui.fab && ui.stop && document.activeElement === ui.fab) {
       try { ui.stop.focus({ preventScroll: true }); } catch (e) {}
     }
     emit('autoscroll', true);
   }
+
   function stopAuto() {
     if (auto.stopFlag) return;
     auto.stopFlag = true;
@@ -799,16 +863,19 @@
       emit('autoscroll', false);
     }
   }
+
   function toggleAuto() {
     if (auto.raf) stopAuto();
     else startAuto();
   }
+
   // ------------------------------------------------------------ open/close
   function lockScroll(lock) {
     const r = document.documentElement;
     if (lock && isMobile()) r.classList.add('rt-locked');
     else r.classList.remove('rt-locked');
   }
+
   function focusables() {
     if (!ui.panel) return [];
     return $$('button, [href], select, input, [tabindex]:not([tabindex="-1"])', ui.panel)
@@ -828,6 +895,7 @@
       first.focus();
     }
   }
+
   function open() {
     if (!ui.root || isOpen || !article) return;
     if (document.documentElement.classList.contains('age-gate-pending')) return;
@@ -864,6 +932,7 @@
     if (isOpen) close();
     else open();
   }
+
   // -------------------------------------------------------------- registry
   const tools = [];
   function register(tool) {
@@ -895,6 +964,7 @@
       );
     });
   }
+
   function runCleanup() {
     if (typeof cleanupTab === 'function') {
       try { cleanupTab(); } catch (e) { console.warn('[reader-tools] cleanup', e); }
@@ -902,6 +972,7 @@
     cleanupTab = null;
     pctEl = null;
   }
+
   function showTab(id) {
     const tool = tools.filter((t) => t.id === id)[0];
     if (!tool || !ui.body) return;
@@ -922,6 +993,7 @@
     }
     emit('tab', id);
   }
+
   // ------------------------------------------------------------- ui bits
   function segment(label, value, options, pick) {
     const seg = el('div', { class: 'rt-seg' });
@@ -944,6 +1016,7 @@
       seg,
     ]);
   }
+
   // returns the group element; group.rtSync(v) updates the thumb and label
   // from code (used by the speed reset button)
   function slider(label, key, fmt, onLive) {
@@ -981,6 +1054,7 @@
     };
     return group;
   }
+
   // ------------------------------------------------------------- tool: toc
   let tocSync = null;
   register({
@@ -1006,53 +1080,80 @@
       ]));
       pctEl = $('[data-rt-pct]', box);
       if (pctEl) pctEl.textContent = Math.round(lastPct * 100) + '%';
+
       const group = el('div', { class: 'rt-group' }, [
         el('p', { class: 'rt-label', text: 'කොටස්' }),
       ]);
       const heads = article
         ? $$(HEADING_SEL, article).filter((h) => (h.textContent || '').trim())
         : [];
+
+      let cleanupToc = null;
+
       if (!heads.length) {
         group.appendChild(el('p', {
           class: 'rt-empty',
           text: 'මේ ලිපියේ උපශීර්ෂ නැහැ. "කියවීම" ටැබ් එකෙන් ස්වයං-අනුචලනය පාවිච්චි කරන්න පුළුවන්.',
         }));
         box.appendChild(group);
-        return () => { pctEl = null; };
-      }
-      const list = el('ul', { class: 'rt-toc' });
-      const pairs = [];
-      heads.forEach((h, i) => {
-        if (!h.id) h.id = 'rt-h-' + i;
-        const a = el('a', {
-          href: '#' + h.id,
-          text: (h.textContent || '').trim(),
-          onclick: (ev) => {
-            ev.preventDefault();
-            stopAuto();
-            h.scrollIntoView({ behavior: behavior(), block: 'start' });
-            if (isMobile()) close();
-          },
+      } else {
+        const list = el('ul', { class: 'rt-toc' });
+        const pairs = [];
+        heads.forEach((h, i) => {
+          if (!h.id) h.id = 'rt-h-' + i;
+          const a = el('a', {
+            href: '#' + h.id,
+            text: (h.textContent || '').trim(),
+            onclick: (ev) => {
+              ev.preventDefault();
+              stopAuto();
+              h.scrollIntoView({ behavior: behavior(), block: 'start' });
+              if (isMobile()) close();
+            },
+          });
+          pairs.push({ a: a, h: h });
+          list.appendChild(el('li', { 'data-lvl': h.tagName.slice(1) }, a));
         });
-        pairs.push({ a: a, h: h });
-        list.appendChild(el('li', { 'data-lvl': h.tagName.slice(1) }, a));
-      });
-      group.appendChild(list);
-      box.appendChild(group);
-      tocSync = () => {
-        let cur = null;
-        for (let i = 0; i < pairs.length; i++) {
-          if (pairs[i].h.getBoundingClientRect().top <= 130) cur = pairs[i];
-        }
-        pairs.forEach((p) => p.a.setAttribute('data-active', p === cur ? '1' : '0'));
-      };
-      tocSync();
+        group.appendChild(list);
+        box.appendChild(group);
+        tocSync = () => {
+          let cur = null;
+          for (let i = 0; i < pairs.length; i++) {
+            if (pairs[i].h.getBoundingClientRect().top <= 130) cur = pairs[i];
+          }
+          pairs.forEach((p) => p.a.setAttribute('data-active', p === cur ? '1' : '0'));
+        };
+        tocSync();
+        cleanupToc = () => { tocSync = null; };
+      }
+
+      // ---- quick-jump buttons to every other tool tab (this section only
+      // adds navigation; it never removes or replaces the content above) ----
+      const navGroup = el('div', { class: 'rt-group' });
+      navGroup.appendChild(el('p', { class: 'rt-label', text: 'ඉක්මන් මාරුව' }));
+      const otherTools = tools.filter((t) => t.id !== 'toc');
+      for (let i = 0; i < otherTools.length; i += 2) {
+        const row = el('div', { class: 'rt-row' });
+        otherTools.slice(i, i + 2).forEach((t) => {
+          row.appendChild(el('button', {
+            class: 'rt-btn',
+            type: 'button',
+            'aria-label': t.label + ' ටැබ් එකට යන්න',
+            onclick: () => showTab(t.id),
+            html: (t.icon || '') + '<span>' + t.label + '</span>',
+          }));
+        });
+        navGroup.appendChild(row);
+      }
+      box.appendChild(navGroup);
+
       return () => {
-        tocSync = null;
+        if (cleanupToc) cleanupToc();
         pctEl = null;
       };
     },
   });
+
   // --------------------------------------------------------- tool: display
   // slider values shown as plain Sinhala words instead of raw numbers
   function lineWord(v) {
@@ -1079,23 +1180,28 @@
         { value: 'sepia', label: 'කහ පාට' },
         { value: 'contrast', label: 'ඉතා පැහැදිලි' },
       ], (v) => set({ page: v }, { immediate: true })));
+
       box.appendChild(segment('අකුරු වර්ගය', state.font, [
         { value: 'sinhala', label: 'සාමාන්‍ය' },
         { value: 'serif', label: 'පොතක අකුරු' },
         { value: 'system', label: 'ෆෝන් එකේ අකුරු' },
       ], (v) => set({ font: v }, { immediate: true })));
+
       box.appendChild(slider('අකුරු ලොකුකම', 'fontScale', (v) => Math.round(v * 100) + '%'));
       box.appendChild(slider('පේළි අතර ඉඩ', 'lineHeight', lineWord));
       box.appendChild(slider('අකුරු අතර ඉඩ', 'letter', letterWord));
+
       box.appendChild(segment('පේළියක දිග', state.measure, [
         { value: 'narrow', label: 'කෙටි' },
         { value: 'normal', label: 'සාමාන්‍ය' },
         { value: 'wide', label: 'දිගු' },
       ], (v) => set({ measure: v }, { immediate: true })));
+
       box.appendChild(el('p', {
         class: 'rt-empty',
         text: 'ඔබ තෝරන දේවල් ඉබේම මතක තියාගන්නවා. ඊළඟ කතාවලදීත් ඒ විදිහමයි.',
       }));
+
       box.appendChild(el('button', {
         class: 'rt-btn',
         type: 'button',
@@ -1114,6 +1220,7 @@
       }));
     },
   });
+
   // ------------------------------------------------------------ voice engine
   // Module level, so it survives tab switches and panel close.
   // status: idle | playing | paused. Every async callback is guarded by the
@@ -1123,10 +1230,12 @@
     kick: 0, guard: 0, utter: null, hl: null, cache: {},
     busy: false, error: '', done: false,
   };
+
   const engines = {};
   function registerVoiceEngine(id, engine) {
     if (id && engine && typeof engine.speak === 'function') engines[id] = engine;
   }
+
   const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu;
   // note: U+200D (ZWJ) is kept on purpose, Sinhala conjuncts need it
   function cleanSpeech(t) {
@@ -1136,6 +1245,7 @@
       .replace(/\s+/g, ' ')
       .trim();
   }
+
   function chunk(text, limit) {
     const out = [];
     let rest = (text || '').replace(/\s+/g, ' ').trim();
@@ -1154,6 +1264,7 @@
     if (rest) out.push(rest);
     return out;
   }
+
   function voiceBuildQueue() {
     const out = [];
     if (!article) return out;
@@ -1167,6 +1278,7 @@
     });
     return out;
   }
+
   function voiceLangOf(v) {
     return String(v.lang || '').toLowerCase().replace(/_/g, '-');
   }
@@ -1188,6 +1300,7 @@
     const want = state.voiceMap[state.voiceLang];
     return list.filter((v) => v.voiceURI === want)[0] || list[0] || null;
   }
+
   // cancel + resume: avoids the Chrome state where speech stays stuck after cancel
   function hardCancel() {
     if (!synth) return;
@@ -1219,6 +1332,7 @@
       window.scrollTo({ top: window.scrollY + r.top - 110, behavior: behavior() });
     }
   }
+
   function voicePct() {
     const n = voice.queue.length;
     return n ? Math.min(100, Math.round((voice.i / n) * 100)) : 0;
@@ -1237,6 +1351,7 @@
     paintVoicePill();
     emit('voice');
   }
+
   function voiceHalt() {
     voice.status = 'idle';
     voice.gen++;
@@ -1263,6 +1378,7 @@
     voice.done = true;
     voiceChanged();
   }
+
   // ---- translation (non-Sinhala languages)
   const trEngine = {};
   async function chromeTranslator(lang) {
@@ -1319,6 +1435,7 @@
     }
     return trEngine[lang];
   }
+
   // text of chunk i in the selected language (cached, failures are not cached)
   function getText(i) {
     const item = voice.queue[i];
@@ -1348,6 +1465,7 @@
       if (from + k < voice.queue.length) getText(from + k);
     }
   }
+
   // ---- playback chain
   function armGuard(gen, len, next) {
     if (voice.guard) clearTimeout(voice.guard);
@@ -1384,6 +1502,7 @@
     u.rate = state.rate;
     u.pitch = state.pitch;
     voice.utter = u; // keep a reference: a collected utterance never fires onend
+
     let advanced = false;
     const next = () => {
       if (advanced) return;
@@ -1444,6 +1563,7 @@
     voice.p = 0;
     playItem(i, gen, 0);
   }
+
   // start (or restart from voice.i / voice.p) after a short settle delay
   function beginPlayback() {
     voice.status = 'playing';
@@ -1458,6 +1578,7 @@
       playItem(voice.i, gen, voice.p);
     }, KICK_MS);
   }
+
   function voiceStartIndex() {
     if (state.voiceFrom !== 'view') return 0;
     const q = voice.queue;
@@ -1563,6 +1684,7 @@
     }
     voiceChanged();
   }
+
   // ----------------------------------------------------------- tool: voice
   const INSTALL_HELP =
     'Android: Settings → Text-to-speech (හෝ Language & input) → Google Speech Services → Install voice data. ' +
@@ -1589,6 +1711,7 @@
         }));
         return;
       }
+
       // ---- status card
       const title = el('span', { class: 'rt-vtitle' });
       const sub = el('span', { class: 'rt-vsub' });
@@ -1603,6 +1726,7 @@
         el('div', { class: 'rt-vbar', 'aria-hidden': 'true' }, bar),
       ]);
       box.appendChild(card);
+
       // ---- language chips
       const langBtns = {};
       const langWrap = el('div', {
@@ -1623,18 +1747,22 @@
         el('p', { class: 'rt-label', text: 'කියවන භාෂාව' }),
         langWrap,
       ]));
+
       // ---- voice select
       const voiceLabel = el('p', { class: 'rt-label', text: 'හඬ තෝරන්න' });
       const select = el('select', { class: 'rt-select', 'aria-label': 'හඬ තෝරන්න' });
       box.appendChild(el('div', { class: 'rt-group' }, [voiceLabel, select]));
+
       // ---- sliders
       box.appendChild(slider('කියවන වේගය', 'rate', (v) => v.toFixed(2) + 'x'));
       box.appendChild(slider('හඬේ ස්වරය (උස / පහත)', 'pitch', (v) => v.toFixed(2)));
+
       // ---- start position
       box.appendChild(segment('පටන් ගන්නේ කොහෙන්ද?', state.voiceFrom, [
         { value: 'view', label: 'තිරයේ පෙනෙන තැනින්' },
         { value: 'top', label: 'ලිපියේ මුල සිට' },
       ], (v) => set({ voiceFrom: v }, { immediate: true })));
+
       // ---- controls
       const btnMain = el('button', { class: 'rt-btn rt-vmain', type: 'button' });
       const btnStop = el('button', {
@@ -1651,14 +1779,18 @@
       btnStop.addEventListener('click', voiceStop);
       btnPrev.addEventListener('click', () => voiceSkip(-1));
       btnNext.addEventListener('click', () => voiceSkip(1));
+
       box.appendChild(el('div', { class: 'rt-row' }, [btnMain, btnStop]));
       box.appendChild(el('div', { class: 'rt-row rt-vnav' }, [btnPrev, btnNext]));
+
       const note = el('p', { class: 'rt-note' });
       box.appendChild(note);
+
       box.appendChild(el('p', {
         class: 'rt-empty',
         text: 'කියවන්න පටන් ගත්තම මේ මෙනුව ඉබේම වැහෙනවා. කියවන ඡේදය ඉස්මතු වෙලා පෙනෙනවා. විරාමයට දාන්න හෝ නවත්වන්න ඕන නම් තිරයේ පහළ මැද තියෙන පාලන බොත්තම් පාවිච්චි කරන්න.',
       }));
+
       // ---- painters
       function paintLangs() {
         VOICE_LANGS.forEach((l) => {
@@ -1763,14 +1895,17 @@
         set({ voiceMap: map }, { immediate: true });
         voiceSettingChanged();
       });
+
       const off = on('voice', paint);
       synth.addEventListener('voiceschanged', fillVoices);
       // voices load late on some browsers
       const t1 = setTimeout(fillVoices, 350);
       const t2 = setTimeout(fillVoices, 1400);
+
       paintLangs();
       fillVoices();
       paint();
+
       // speech keeps running after this tab is left: it lives at module level
       return () => {
         off();
@@ -1780,6 +1915,7 @@
       };
     },
   });
+
   // --------------------------------------------------------- tool: reading
   // short spoken-Sinhala description that follows the speed slider
   function speedHint(v) {
@@ -1797,6 +1933,7 @@
     mount(box) {
       const defSpeed = DEFAULTS.scrollSpeed;
       const hintEl = el('p', { class: 'rt-empty' });
+
       // red reset button: shown only while the speed differs from default
       const btnReset = el('button', {
         class: 'rt-reset-btn',
@@ -1812,6 +1949,7 @@
         'data-show': '0',
         'aria-hidden': 'true',
       }, el('div', { class: 'rt-reset-inner' }, btnReset));
+
       function paintHint() {
         hintEl.textContent = speedHint(state.scrollSpeed);
       }
@@ -1820,6 +1958,7 @@
         resetWrap.setAttribute('data-show', changed ? '1' : '0');
         resetWrap.setAttribute('aria-hidden', changed ? 'false' : 'true');
       }
+
       // speed can be changed while running too: autoStep reads state each frame
       const speedGroup = slider(
         'ස්වයං-අනුචලන වේගය',
@@ -1833,14 +1972,17 @@
       speedGroup.appendChild(hintEl);
       box.appendChild(speedGroup);
       box.appendChild(resetWrap);
+
       paintHint();
       paintReset();
+
       btnReset.addEventListener('click', () => {
         set({ scrollSpeed: defSpeed }, { immediate: true });
         speedGroup.rtSync(defSpeed);
         paintHint();
         paintReset();
       });
+
       const btn = el('button', { class: 'rt-btn', type: 'button' });
       const lockBtn = el('button', {
         class: 'rt-btn',
@@ -1857,6 +1999,7 @@
         }),
         el('div', { class: 'rt-row' }, [lockBtn]),
       ]);
+
       function paint() {
         const running = !!auto.raf;
         const locked = !running && voice.status !== 'idle';
@@ -1877,12 +2020,14 @@
       const offAuto = on('autoscroll', paint);
       const offVoice = on('voice', paint);
       btn.addEventListener('click', toggleAuto);
+
       box.appendChild(el('div', { class: 'rt-row' }, [btn]));
       box.appendChild(lockBox);
       box.appendChild(el('p', {
         class: 'rt-empty',
         text: 'පටන් ගත්තම මේ මෙනුව ඉබේම වැහෙනවා. නවත්වන්න ඕන නම් පහළ මැද තියෙන රතු බොත්තම ඔබන්න, නැත්නම් තිරය ඇඟිල්ලෙන් ඇදන්න. කතාව අවසාන වුනාම තනියම නවතිනවා.',
       }));
+
       let saved = 0;
       try {
         saved = parseFloat(localStorage.getItem(posKey(curPath)) || '0') || 0;
@@ -1905,6 +2050,7 @@
           }),
         ]));
       }
+
       box.appendChild(el('div', { class: 'rt-row' }, [
         el('button', {
           class: 'rt-btn', type: 'button', html: ICON.up + '<span>මුලට</span>',
@@ -1921,9 +2067,11 @@
           },
         }),
       ]));
+
       return () => { offAuto(); offVoice(); };
     },
   });
+
   // ------------------------------------------------------- tool: translate
   register({
     id: 'translate',
@@ -1961,6 +2109,7 @@
       }));
     },
   });
+
   // -------------------------------------------------------- shared scroll
   let lastSave = 0;
   let lastPct = 0;
@@ -1990,15 +2139,19 @@
     savePos();
     saveNow();
   }
+
   // -------------------------------------------------------- boot/teardown
   let booted = false;
+
   function bindGlobal() {
     listen(ui.fab, 'click', toggle);
     listen(ui.close, 'click', close);
     listen(ui.scrim, 'click', close);
+
     // voice pill controls
     listen(ui.voiceMain, 'click', voiceToggle);
     listen(ui.voiceStop, 'click', voiceStop);
+
     // stop pill: act on the very first event (pointerdown / touchstart);
     // a finger press can turn into a scroll gesture and cancel the click
     const hardStopAuto = (ev) => {
@@ -2011,6 +2164,7 @@
     listen(ui.stop, 'pointerdown', hardStopAuto);
     listen(ui.stop, 'touchstart', hardStopAuto, { passive: false });
     listen(ui.stop, 'click', hardStopAuto);
+
     // on a long page the scroll writes can delay event dispatch, so any tap
     // outside the panel also stops auto-scroll (capture phase, runs first)
     const tapStop = (ev) => {
@@ -2026,11 +2180,13 @@
     listen(window, 'pointerdown', tapStop, { capture: true, passive: true });
     listen(window, 'touchstart', tapStop, { capture: true, passive: true });
     listen(window, 'mousedown', tapStop, { capture: true, passive: true });
+
     listen(window, 'scroll', onScroll, { passive: true });
     listen(window, 'resize', () => {
       scrollMax(true);
       onScroll();
     }, { passive: true });
+
     // manual input stops auto-scroll; events inside the panel are ignored,
     // and the 420ms arm delay protects the tap that started it
     const abortAuto = (ev) => {
@@ -2040,6 +2196,7 @@
     };
     listen(window, 'wheel', abortAuto, { passive: true });
     listen(window, 'touchmove', abortAuto, { passive: true });
+
     listen(document, 'keydown', (e) => {
       if (e.key === 'Escape') {
         if (auto.raf) stopAuto();
@@ -2064,6 +2221,7 @@
       }
       trap(e);
     });
+
     listen(window, 'pagehide', () => {
       stopAuto();
       voiceHalt();
@@ -2077,6 +2235,7 @@
       }
     });
   }
+
   function teardown() {
     stopAuto();
     runCleanup();
@@ -2111,12 +2270,14 @@
     article = null;
     booted = false;
   }
+
   function boot() {
     if (booted) return;
     if (!document.body) return;
     curPath = location.pathname;
     if (!buildChrome()) return;
     booted = true;
+
     ensureAutoStyle();
     ensureResetStyle();
     ensureVoiceStyle();
@@ -2124,12 +2285,14 @@
     maxCache = -1;
     article = findArticle();
     apply();
+
     if (!article) {
       ui.root.setAttribute('data-rt-ready', '0');
       if (ui.bar) ui.bar.style.transform = 'scaleX(0)';
       emit('boot', { article: null });
       return;
     }
+
     ui.root.setAttribute('data-rt-ready', '1');
     if (ui.sub) {
       ui.sub.textContent = words().toLocaleString('en-US') + ' වචන · ' + minutes() + ' මිනිත්තු';
@@ -2139,6 +2302,7 @@
     onScroll();
     emit('boot', { article: article });
   }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot, { once: true });
   } else {
@@ -2146,9 +2310,10 @@
   }
   document.addEventListener('astro:before-swap', teardown);
   document.addEventListener('astro:page-load', boot);
+
   // ---------------------------------------------------------------- api
   window.ReaderTools = {
-    version: 15,
+    version: 16,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
