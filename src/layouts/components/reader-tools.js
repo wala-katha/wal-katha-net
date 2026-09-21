@@ -1,6 +1,10 @@
 // ==========================================================================
 // Reader Tools - logic only. Chrome + themes live in reader-tools.css
 // --------------------------------------------------------------------------
+// v16:
+//  - toc tab keeps stats + headings and gains quick buttons below them:
+//    voice, auto-scroll, page colour, size/spacing levels, speeds, language,
+//    jump buttons and reset
 // v15:
 //  - voice and auto-scroll are mutually exclusive (guards + locked UI)
 //  - voice status card no longer collapses (flex-shrink fix)
@@ -440,6 +444,47 @@
     s.textContent = css;
     document.head.appendChild(s);
   }
+  // Quick-controls dashboard styles (toc tab).
+  const QUICK_STYLE_ID = 'wk-rt-quick-style';
+  function ensureQuickStyle() {
+    if (!document.head || document.getElementById(QUICK_STYLE_ID)) return;
+    const css = `
+.rt-root .rt-qsec{display:flex;flex-direction:column;gap:10px;padding-top:14px;border-top:1px solid var(--rt-border);}
+.rt-root .rt-qtitle{margin:0;font-size:11px;font-weight:800;letter-spacing:.04em;color:var(--rt-accent);}
+.rt-root .rt-qmain{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+.rt-root .rt-qbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:78px;padding:12px 8px;border:1px solid var(--rt-border);border-radius:14px;background:var(--rt-bg2);color:var(--rt-fg);font:inherit;font-size:12px;font-weight:800;line-height:1.3;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .18s ease,border-color .18s ease,transform .12s ease;}
+.rt-root .rt-qbtn:hover{border-color:rgba(1,173,159,.55);}
+.rt-root .rt-qbtn:active{transform:scale(.97);}
+.rt-root .rt-qbtn:disabled{opacity:.45;cursor:not-allowed;}
+.rt-root .rt-qbtn[data-tone="primary"]{background:var(--rt-accent);border-color:var(--rt-accent);color:#010203;}
+.rt-root .rt-qbtn[data-tone="live"]{background:rgba(1,173,159,.14);border-color:rgba(1,173,159,.6);color:var(--rt-accent);}
+.rt-root .rt-qbtn[data-tone="danger"]{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.5);color:#f87171;}
+.rt-root .rt-qico{display:grid;place-items:center;}
+.rt-root .rt-qico svg{display:block;width:22px;height:22px;}
+.rt-root .rt-swrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
+.rt-root .rt-sw{display:flex;flex-direction:column;align-items:center;gap:6px;padding:9px 4px 8px;border:1px solid var(--rt-border);border-radius:12px;background:var(--rt-bg2);color:var(--rt-fg);font:inherit;font-size:10.5px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .18s ease,border-color .18s ease;}
+.rt-root .rt-sw i{display:block;width:26px;height:26px;border-radius:999px;border:2px solid rgba(255,255,255,.28);box-shadow:inset 0 0 0 1px rgba(0,0,0,.25);}
+.rt-root .rt-sw[aria-pressed="true"]{border-color:rgba(1,173,159,.75);background:rgba(1,173,159,.12);color:var(--rt-accent);}
+.rt-root .rt-sw[aria-pressed="true"] i{border-color:var(--rt-accent);}
+.rt-root .rt-qgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+.rt-root .rt-qcell{display:flex;flex-direction:column;gap:7px;padding:9px 8px 10px;border:1px solid var(--rt-border);border-radius:12px;background:var(--rt-bg2);}
+.rt-root .rt-qcell[data-wide="1"]{grid-column:1 / -1;}
+.rt-root .rt-qlabel{font-size:10px;font-weight:800;letter-spacing:.03em;color:var(--rt-muted);}
+.rt-root .rt-qstepper{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+.rt-root .rt-qstep{display:grid;place-items:center;width:38px;height:38px;flex:0 0 auto;margin:0;padding:0;border:1px solid var(--rt-border);border-radius:11px;background:var(--rt-bg3);color:var(--rt-fg);font:inherit;font-size:20px;font-weight:800;line-height:1;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .18s ease,border-color .18s ease,color .18s ease,transform .12s ease;}
+.rt-root .rt-qstep:hover{border-color:rgba(1,173,159,.6);color:var(--rt-accent);}
+.rt-root .rt-qstep:active{transform:scale(.92);}
+.rt-root .rt-qstep:disabled{opacity:.35;cursor:not-allowed;}
+.rt-root .rt-qval{flex:1 1 auto;min-width:0;text-align:center;font-size:11.5px;font-weight:800;color:var(--rt-accent);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.rt-root .rt-qbtn:focus-visible,.rt-root .rt-sw:focus-visible,.rt-root .rt-qstep:focus-visible{outline:2px solid var(--rt-accent);outline-offset:2px;}
+@media (prefers-reduced-motion:reduce){.rt-root .rt-qbtn,.rt-root .rt-sw,.rt-root .rt-qstep{transition:none !important;}}
+`;
+    const s = document.createElement('style');
+    s.id = QUICK_STYLE_ID;
+    s.textContent = css;
+    document.head.appendChild(s);
+  }
+
   // --------------------------------------------------------------- elements
   const ui = {
     root: null, bar: null, fab: null, stop: null, stopPct: null,
@@ -981,6 +1026,287 @@
     };
     return group;
   }
+  // ------------------------------------------------- quick controls (toc tab)
+  const SWATCHES = [
+    { value: 'dark', label: 'කළු', bg: '#0c0d10' },
+    { value: 'paper', label: 'සුදු', bg: '#fdfcf9' },
+    { value: 'sepia', label: 'කහ පාට', bg: '#f3e6cf' },
+    { value: 'contrast', label: 'පැහැදිලි', bg: 'linear-gradient(135deg,#000 50%,#fff 50%)' },
+  ];
+  const FONT_OPTS = [
+    { value: 'sinhala', label: 'සාමාන්‍ය' },
+    { value: 'serif', label: 'පොතක අකුරු' },
+    { value: 'system', label: 'ෆෝන් එකේ අකුරු' },
+  ];
+  const MEASURE_OPTS = [
+    { value: 'narrow', label: 'කෙටි' },
+    { value: 'normal', label: 'සාමාන්‍ය' },
+    { value: 'wide', label: 'දිගු' },
+  ];
+  const FROM_OPTS = [
+    { value: 'view', label: 'තිරයේ පෙනෙන තැනින්' },
+    { value: 'top', label: 'ලිපියේ මුල සිට' },
+  ];
+  const SIZE_LEVELS = [[0.9, 'කුඩා'], [1, 'සාමාන්‍ය'], [1.2, 'ලොකු'], [1.45, 'විශාල']];
+  const LINE_LEVELS = [[1.55, 'ළං'], [1.85, 'සාමාන්‍ය'], [2.2, 'ඈත']];
+  const LETTER_LEVELS = [[0, 'සාමාන්‍ය'], [0.02, 'ටිකක් ඈත'], [0.04, 'ඈත']];
+  function qsec(title, kids) {
+    return el('section', { class: 'rt-qsec', 'aria-label': title },
+      [el('p', { class: 'rt-qtitle', text: title })].concat(kids));
+  }
+  // row of level buttons for one numeric setting; the nearest level is pressed
+  function qlevels(label, key, levels) {
+    const seg = el('div', { class: 'rt-seg', role: 'group', 'aria-label': label });
+    const btns = [];
+    function paint() {
+      let best = 0;
+      let dist = Infinity;
+      levels.forEach((lv, i) => {
+        const d = Math.abs(state[key] - lv[0]);
+        if (d < dist) { dist = d; best = i; }
+      });
+      btns.forEach((b, i) => b.setAttribute('aria-pressed', i === best ? 'true' : 'false'));
+    }
+    levels.forEach((lv) => {
+      const b = el('button', { class: 'rt-chip', type: 'button', text: lv[1], 'aria-pressed': 'false' });
+      b.addEventListener('click', () => {
+        const patch = {};
+        patch[key] = lv[0];
+        set(patch, { immediate: true });
+        paint();
+      });
+      btns.push(b);
+      seg.appendChild(b);
+    });
+    paint();
+    return el('div', { class: 'rt-group' }, [el('p', { class: 'rt-label', text: label }), seg]);
+  }
+  // minus / value / plus control for one numeric setting
+  function qstepper(label, key, inc, fmt) {
+    const l = LIMITS[key];
+    const val = el('span', { class: 'rt-qval', 'aria-live': 'polite' });
+    const minus = el('button', {
+      class: 'rt-qstep', type: 'button', 'aria-label': label + ' අඩු කරන්න', text: '\u2212',
+    });
+    const plus = el('button', {
+      class: 'rt-qstep', type: 'button', 'aria-label': label + ' වැඩි කරන්න', text: '+',
+    });
+    function paint() {
+      const v = state[key];
+      val.textContent = fmt(v);
+      minus.disabled = v <= l[0] + 1e-6;
+      plus.disabled = v >= l[1] - 1e-6;
+    }
+    function bump(dir) {
+      const v = clamp(Number(round(state[key] + dir * inc, l[2]).toFixed(4)), l[0], l[1]);
+      const patch = {};
+      patch[key] = v;
+      set(patch);
+      paint();
+    }
+    minus.addEventListener('click', () => bump(-1));
+    plus.addEventListener('click', () => bump(1));
+    paint();
+    return el('div', { class: 'rt-qcell' }, [
+      el('span', { class: 'rt-qlabel', text: label }),
+      el('div', { class: 'rt-qstepper' }, [minus, val, plus]),
+    ]);
+  }
+  function qgrid(defs) {
+    const cells = defs.map((d) => qstepper(d[0], d[1], d[2], d[3]));
+    if (cells.length % 2 === 1) cells[cells.length - 1].setAttribute('data-wide', '1');
+    return el('div', { class: 'rt-qgrid' }, cells);
+  }
+  function mountQuickControls(box) {
+    const cleanups = [];
+    // ---- 1. main action buttons
+    const vIcon = el('span', { class: 'rt-qico', 'aria-hidden': 'true' });
+    const vLabel = el('span');
+    const vBtn = el('button', { class: 'rt-qbtn', type: 'button' }, [vIcon, vLabel]);
+    const aIcon = el('span', { class: 'rt-qico', 'aria-hidden': 'true' });
+    const aLabel = el('span');
+    const aBtn = el('button', { class: 'rt-qbtn', type: 'button' }, [aIcon, aLabel]);
+    vBtn.addEventListener('click', voiceToggle);
+    aBtn.addEventListener('click', toggleAuto);
+    const tPrev = el('button', {
+      class: 'rt-btn', type: 'button', 'aria-label': 'පෙර ඡේදය', title: 'පෙර ඡේදය',
+      html: ICON.prev + '<span>පෙර</span>',
+    });
+    const tNext = el('button', {
+      class: 'rt-btn', type: 'button', 'aria-label': 'ඊළඟ ඡේදය', title: 'ඊළඟ ඡේදය',
+      html: ICON.next + '<span>ඊළඟ</span>',
+    });
+    const tStop = el('button', {
+      class: 'rt-btn', type: 'button', 'data-danger': '1',
+      html: ICON.stop + '<span>නවත්වන්න</span>',
+    });
+    tPrev.addEventListener('click', () => voiceSkip(-1));
+    tNext.addEventListener('click', () => voiceSkip(1));
+    tStop.addEventListener('click', voiceStop);
+    const transport = el('div', { class: 'rt-row rt-vnav' }, [tPrev, tNext, tStop]);
+    const vNote = el('p', { class: 'rt-note', 'data-warn': '1' });
+    const lockNote = el('p', {
+      class: 'rt-note',
+      'data-warn': '1',
+      text: 'හඬ ක්‍රියාත්මක නිසා ඉබේම පහළට යාම දැන් බැහැ. මුලින් හඬ නවත්වන්න.',
+    });
+    // ---- language + start position (only when speech exists)
+    let langSel = null;
+    let langHint = null;
+    const voiceKids = [];
+    if (synth) {
+      langSel = el('select', { class: 'rt-select', 'aria-label': 'කියවන භාෂාව' });
+      VOICE_LANGS.forEach((l) => {
+        langSel.appendChild(el('option', {
+          value: l.id, text: l.id === 'si' ? l.label : l.label + ' \u00b7 ' + l.name,
+        }));
+      });
+      langSel.value = state.voiceLang;
+      langSel.addEventListener('change', () => voiceSetLang(langSel.value));
+      langHint = el('p', {
+        class: 'rt-empty',
+        text: 'ලිපිය මුලින් තියෙන්නේ සිංහලෙන්. තෝරපු භාෂාවට කොටස් කොටස් පරිවර්තනය කරලා කියවනවා. ඒකට අන්තර්ජාලය ඕන.',
+      });
+      voiceKids.push(
+        el('div', { class: 'rt-group' }, [el('p', { class: 'rt-label', text: 'කියවන භාෂාව' }), langSel]),
+        langHint,
+        segment('හඬ පටන් ගන්නේ', state.voiceFrom, FROM_OPTS,
+          (v) => set({ voiceFrom: v }, { immediate: true }))
+      );
+    }
+    // ---- painters
+    function paintAuto() {
+      const running = !!auto.raf;
+      const locked = !running && voice.status !== 'idle';
+      aIcon.innerHTML = running ? ICON.stop : ICON.down;
+      aLabel.textContent = running ? 'ඉබේම යාම නවත්වන්න' : 'ඉබේම පහළට යන්න';
+      aBtn.setAttribute('data-tone', running ? 'danger' : 'idle');
+      aBtn.disabled = locked;
+      lockNote.style.display = locked ? '' : 'none';
+    }
+    function paintVoice() {
+      const s = voice.status;
+      vIcon.innerHTML = s === 'playing' ? ICON.pause : ICON.play;
+      vLabel.textContent =
+        s === 'playing' ? 'විරාමය' : s === 'paused' ? 'දිගටම කියවන්න' : 'හඬින් කියවන්න';
+      vBtn.setAttribute('data-tone', s === 'playing' ? 'live' : 'primary');
+      vBtn.disabled = !synth;
+      transport.style.display = s === 'idle' ? 'none' : '';
+      const msg = voice.error ||
+        (!synth ? 'මෙම බ්‍රව්සරය හඬ කියවීමට සහාය නොදක්වයි. Chrome හෝ Edge භාවිත කර බලන්න.' : '');
+      vNote.textContent = msg;
+      vNote.style.display = msg ? '' : 'none';
+      if (langSel) langSel.value = state.voiceLang;
+      if (langHint) langHint.style.display = state.voiceLang === 'si' ? 'none' : '';
+    }
+    function paintAll() {
+      paintVoice();
+      paintAuto();
+    }
+    cleanups.push(on('voice', paintAll));
+    cleanups.push(on('autoscroll', paintAuto));
+    paintAll();
+    box.appendChild(qsec('ඉක්මන් පාලන', [
+      el('div', { class: 'rt-qmain' }, [vBtn, aBtn]),
+      transport,
+      vNote,
+      lockNote,
+    ]));
+    // ---- 2. page look
+    const swBtns = [];
+    const swRow = el('div', { class: 'rt-swrow', role: 'group', 'aria-label': 'පිටුවේ පාට' });
+    function paintSw() {
+      swBtns.forEach((s) => s.btn.setAttribute('aria-pressed', s.value === state.page ? 'true' : 'false'));
+    }
+    SWATCHES.forEach((sw) => {
+      const dot = el('i', { 'aria-hidden': 'true' });
+      dot.style.background = sw.bg;
+      const btn = el('button', { class: 'rt-sw', type: 'button', 'aria-pressed': 'false' },
+        [dot, el('span', { text: sw.label })]);
+      btn.addEventListener('click', () => {
+        set({ page: sw.value }, { immediate: true });
+        paintSw();
+      });
+      swBtns.push({ value: sw.value, btn: btn });
+      swRow.appendChild(btn);
+    });
+    paintSw();
+    const btnReset = el('button', {
+      class: 'rt-btn', type: 'button',
+      html: ICON.reset + '<span>පෙනුම මුල් විදිහටම හදන්න</span>',
+    });
+    btnReset.addEventListener('click', () => {
+      set({
+        page: DEFAULTS.page,
+        font: DEFAULTS.font,
+        fontScale: DEFAULTS.fontScale,
+        lineHeight: DEFAULTS.lineHeight,
+        letter: DEFAULTS.letter,
+        measure: DEFAULTS.measure,
+      }, { immediate: true });
+      const y = ui.body ? ui.body.scrollTop : 0;
+      showTab('toc');
+      if (ui.body) ui.body.scrollTop = y;
+    });
+    box.appendChild(qsec('පිටුවේ පෙනුම', [
+      el('div', { class: 'rt-group' }, [el('p', { class: 'rt-label', text: 'පිටුවේ පාට' }), swRow]),
+      qlevels('අකුරු ලොකුකම', 'fontScale', SIZE_LEVELS),
+      qlevels('පේළි අතර ඉඩ', 'lineHeight', LINE_LEVELS),
+      qlevels('අකුරු අතර ඉඩ', 'letter', LETTER_LEVELS),
+      segment('අකුරු වර්ගය', state.font, FONT_OPTS, (v) => set({ font: v }, { immediate: true })),
+      segment('පේළියක දිග', state.measure, MEASURE_OPTS, (v) => set({ measure: v }, { immediate: true })),
+      btnReset,
+    ]));
+    // ---- 3. speeds + voice options
+    const speedDefs = [['ඉබේම යන වේගය', 'scrollSpeed', 1, (v) => Math.round(v) + ' / 10']];
+    if (synth) {
+      speedDefs.push(['හඬ වේගය', 'rate', 0.1, (v) => v.toFixed(2) + 'x']);
+      speedDefs.push(['හඬේ ස්වරය', 'pitch', 0.1, (v) => v.toFixed(2)]);
+    }
+    box.appendChild(qsec('වේගය සහ හඬ', [qgrid(speedDefs)].concat(voiceKids)));
+    // ---- 4. jump buttons
+    const goTop = el('button', { class: 'rt-btn', type: 'button', html: ICON.up + '<span>මුලට</span>' });
+    const goEnd = el('button', { class: 'rt-btn', type: 'button', html: ICON.down + '<span>අන්තිමට</span>' });
+    goTop.addEventListener('click', () => {
+      stopAuto();
+      window.scrollTo({ top: 0, behavior: isMobile() ? 'auto' : behavior() });
+      if (isMobile()) close();
+    });
+    goEnd.addEventListener('click', () => {
+      stopAuto();
+      window.scrollTo({ top: scrollMax(true), behavior: isMobile() ? 'auto' : behavior() });
+      if (isMobile()) close();
+    });
+    const goKids = [el('div', { class: 'rt-row' }, [goTop, goEnd])];
+    let saved = 0;
+    try {
+      saved = parseFloat(localStorage.getItem(posKey(curPath)) || '0') || 0;
+    } catch (e) {}
+    if (saved > 0.04 && saved < 0.95) {
+      const goSaved = el('button', {
+        class: 'rt-btn', type: 'button',
+        html: ICON.up + '<span>කලින් නැවතුණ තැනට (' + Math.round(saved * 100) + '%)</span>',
+      });
+      goSaved.addEventListener('click', () => {
+        stopAuto();
+        window.scrollTo({ top: scrollMax(true) * saved, behavior: isMobile() ? 'auto' : behavior() });
+        if (isMobile()) close();
+      });
+      goKids.unshift(el('div', { class: 'rt-row' }, [goSaved]));
+    }
+    const moreKids = [];
+    if (synth) {
+      const goVoice = el('button', { class: 'rt-btn', type: 'button', html: ICON.voice + '<span>හඬ සැකසුම්</span>' });
+      goVoice.addEventListener('click', () => showTab('voice'));
+      moreKids.push(goVoice);
+    }
+    const goTr = el('button', { class: 'rt-btn', type: 'button', html: ICON.globe + '<span>පරිවර්තනය</span>' });
+    goTr.addEventListener('click', () => showTab('translate'));
+    moreKids.push(goTr);
+    goKids.push(el('div', { class: 'rt-row' }, moreKids));
+    box.appendChild(qsec('යන්න', goKids));
+    return () => { cleanups.forEach((f) => f()); };
+  }
   // ------------------------------------------------------------- tool: toc
   let tocSync = null;
   register({
@@ -1015,41 +1341,43 @@
       if (!heads.length) {
         group.appendChild(el('p', {
           class: 'rt-empty',
-          text: 'මේ ලිපියේ උපශීර්ෂ නැහැ. "කියවීම" ටැබ් එකෙන් ස්වයං-අනුචලනය පාවිච්චි කරන්න පුළුවන්.',
+          text: 'මේ ලිපියේ උපශීර්ෂ නැහැ. පහළ බටන් වලින් කියවීම පාලනය කරගන්න පුළුවන්.',
         }));
         box.appendChild(group);
-        return () => { pctEl = null; };
-      }
-      const list = el('ul', { class: 'rt-toc' });
-      const pairs = [];
-      heads.forEach((h, i) => {
-        if (!h.id) h.id = 'rt-h-' + i;
-        const a = el('a', {
-          href: '#' + h.id,
-          text: (h.textContent || '').trim(),
-          onclick: (ev) => {
-            ev.preventDefault();
-            stopAuto();
-            h.scrollIntoView({ behavior: behavior(), block: 'start' });
-            if (isMobile()) close();
-          },
+      } else {
+        const list = el('ul', { class: 'rt-toc' });
+        const pairs = [];
+        heads.forEach((h, i) => {
+          if (!h.id) h.id = 'rt-h-' + i;
+          const a = el('a', {
+            href: '#' + h.id,
+            text: (h.textContent || '').trim(),
+            onclick: (ev) => {
+              ev.preventDefault();
+              stopAuto();
+              h.scrollIntoView({ behavior: behavior(), block: 'start' });
+              if (isMobile()) close();
+            },
+          });
+          pairs.push({ a: a, h: h });
+          list.appendChild(el('li', { 'data-lvl': h.tagName.slice(1) }, a));
         });
-        pairs.push({ a: a, h: h });
-        list.appendChild(el('li', { 'data-lvl': h.tagName.slice(1) }, a));
-      });
-      group.appendChild(list);
-      box.appendChild(group);
-      tocSync = () => {
-        let cur = null;
-        for (let i = 0; i < pairs.length; i++) {
-          if (pairs[i].h.getBoundingClientRect().top <= 130) cur = pairs[i];
-        }
-        pairs.forEach((p) => p.a.setAttribute('data-active', p === cur ? '1' : '0'));
-      };
-      tocSync();
+        group.appendChild(list);
+        box.appendChild(group);
+        tocSync = () => {
+          let cur = null;
+          for (let i = 0; i < pairs.length; i++) {
+            if (pairs[i].h.getBoundingClientRect().top <= 130) cur = pairs[i];
+          }
+          pairs.forEach((p) => p.a.setAttribute('data-active', p === cur ? '1' : '0'));
+        };
+        tocSync();
+      }
+      const offQuick = mountQuickControls(box);
       return () => {
         tocSync = null;
         pctEl = null;
+        offQuick();
       };
     },
   });
@@ -1526,6 +1854,13 @@
       }, KICK_MS);
     }
     voiceChanged();
+  }
+  // language change from any tab: save, then restart the current chunk
+  function voiceSetLang(id) {
+    if (id === state.voiceLang) return;
+    if (!VOICE_LANGS.some((l) => l.id === id)) return;
+    set({ voiceLang: id }, { immediate: true });
+    voiceSettingChanged();
   }
   // jump to previous / next paragraph
   function voiceSkip(dir) {
@@ -2120,6 +2455,7 @@
     ensureAutoStyle();
     ensureResetStyle();
     ensureVoiceStyle();
+    ensureQuickStyle();
     clearDim();
     maxCache = -1;
     article = findArticle();
@@ -2148,7 +2484,7 @@
   document.addEventListener('astro:page-load', boot);
   // ---------------------------------------------------------------- api
   window.ReaderTools = {
-    version: 15,
+    version: 16,
     register: register,
     registerVoiceEngine: registerVoiceEngine,
     open: open,
