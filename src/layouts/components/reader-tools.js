@@ -1,12 +1,6 @@
 // ==========================================================================
 // Reader Tools - logic only. Chrome + themes live in reader-tools.css
 // --------------------------------------------------------------------------
-// v16:
-//  - "පටුන" tab keeps stats + headings and gains a quick-tools dashboard
-//    (tiles, colour swatches, level chips, steppers)
-//  - new "තවත්" tab: night light / dimmer, keep-awake (Wake Lock), sleep timer,
-//    bookmarks, share, fullscreen, random story
-//  - new prefs: align, dim, warm, keepAwake
 // v15:
 //  - voice and auto-scroll are mutually exclusive (guards + locked UI)
 //  - voice status card no longer collapses (flex-shrink fix)
@@ -97,10 +91,6 @@
     voiceMap: {},
     voiceFrom: 'view',
     scrollSpeed: 4,
-    align: 'left',
-    dim: 0,
-    warm: 0,
-    keepAwake: false,
   };
   const LIMITS = {
     fontScale: [0.85, 1.6, 0.05],
@@ -109,15 +99,12 @@
     rate: [0.6, 1.6, 0.05],
     pitch: [0.6, 1.4, 0.05],
     scrollSpeed: [1, 10, 1],
-    dim: [0, 0.6, 0.05],
-    warm: [0, 0.35, 0.05],
   };
   const ENUMS = {
     page: ['dark', 'paper', 'sepia', 'contrast'],
     font: ['sinhala', 'serif', 'system'],
     measure: ['narrow', 'normal', 'wide'],
     voiceFrom: ['view', 'top'],
-    align: ['left', 'justify'],
   };
   // ---------------------------------------------------------------- helpers
   const $ = (s, r) => (r || document).querySelector(s);
@@ -214,7 +201,6 @@
       s[k] = clamp(isNum(s[k]) ? s[k] : DEFAULTS[k], l[0], l[1]);
     });
     if (!VOICE_LANGS.some((l) => l.id === s.voiceLang)) s.voiceLang = 'si';
-    s.keepAwake = s.keepAwake === true;
     const vm = {};
     if (s.voiceMap && typeof s.voiceMap === 'object') {
       Object.keys(s.voiceMap).forEach((k) => {
@@ -288,21 +274,6 @@
     reset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 14.6-5.9"/><path d="M19 3v4.5h-4.5"/></svg>',
     close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   };
-  const S = (d) =>
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-    d + '</svg>';
-  Object.assign(ICON, {
-    moon: S('<path d="M20.5 13.2A8.5 8.5 0 1 1 10.8 3.5a6.8 6.8 0 0 0 9.7 9.7z"/>'),
-    phone: S('<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.2h2"/>'),
-    bookmark: S('<path d="M6.5 3.5h11v17L12 16.6 6.5 20.5z"/>'),
-    share: S('<circle cx="18" cy="5.5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="18.5" r="2.6"/><path d="M8.3 10.8l7.4-4M8.3 13.2l7.4 4"/>'),
-    expand: S('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
-    shrink: S('<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>'),
-    book: S('<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/>'),
-    clock: S('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
-    link: S('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
-    grid: S('<rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/>'),
-  });
   // ------------------------------------------------- injected auto-scroll css
   // Also lives here (not only in the css file) so a renamed class or a cached
   // old css build can never make the red stop pill invisible.
@@ -482,8 +453,6 @@
   let cleanupTab = null;
   let lastFocus = null;
   let pctEl = null;
-  let restEl = null;
-  let totalMin = 1;
   let curPath = typeof location !== 'undefined' ? location.pathname : '/';
   // ------------------------------------------------------------ build chrome
   function ensureRoot() {
@@ -638,11 +607,6 @@
     r.setAttribute('data-rt-page', state.page);
     r.setAttribute('data-rt-font', state.font);
     r.setAttribute('data-rt-measure', state.measure);
-    r.setAttribute('data-rt-align', state.align);
-    r.style.setProperty('--rt-dim', String(state.dim));
-    r.style.setProperty('--rt-warm', String(state.warm));
-    if (state.dim > 0 || state.warm > 0) r.setAttribute('data-rt-shade', '1');
-    else r.removeAttribute('data-rt-shade');
     r.style.setProperty('--rt-font-scale', String(state.fontScale));
     r.style.setProperty('--rt-line-height', String(state.lineHeight));
     r.style.setProperty('--rt-letter', state.letter + 'em');
@@ -661,7 +625,6 @@
     apply();
     if (opts && opts.immediate) saveNow();
     else save();
-    if (patch && Object.prototype.hasOwnProperty.call(patch, 'keepAwake')) wakeSync();
     emit('change', state);
   }
   // -------------------------------------------------------- auto scroll
@@ -938,7 +901,6 @@
     }
     cleanupTab = null;
     pctEl = null;
-    restEl = null;
   }
   function showTab(id) {
     const tool = tools.filter((t) => t.id === id)[0];
@@ -1019,556 +981,6 @@
     };
     return group;
   }
-  // ------------------------------------------------------------ extra helpers
-  const MAX_MARKS = 8;
-  const NIGHT = { dim: 0.25, warm: 0.15 };
-  const PAGE_SWATCHES = [
-    { v: 'dark', label: 'කළු', bg: '#0c0d10', fg: '#f8f8ff', hi: false },
-    { v: 'paper', label: 'සුදු', bg: '#fdfcf9', fg: '#1b1d22', hi: false },
-    { v: 'sepia', label: 'කහ පාට', bg: '#f3e6cf', fg: '#47341f', hi: false },
-    { v: 'contrast', label: 'පැහැදිලි', bg: '#000000', fg: '#ffffff', hi: true },
-  ];
-  function section(title) {
-    return el('div', { class: 'rt-sect' }, [
-      el('span', { class: 'rt-sect-txt', text: title }),
-      el('i', { 'aria-hidden': 'true' }),
-    ]);
-  }
-  // icon + title + small status line. b.rtSet({title, sub, icon, on, danger, disabled})
-  function tile(icon, title, onclick) {
-    const ico = el('span', { class: 'rt-tile-ico', html: icon, 'aria-hidden': 'true' });
-    const ttl = el('span', { class: 'rt-tile-title', text: title });
-    const sub = el('span', { class: 'rt-tile-sub' });
-    const b = el('button', { class: 'rt-tile', type: 'button' }, [
-      ico,
-      el('span', { class: 'rt-tile-txt' }, [ttl, sub]),
-    ]);
-    let curIcon = icon;
-    b.addEventListener('click', onclick);
-    b.rtSet = (o) => {
-      if (o.title !== undefined) ttl.textContent = o.title;
-      if (o.sub !== undefined) sub.textContent = o.sub;
-      if (o.icon !== undefined && o.icon !== curIcon) {
-        curIcon = o.icon;
-        ico.innerHTML = o.icon;
-      }
-      if (o.on !== undefined) b.setAttribute('aria-pressed', o.on ? 'true' : 'false');
-      if (o.danger !== undefined) {
-        if (o.danger) b.setAttribute('data-danger', '1');
-        else b.removeAttribute('data-danger');
-      }
-      if (o.disabled !== undefined) b.disabled = !!o.disabled;
-    };
-    return b;
-  }
-  // a row of preset chips bound to one numeric pref; group.rtSync() repaints
-  function levels(label, key, opts, tol, after) {
-    const seg = el('div', { class: 'rt-seg' });
-    const btns = opts.map((o) => {
-      const b = el('button', {
-        class: 'rt-chip',
-        type: 'button',
-        text: o.label,
-        onclick: () => {
-          const p = {};
-          p[key] = o.value;
-          set(p, { immediate: true });
-          if (typeof after === 'function') after(o.value);
-        },
-      });
-      seg.appendChild(b);
-      return { b: b, v: o.value };
-    });
-    const group = el('div', { class: 'rt-group' }, [
-      el('p', { class: 'rt-label', text: label }),
-      seg,
-    ]);
-    group.rtSync = () => {
-      btns.forEach((x) => {
-        x.b.setAttribute('aria-pressed', Math.abs(state[key] - x.v) < tol ? 'true' : 'false');
-      });
-    };
-    group.rtSync();
-    return group;
-  }
-  function pageSwatches() {
-    const row = el('div', { class: 'rt-swatches', role: 'group', 'aria-label': 'පිටුවේ පාට' });
-    const btns = PAGE_SWATCHES.map((p) => {
-      const b = el('button', {
-        class: 'rt-swatch',
-        type: 'button',
-        'aria-label': p.label,
-        onclick: () => set({ page: p.v }, { immediate: true }),
-      }, [
-        el('span', {
-          class: 'rt-swatch-dot',
-          'data-hi': p.hi ? '1' : '0',
-          style: 'background:' + p.bg + ';color:' + p.fg + ';',
-          text: 'අ',
-        }),
-        el('span', { class: 'rt-swatch-txt', text: p.label }),
-      ]);
-      row.appendChild(b);
-      return { b: b, v: p.v };
-    });
-    const group = el('div', { class: 'rt-group' }, [
-      el('p', { class: 'rt-label', text: 'පිටුවේ පාට' }),
-      row,
-    ]);
-    group.rtSync = () => {
-      btns.forEach((x) => x.b.setAttribute('aria-pressed', x.v === state.page ? 'true' : 'false'));
-    };
-    group.rtSync();
-    return group;
-  }
-  // font size: 4 level chips + a fine [-] value [+] stepper
-  function fontGroup() {
-    const group = levels('අකුරු ලොකුකම', 'fontScale', [
-      { label: 'කුඩා', value: 0.9 },
-      { label: 'සාමාන්‍ය', value: 1 },
-      { label: 'ලොකු', value: 1.2 },
-      { label: 'ගොඩක් ලොකු', value: 1.45 },
-    ], 0.03);
-    const val = el('span', { class: 'rt-step-val' });
-    const nudge = (dir) => {
-      const l = LIMITS.fontScale;
-      const next = clamp(Math.round((state.fontScale + dir * 0.05) * 100) / 100, l[0], l[1]);
-      set({ fontScale: next }, { immediate: true });
-    };
-    const minus = el('button', {
-      class: 'rt-btn rt-step-btn',
-      type: 'button',
-      'aria-label': 'අකුරු කුඩා කරන්න',
-      html: '<span class="rt-step-a-sm">අ</span>',
-      onclick: () => nudge(-1),
-    });
-    const plus = el('button', {
-      class: 'rt-btn rt-step-btn',
-      type: 'button',
-      'aria-label': 'අකුරු ලොකු කරන්න',
-      html: '<span class="rt-step-a-lg">අ</span>',
-      onclick: () => nudge(1),
-    });
-    group.appendChild(el('div', { class: 'rt-row rt-stepper' }, [minus, val, plus]));
-    const base = group.rtSync;
-    group.rtSync = () => {
-      base();
-      val.textContent = Math.round(state.fontScale * 100) + '%';
-    };
-    group.rtSync();
-    return group;
-  }
-  // shown only while voice is playing/paused (auto-scroll cannot start then)
-  function makeVoiceLockBox() {
-    const box = el('div', { class: 'rt-group' }, [
-      el('p', {
-        class: 'rt-note',
-        'data-warn': '1',
-        text: 'දැන් හඬින් කියවමින් හෝ විරාමයේ තියෙනවා. හඬ සහ ඉබේම පහළට යාම එකවර පාවිච්චි කරන්න බැහැ. ඉබේම පහළට යන්න ඕන නම් මුලින් හඬ නවත්වන්න.',
-      }),
-      el('div', { class: 'rt-row' }, [
-        el('button', {
-          class: 'rt-btn',
-          type: 'button',
-          'data-danger': '1',
-          html: ICON.stop + '<span>හඬ නවත්වන්න</span>',
-          onclick: voiceStop,
-        }),
-      ]),
-    ]);
-    box.rtSync = () => {
-      const locked = !auto.raf && voice.status !== 'idle';
-      box.style.display = locked ? '' : 'none';
-      return locked;
-    };
-    box.rtSync();
-    return box;
-  }
-  const pctWord = (v) => (v <= 0 ? 'නැහැ' : Math.round(v * 100) + '%');
-  function restLabel(pct) {
-    if (pct >= 0.98) return 'කතාව කියවා අවසානයි.';
-    const left = Math.max(1, Math.ceil(totalMin * (1 - pct)));
-    return 'කියවා අවසන් කරන්න තව මිනිත්තු ' + left + 'ක් පමණ ඉතිරියි.';
-  }
-  // ---- keep screen awake (Wake Lock). Held while the pref is on, or while
-  // auto-scroll / voice is running: programmatic scrolling does not reset the
-  // phone's screen timeout, so the screen used to switch off mid-story.
-  const wake = { sentinel: null, busy: false, dirty: false };
-  function wakeSupported() {
-    try {
-      return !!(navigator.wakeLock && navigator.wakeLock.request);
-    } catch (e) {
-      return false;
-    }
-  }
-  function wantAwake() {
-    return !!article && (state.keepAwake || !!auto.raf || voice.status === 'playing');
-  }
-  async function wakeSync() {
-    if (!wakeSupported()) return;
-    if (wake.busy) {
-      wake.dirty = true;
-      return;
-    }
-    wake.busy = true;
-    try {
-      const want = wantAwake() && document.visibilityState === 'visible';
-      if (want && !wake.sentinel) {
-        const s = await navigator.wakeLock.request('screen');
-        wake.sentinel = s;
-        s.addEventListener('release', () => {
-          if (wake.sentinel === s) wake.sentinel = null;
-        });
-      } else if (!want && wake.sentinel) {
-        const s = wake.sentinel;
-        wake.sentinel = null;
-        await s.release();
-      }
-    } catch (e) {
-      wake.sentinel = null;
-    }
-    wake.busy = false;
-    if (wake.dirty) {
-      wake.dirty = false;
-      wakeSync();
-    }
-  }
-  function wakeRelease() {
-    const s = wake.sentinel;
-    wake.sentinel = null;
-    if (s) {
-      try { s.release(); } catch (e) {}
-    }
-  }
-  on('autoscroll', wakeSync);
-  on('voice', wakeSync);
-  // ---- sleep timer: stops voice + auto-scroll when the time is up
-  const sleeper = { id: 0, endAt: 0, min: 0 };
-  function sleepLeftMs() {
-    return sleeper.endAt ? Math.max(0, sleeper.endAt - Date.now()) : 0;
-  }
-  function sleepClear() {
-    if (sleeper.id) clearTimeout(sleeper.id);
-    sleeper.id = 0;
-    sleeper.endAt = 0;
-    sleeper.min = 0;
-  }
-  function sleepSet(min) {
-    sleepClear();
-    if (min > 0) {
-      sleeper.min = min;
-      sleeper.endAt = Date.now() + min * 60000;
-      sleeper.id = setTimeout(() => {
-        sleepClear();
-        stopAuto();
-        if (voice.status !== 'idle') voiceStop();
-        emit('tools');
-      }, min * 60000);
-    }
-    emit('tools');
-  }
-  // ---- bookmarks (per page, localStorage)
-  const marksKey = () => 'wk:reader:marks:' + curPath;
-  function loadMarks() {
-    try {
-      const a = JSON.parse(localStorage.getItem(marksKey()) || '[]');
-      return Array.isArray(a) ? a.filter((m) => m && isNum(m.f)).slice(0, MAX_MARKS) : [];
-    } catch (e) {
-      return [];
-    }
-  }
-  function saveMarks(list) {
-    try {
-      localStorage.setItem(marksKey(), JSON.stringify(list));
-    } catch (e) {}
-  }
-  // first block still visible at the top of the screen
-  function topBlock() {
-    if (!article) return { i: -1, s: '' };
-    const nodes = $$(BLOCK_SEL, article);
-    for (let i = 0; i < nodes.length; i++) {
-      if (nodes[i].getBoundingClientRect().bottom > 90) {
-        const t = cleanSpeech(nodes[i].textContent);
-        return { i: i, s: t.length > 48 ? t.slice(0, 48).trim() + '…' : t };
-      }
-    }
-    return { i: -1, s: '' };
-  }
-  function addMark() {
-    const max = scrollMax(true);
-    const f = max > 4 ? clamp(window.scrollY / max, 0, 1) : 0;
-    const tb = topBlock();
-    const list = loadMarks().filter((m) => Math.abs(m.f - f) > 0.01);
-    list.unshift({ f: Math.round(f * 1000) / 1000, i: tb.i, s: tb.s, t: Date.now() });
-    saveMarks(list.slice(0, MAX_MARKS));
-    emit('tools');
-  }
-  function removeMark(t) {
-    saveMarks(loadMarks().filter((m) => m.t !== t));
-    emit('tools');
-  }
-  function jumpToMark(m) {
-    stopAuto();
-    let top = null;
-    if (article && isNum(m.i) && m.i >= 0) {
-      const n = $$(BLOCK_SEL, article)[m.i];
-      if (n) top = window.scrollY + n.getBoundingClientRect().top - 90;
-    }
-    if (top === null) top = scrollMax(true) * clamp(m.f, 0, 1);
-    window.scrollTo({ top: Math.max(0, top), behavior: isMobile() ? 'auto' : behavior() });
-    if (isMobile()) close();
-  }
-  function buildMarks(hideEmpty) {
-    const list = el('div', { class: 'rt-marks' });
-    const root = el('div', { class: 'rt-group' }, [
-      el('p', { class: 'rt-label', text: 'මගේ සලකුණු' }),
-      list,
-    ]);
-    function sync() {
-      list.textContent = '';
-      const marks = loadMarks();
-      root.style.display = !marks.length && hideEmpty ? 'none' : '';
-      if (!marks.length) {
-        list.appendChild(el('p', {
-          class: 'rt-empty',
-          text: 'තවම සලකුණු නැහැ. කියවන අතරතුර ඕන තැනක "සලකුණක් දාන්න" ඔබන්න.',
-        }));
-        return;
-      }
-      marks.forEach((m) => {
-        list.appendChild(el('div', { class: 'rt-mark' }, [
-          el('button', {
-            class: 'rt-mark-go',
-            type: 'button',
-            onclick: () => jumpToMark(m),
-          }, [
-            el('b', { text: Math.round(m.f * 100) + '%' }),
-            el('span', { text: m.s || 'සලකුණු කළ තැන' }),
-          ]),
-          el('button', {
-            class: 'rt-mark-del',
-            type: 'button',
-            'aria-label': 'සලකුණ මකන්න',
-            html: ICON.close,
-            onclick: () => removeMark(m.t),
-          }),
-        ]));
-      });
-    }
-    sync();
-    return { node: root, off: on('tools', sync) };
-  }
-  // ---- share / copy link
-  function pageUrl() {
-    const c = $('link[rel="canonical"]');
-    return (c && c.href) || location.href;
-  }
-  async function copyText(text) {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-        return true;
-      }
-    } catch (e) {}
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.setAttribute('readonly', '');
-      ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand('copy');
-      ta.remove();
-      return !!ok;
-    } catch (e) {
-      return false;
-    }
-  }
-  async function sharePage() {
-    const url = pageUrl();
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: document.title, url: url });
-        return 'බෙදාගත්තා ✓';
-      } catch (e) {
-        if (e && e.name === 'AbortError') return '';
-      }
-    }
-    return (await copyText(url)) ? 'ලින්ක් එක copy කළා ✓' : 'copy කරන්න බැරි වුණා';
-  }
-  // ---- fullscreen + random story
-  const fsOK = () => !!(document.fullscreenEnabled && document.documentElement.requestFullscreen);
-  function toggleFullscreen() {
-    try {
-      const p = document.fullscreenElement
-        ? document.exitFullscreen()
-        : document.documentElement.requestFullscreen();
-      if (p && typeof p.catch === 'function') p.catch(() => {});
-    } catch (e) {}
-  }
-  function otherStoryLinks() {
-    const cur = location.pathname.replace(/\/+$/, '');
-    const seen = {};
-    const out = [];
-    $$('#similar-posts-wrapper a[href^="/blog/"]').forEach((a) => {
-      const h = a.getAttribute('href');
-      if (!h || seen[h] || h.replace(/\/+$/, '') === cur) return;
-      seen[h] = 1;
-      out.push(a);
-    });
-    return out;
-  }
-  function openRandomStory() {
-    const links = otherStoryLinks();
-    if (!links.length) return;
-    links[Math.floor(Math.random() * links.length)].click();
-  }
-  // ------------------------------------------------ quick dashboard (පටුන tab)
-  function mountQuick(box) {
-    const syncs = [];
-    const offs = [];
-    let flashT = 0;
-    const track = (node) => {
-      box.appendChild(node);
-      if (typeof node.rtSync === 'function') syncs.push(node.rtSync);
-      return node;
-    };
-    const goTo = (top) => {
-      stopAuto();
-      window.scrollTo({ top: top, behavior: isMobile() ? 'auto' : behavior() });
-      if (isMobile()) close();
-    };
-    // ---- reading
-    box.appendChild(section('කියවීම'));
-    const tVoice = tile(ICON.voice, 'හඬින් කියවන්න', voiceToggle);
-    const tAuto = tile(ICON.down, 'ඉබේම පහළට', toggleAuto);
-    box.appendChild(el('div', { class: 'rt-tiles' }, [tVoice, tAuto]));
-    const lock = makeVoiceLockBox();
-    box.appendChild(lock);
-    track(levels('ඉබේම පහළට යන වේගය', 'scrollSpeed', [
-      { label: 'සෙමින්', value: 2 },
-      { label: 'සාමාන්‍ය', value: 4 },
-      { label: 'වේගවත්', value: 7 },
-      { label: 'ඉතා වේගවත්', value: 9 },
-    ], 0.5));
-    track(levels('හඬේ වේගය', 'rate', [
-      { label: 'සෙමින්', value: 0.85 },
-      { label: 'සාමාන්‍ය', value: 1 },
-      { label: 'වේගවත්', value: 1.25 },
-      { label: 'ඉතා වේගවත්', value: 1.5 },
-    ], 0.03, () => {
-      if (voice.status === 'playing') voiceSettingChanged();
-    }));
-    // ---- look
-    box.appendChild(section('පෙනුම'));
-    track(pageSwatches());
-    track(fontGroup());
-    const tNight = tile(ICON.moon, 'රාත්‍රී ආලෝකය', () => {
-      const active = state.dim > 0 || state.warm > 0;
-      set(active ? { dim: 0, warm: 0 } : { dim: NIGHT.dim, warm: NIGHT.warm }, { immediate: true });
-    });
-    const tAwake = tile(ICON.phone, 'තිරය නිවෙන්න එපා', () => {
-      set({ keepAwake: !state.keepAwake }, { immediate: true });
-    });
-    box.appendChild(el('div', { class: 'rt-tiles' }, [tNight, tAwake]));
-    // ---- more
-    box.appendChild(section('තව දේවල්'));
-    const tMark = tile(ICON.bookmark, 'සලකුණක් දාන්න', () => {
-      addMark();
-      tMark.rtSet({ sub: 'සලකුණු කළා ✓' });
-      clearTimeout(flashT);
-      flashT = setTimeout(paint, 1600);
-    });
-    const tShare = tile(ICON.share, 'බෙදාගන්න', async () => {
-      const r = await sharePage();
-      if (r) {
-        tShare.rtSet({ sub: r });
-        clearTimeout(flashT);
-        flashT = setTimeout(paint, 2200);
-      }
-    });
-    const tTop = tile(ICON.up, 'කතාවේ මුලට', () => goTo(0));
-    const tEnd = tile(ICON.down, 'කතාවේ අන්තිමට', () => goTo(scrollMax(true)));
-    const tTrans = tile(ICON.globe, 'පරිවර්තනය', () => showTab('translate'));
-    const tiles = [tMark, tShare, tTop, tEnd];
-    let saved = 0;
-    try {
-      saved = parseFloat(localStorage.getItem(posKey(curPath)) || '0') || 0;
-    } catch (e) {}
-    if (saved > 0.04 && saved < 0.95) {
-      const tSaved = tile(ICON.clock, 'නැවතුණු තැනට', () => goTo(scrollMax(true) * saved));
-      tSaved.rtSet({ sub: Math.round(saved * 100) + '%' });
-      tiles.push(tSaved);
-    }
-    tiles.push(tTrans);
-    let tRand = null;
-    if (otherStoryLinks().length) {
-      tRand = tile(ICON.book, 'වෙනත් කතාවක්', openRandomStory);
-      tRand.rtSet({ sub: 'අහඹු එකක් විවෘත කරන්න' });
-      tiles.push(tRand);
-    }
-    let tFs = null;
-    if (fsOK()) {
-      tFs = tile(ICON.expand, 'පූර්ණ තිරය', toggleFullscreen);
-      tiles.push(tFs);
-    }
-    box.appendChild(el('div', { class: 'rt-tiles' }, tiles));
-    const mk = buildMarks(true);
-    box.appendChild(mk.node);
-    offs.push(mk.off);
-    function paint() {
-      const vs = voice.status;
-      const autoOn = !!auto.raf;
-      const locked = !autoOn && vs !== 'idle';
-      if (!synth) {
-        tVoice.rtSet({ title: 'හඬින් කියවන්න', sub: 'මේ බ්‍රව්සරයේ නැහැ', icon: ICON.voice, danger: false, disabled: true });
-      } else if (vs === 'playing') {
-        tVoice.rtSet({ title: 'විරාමය', sub: 'කියවමින් · ' + voicePct() + '%', icon: ICON.pause, danger: true, disabled: false });
-      } else if (vs === 'paused') {
-        tVoice.rtSet({ title: 'දිගටම කියවන්න', sub: 'විරාමයේ · ' + voicePct() + '%', icon: ICON.play, danger: false, disabled: autoOn });
-      } else {
-        tVoice.rtSet({ title: 'හඬින් කියවන්න', sub: langInfo(state.voiceLang).label, icon: ICON.voice, danger: false, disabled: autoOn });
-      }
-      if (autoOn) {
-        tAuto.rtSet({ title: 'නවත්වන්න', sub: 'ඉබේම යමින්', icon: ICON.stop, danger: true, disabled: false });
-      } else {
-        tAuto.rtSet({
-          title: 'ඉබේම පහළට',
-          sub: locked ? 'මුලින් හඬ නවත්වන්න' : 'වේගය ' + Math.round(state.scrollSpeed) + ' / 10',
-          icon: ICON.down,
-          danger: false,
-          disabled: locked,
-        });
-      }
-      lock.rtSync();
-      syncs.forEach((fn) => fn());
-      const night = state.dim > 0 || state.warm > 0;
-      tNight.rtSet({ on: night, sub: night ? 'ක්‍රියාත්මකයි' : 'අඳුරු + කහ ආලෝකය' });
-      if (!wakeSupported()) {
-        tAwake.rtSet({ on: false, sub: 'මේ බ්‍රව්සරයේ නැහැ', disabled: true });
-      } else {
-        tAwake.rtSet({ on: state.keepAwake, sub: state.keepAwake ? 'ක්‍රියාත්මකයි' : 'ඉබේම නිවෙනවා', disabled: false });
-      }
-      tMark.rtSet({ sub: 'මේ තැන මතක තියාගන්න' });
-      tShare.rtSet({ sub: navigator.share ? 'WhatsApp, Facebook...' : 'ලින්ක් එක copy කරන්න' });
-      tTop.rtSet({ sub: '' });
-      tEnd.rtSet({ sub: '' });
-      if (tFs) {
-        const full = !!document.fullscreenElement;
-        tFs.rtSet({ title: full ? 'පූර්ණ තිරයෙන් ඉවත් වන්න' : 'පූර්ණ තිරය', icon: full ? ICON.shrink : ICON.expand, on: full });
-      }
-    }
-    paint();
-    offs.push(on('change', paint));
-    offs.push(on('voice', paint));
-    offs.push(on('autoscroll', paint));
-    if (tFs) document.addEventListener('fullscreenchange', paint);
-    return () => {
-      offs.forEach((f) => f());
-      clearTimeout(flashT);
-      if (tFs) document.removeEventListener('fullscreenchange', paint);
-    };
-  }
   // ------------------------------------------------------------- tool: toc
   let tocSync = null;
   register({
@@ -1592,12 +1004,8 @@
           el('span', { text: 'කියවා ඇත' }),
         ]),
       ]));
-      const rest = el('p', { class: 'rt-empty rt-rest' });
-      box.appendChild(rest);
       pctEl = $('[data-rt-pct]', box);
-      restEl = rest;
       if (pctEl) pctEl.textContent = Math.round(lastPct * 100) + '%';
-      rest.textContent = restLabel(lastPct);
       const group = el('div', { class: 'rt-group' }, [
         el('p', { class: 'rt-label', text: 'කොටස්' }),
       ]);
@@ -1607,44 +1015,41 @@
       if (!heads.length) {
         group.appendChild(el('p', {
           class: 'rt-empty',
-          text: 'මේ ලිපියේ උපශීර්ෂ නැහැ. පහළ ඇති ඉක්මන් මෙවලම් පාවිච්චි කරන්න.',
+          text: 'මේ ලිපියේ උපශීර්ෂ නැහැ. "කියවීම" ටැබ් එකෙන් ස්වයං-අනුචලනය පාවිච්චි කරන්න පුළුවන්.',
         }));
         box.appendChild(group);
-      } else {
-        const list = el('ul', { class: 'rt-toc' });
-        const pairs = [];
-        heads.forEach((h, i) => {
-          if (!h.id) h.id = 'rt-h-' + i;
-          const a = el('a', {
-            href: '#' + h.id,
-            text: (h.textContent || '').trim(),
-            onclick: (ev) => {
-              ev.preventDefault();
-              stopAuto();
-              h.scrollIntoView({ behavior: behavior(), block: 'start' });
-              if (isMobile()) close();
-            },
-          });
-          pairs.push({ a: a, h: h });
-          list.appendChild(el('li', { 'data-lvl': h.tagName.slice(1) }, a));
-        });
-        group.appendChild(el('div', { class: 'rt-toc-wrap' }, list));
-        box.appendChild(group);
-        tocSync = () => {
-          let cur = null;
-          for (let i = 0; i < pairs.length; i++) {
-            if (pairs[i].h.getBoundingClientRect().top <= 130) cur = pairs[i];
-          }
-          pairs.forEach((p) => p.a.setAttribute('data-active', p === cur ? '1' : '0'));
-        };
-        tocSync();
+        return () => { pctEl = null; };
       }
-      const offQuick = mountQuick(box);
+      const list = el('ul', { class: 'rt-toc' });
+      const pairs = [];
+      heads.forEach((h, i) => {
+        if (!h.id) h.id = 'rt-h-' + i;
+        const a = el('a', {
+          href: '#' + h.id,
+          text: (h.textContent || '').trim(),
+          onclick: (ev) => {
+            ev.preventDefault();
+            stopAuto();
+            h.scrollIntoView({ behavior: behavior(), block: 'start' });
+            if (isMobile()) close();
+          },
+        });
+        pairs.push({ a: a, h: h });
+        list.appendChild(el('li', { 'data-lvl': h.tagName.slice(1) }, a));
+      });
+      group.appendChild(list);
+      box.appendChild(group);
+      tocSync = () => {
+        let cur = null;
+        for (let i = 0; i < pairs.length; i++) {
+          if (pairs[i].h.getBoundingClientRect().top <= 130) cur = pairs[i];
+        }
+        pairs.forEach((p) => p.a.setAttribute('data-active', p === cur ? '1' : '0'));
+      };
+      tocSync();
       return () => {
         tocSync = null;
         pctEl = null;
-        restEl = null;
-        offQuick();
       };
     },
   });
@@ -1687,10 +1092,6 @@
         { value: 'normal', label: 'සාමාන්‍ය' },
         { value: 'wide', label: 'දිගු' },
       ], (v) => set({ measure: v }, { immediate: true })));
-      box.appendChild(segment('පේළි සකස් කිරීම', state.align, [
-        { value: 'left', label: 'වම් පැත්තට' },
-        { value: 'justify', label: 'දෙපැත්තටම සමානව' },
-      ], (v) => set({ align: v }, { immediate: true })));
       box.appendChild(el('p', {
         class: 'rt-empty',
         text: 'ඔබ තෝරන දේවල් ඉබේම මතක තියාගන්නවා. ඊළඟ කතාවලදීත් ඒ විදිහමයි.',
@@ -1707,7 +1108,6 @@
             lineHeight: DEFAULTS.lineHeight,
             letter: DEFAULTS.letter,
             measure: DEFAULTS.measure,
-            align: DEFAULTS.align,
           }, { immediate: true });
           showTab('display');
         },
@@ -2442,9 +1842,24 @@
         paintReset();
       });
       const btn = el('button', { class: 'rt-btn', type: 'button' });
-      const lockBox = makeVoiceLockBox();
+      const lockBtn = el('button', {
+        class: 'rt-btn',
+        type: 'button',
+        'data-danger': '1',
+        html: ICON.stop + '<span>හඬ නවත්වන්න</span>',
+        onclick: voiceStop,
+      });
+      const lockBox = el('div', { class: 'rt-group' }, [
+        el('p', {
+          class: 'rt-note',
+          'data-warn': '1',
+          text: 'දැන් හඬින් කියවමින් හෝ විරාමයේ තියෙනවා. හඬ සහ ඉබේම පහළට යාම එකවර පාවිච්චි කරන්න බැහැ. ඉබේම පහළට යන්න ඕන නම් මුලින් හඬ නවත්වන්න.',
+        }),
+        el('div', { class: 'rt-row' }, [lockBtn]),
+      ]);
       function paint() {
         const running = !!auto.raf;
+        const locked = !running && voice.status !== 'idle';
         btn.innerHTML =
           (running ? ICON.stop : ICON.down) +
           '<span>' + (running ? 'නවත්වන්න' : 'ඉබේම පහළට යන්න පටන් ගන්න') + '</span>';
@@ -2455,7 +1870,8 @@
           btn.setAttribute('data-primary', '1');
           btn.removeAttribute('data-danger');
         }
-        btn.disabled = lockBox.rtSync();
+        btn.disabled = locked;
+        lockBox.style.display = locked ? '' : 'none';
       }
       paint();
       const offAuto = on('autoscroll', paint);
@@ -2545,69 +1961,215 @@
       }));
     },
   });
-  // ------------------------------------------------------------- tool: more
-  register({
-    id: 'more',
-    label: 'තවත්',
-    icon: ICON.grid,
-    order: 60,
-    mount(box) {
-      const offs = [];
-      const timers = [];
-      // ---- screen light
-      box.appendChild(section('තිරයේ ආලෝකය'));
-      const gDim = slider('තිරය අඳුරු කිරීම', 'dim', pctWord);
-      const gWarm = slider('රාත්‍රී කහ ආලෝකය', 'warm', pctWord);
-      const presets = [
-        { label: 'සාමාන්‍ය', dim: 0, warm: 0 },
-        { label: 'රාත්‍රී', dim: NIGHT.dim, warm: NIGHT.warm },
-        { label: 'ගොඩක් අඳුරු', dim: 0.5, warm: 0.25 },
-      ];
-      const presetSeg = el('div', { class: 'rt-seg' });
-      const pBtns = presets.map((p) => {
-        const b = el('button', {
-          class: 'rt-chip',
-          type: 'button',
-          text: p.label,
-          onclick: () => {
-            set({ dim: p.dim, warm: p.warm }, { immediate: true });
-            gDim.rtSync(p.dim);
-            gWarm.rtSync(p.warm);
-          },
-        });
-        presetSeg.appendChild(b);
-        return { b: b, p: p };
-      });
-      box.appendChild(el('div', { class: 'rt-group' }, [
-        el('p', { class: 'rt-label', text: 'ඉක්මන් තේරීම' }),
-        presetSeg,
-      ]));
-      box.appendChild(gDim);
-      box.appendChild(gWarm);
-      function paintPresets() {
-        pBtns.forEach((x) => {
-          const same = Math.abs(state.dim - x.p.dim) < 0.01 && Math.abs(state.warm - x.p.warm) < 0.01;
-          x.b.setAttribute('aria-pressed', same ? 'true' : 'false');
-        });
+  // -------------------------------------------------------- shared scroll
+  let lastSave = 0;
+  let lastPct = 0;
+  const onScroll = rafOnce(() => {
+    const max = scrollMax();
+    const pct = max > 4 ? clamp(window.scrollY / max, 0, 1) : 0;
+    lastPct = pct;
+    if (ui.bar) ui.bar.style.transform = 'scaleX(' + pct.toFixed(4) + ')';
+    if (isOpen) {
+      if (pctEl) pctEl.textContent = Math.round(pct * 100) + '%';
+      if (tocSync) tocSync();
+    }
+    const now = Date.now();
+    // localStorage is synchronous I/O: never write it while auto-scroll runs
+    if (!auto.raf && pct > 0.02 && now - lastSave > POS_SAVE_MS) {
+      lastSave = now;
+      savePos();
+    }
+  });
+  function savePos() {
+    try {
+      if (lastPct <= 0.02) return;
+      localStorage.setItem(posKey(curPath), lastPct.toFixed(3));
+    } catch (e) {}
+  }
+  function flushPos() {
+    savePos();
+    saveNow();
+  }
+  // -------------------------------------------------------- boot/teardown
+  let booted = false;
+  function bindGlobal() {
+    listen(ui.fab, 'click', toggle);
+    listen(ui.close, 'click', close);
+    listen(ui.scrim, 'click', close);
+    // voice pill controls
+    listen(ui.voiceMain, 'click', voiceToggle);
+    listen(ui.voiceStop, 'click', voiceStop);
+    // stop pill: act on the very first event (pointerdown / touchstart);
+    // a finger press can turn into a scroll gesture and cancel the click
+    const hardStopAuto = (ev) => {
+      if (ev) {
+        if (ev.cancelable) ev.preventDefault();
+        ev.stopPropagation();
       }
-      paintPresets();
-      offs.push(on('change', paintPresets));
-      // ---- keep awake
-      box.appendChild(section('තිරය'));
-      if (wakeSupported()) {
-        box.appendChild(segment('තිරය නිවෙන්න එපා', state.keepAwake ? 'on' : 'off', [
-          { value: 'off', label: 'නිවෙන්න දෙන්න' },
-          { value: 'on', label: 'නිවෙන්න එපා' },
-        ], (v) => set({ keepAwake: v === 'on' }, { immediate: true })));
-        box.appendChild(el('p', {
-          class: 'rt-empty',
-          text: 'ඉබේම පහළට යන විට සහ හඬින් කියවන විට තිරය ඉබේම නිවෙන්නේ නැහැ.',
-        }));
-      } else {
-        box.appendChild(el('p', {
-          class: 'rt-note',
-          'data-warn': '1',
-          text: 'මේ බ්‍රව්සරයට තිරය නිවෙන්නේ නැතිව තබාගැනීමේ හැකියාව නැහැ. Chrome හෝ Edge (අලුත් වර්ෂන්) භාවිත කර බලන්න.',
-        }));
+      stopAuto();
+    };
+    listen(ui.stop, 'pointerdown', hardStopAuto);
+    listen(ui.stop, 'touchstart', hardStopAuto, { passive: false });
+    listen(ui.stop, 'click', hardStopAuto);
+    // on a long page the scroll writes can delay event dispatch, so any tap
+    // outside the panel also stops auto-scroll (capture phase, runs first)
+    const tapStop = (ev) => {
+      if (!auto.raf) return;
+      const t = ev ? ev.target : null;
+      if (t && ui.stop && (t === ui.stop || ui.stop.contains(t))) {
+        stopAuto();
+        return;
       }
-      // ---- sleep timer
+      if (t && ui.root && ui.root.contains(t)) return;
+      stopAuto();
+    };
+    listen(window, 'pointerdown', tapStop, { capture: true, passive: true });
+    listen(window, 'touchstart', tapStop, { capture: true, passive: true });
+    listen(window, 'mousedown', tapStop, { capture: true, passive: true });
+    listen(window, 'scroll', onScroll, { passive: true });
+    listen(window, 'resize', () => {
+      scrollMax(true);
+      onScroll();
+    }, { passive: true });
+    // manual input stops auto-scroll; events inside the panel are ignored,
+    // and the 420ms arm delay protects the tap that started it
+    const abortAuto = (ev) => {
+      if (!auto.raf || !auto.armed) return;
+      if (ui.root && ev && ev.target && ev.target.nodeType && ui.root.contains(ev.target)) return;
+      stopAuto();
+    };
+    listen(window, 'wheel', abortAuto, { passive: true });
+    listen(window, 'touchmove', abortAuto, { passive: true });
+    listen(document, 'keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (auto.raf) stopAuto();
+        if (isOpen) {
+          e.stopPropagation();
+          close();
+        }
+        return;
+      }
+      if (e.altKey && (e.key === 'r' || e.key === 'R')) {
+        e.preventDefault();
+        toggle();
+        return;
+      }
+      // only scroll keys stop auto-scroll
+      if (auto.raf && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        const k = e.key;
+        if (k === ' ' || k === 'Spacebar' || k === 'ArrowUp' || k === 'ArrowDown' ||
+            k === 'PageUp' || k === 'PageDown' || k === 'Home' || k === 'End') {
+          stopAuto();
+        }
+      }
+      trap(e);
+    });
+    listen(window, 'pagehide', () => {
+      stopAuto();
+      voiceHalt();
+      flushPos();
+    });
+    listen(document, 'visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        stopAuto();
+        voicePause();
+        flushPos();
+      }
+    });
+  }
+  function teardown() {
+    stopAuto();
+    runCleanup();
+    voiceHalt();
+    voice.queue = [];
+    voice.cache = {};
+    voice.i = 0;
+    voice.p = 0;
+    voice.error = '';
+    voice.done = false;
+    tocSync = null;
+    pctEl = null;
+    flushPos();
+    unlistenAll();
+    lockScroll(false);
+    isOpen = false;
+    activeTab = null;
+    lastFocus = null;
+    lastPct = 0;
+    maxCache = -1;
+    if (ui.root) {
+      ui.root.setAttribute('data-open', '0');
+      ui.root.setAttribute('data-rt-ready', '0');
+      ui.root.removeAttribute('data-scrolling');
+      ui.root.removeAttribute('data-autoscroll');
+    }
+    clearDim();
+    document.documentElement.setAttribute('data-rt-focus', 'off');
+    document.documentElement.removeAttribute('data-rt-has-article');
+    document.documentElement.removeAttribute('data-rt-scrolling');
+    Object.keys(ui).forEach((k) => { ui[k] = null; });
+    article = null;
+    booted = false;
+  }
+  function boot() {
+    if (booted) return;
+    if (!document.body) return;
+    curPath = location.pathname;
+    if (!buildChrome()) return;
+    booted = true;
+    ensureAutoStyle();
+    ensureResetStyle();
+    ensureVoiceStyle();
+    clearDim();
+    maxCache = -1;
+    article = findArticle();
+    apply();
+    if (!article) {
+      ui.root.setAttribute('data-rt-ready', '0');
+      if (ui.bar) ui.bar.style.transform = 'scaleX(0)';
+      emit('boot', { article: null });
+      return;
+    }
+    ui.root.setAttribute('data-rt-ready', '1');
+    if (ui.sub) {
+      ui.sub.textContent = words().toLocaleString('en-US') + ' වචන · ' + minutes() + ' මිනිත්තු';
+    }
+    renderTabs();
+    bindGlobal();
+    onScroll();
+    emit('boot', { article: article });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
+  }
+  document.addEventListener('astro:before-swap', teardown);
+  document.addEventListener('astro:page-load', boot);
+  // ---------------------------------------------------------------- api
+  window.ReaderTools = {
+    version: 15,
+    register: register,
+    registerVoiceEngine: registerVoiceEngine,
+    open: open,
+    close: close,
+    toggle: toggle,
+    showTab: showTab,
+    set: set,
+    on: on,
+    boot: boot,
+    teardown: teardown,
+    startAutoScroll: startAuto,
+    stopAutoScroll: stopAuto,
+    toggleAutoScroll: toggleAuto,
+    startVoice: voiceStart,
+    pauseVoice: voicePause,
+    stopVoice: voiceStop,
+    get scrolling() { return !!auto.raf; },
+    get speaking() { return voice.status === 'playing'; },
+    get state() { return Object.assign({}, state); },
+    get article() { return article; },
+    get tools() { return tools.map((t) => t.id); },
+    get engines() { return Object.keys(engines); },
+  };
+})();
