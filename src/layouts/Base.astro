@@ -718,6 +718,16 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     </script>
     <script src="/scripts/deferred-perf.js" defer></script>
 
+    {/* ExoClick Delegate-CH meta tag - required once per page for the
+        relevant ad-serving domain (s.magsrv.com) so the ad network
+        receives essential Client Hints (UA/mobile/arch/model/platform/
+        bitness/full-version) for ad targeting, while limiting the
+        browser's default unrestricted Client Hints exposure. This must
+        live in <head>, delegating hint access ONLY to s.magsrv.com - no
+        change to public/_headers' Permissions-Policy is needed for this,
+        and it does not affect the site's own Client Hints usage. */}
+    <meta http-equiv="Delegate-CH" content="Sec-CH-UA https://s.magsrv.com; Sec-CH-UA-Mobile https://s.magsrv.com; Sec-CH-UA-Arch https://s.magsrv.com; Sec-CH-UA-Model https://s.magsrv.com; Sec-CH-UA-Platform https://s.magsrv.com; Sec-CH-UA-Platform-Version https://s.magsrv.com; Sec-CH-UA-Bitness https://s.magsrv.com; Sec-CH-UA-Full-Version-List https://s.magsrv.com; Sec-CH-UA-Full-Version https://s.magsrv.com;" />
+
     {/* 2026-09 ExoClick ad network integration: same script-ordering
         convention as deferred-perf.js above (defer, loaded once, then
         re-runs its own render logic on astro:page-load). Domains this
