@@ -1,44 +1,83 @@
 ---
-// Reusable ExoClick ad slot. Renders an empty container only; the
-// actual <ins> element and ad-provider.js call are injected by
-// public/scripts/exo-ads.js on astro:page-load, so it survives
-// ClientRouter navigations exactly like every other dynamic widget
-// in this repo (Header.astro, PostSingle.astro like/comment system).
-export interface Props {
+interface Props {
   zoneId: string;
+  adClass: string;
   label?: string;
-  class?: string;
-  minHeight?: string;
+  minHeight?: number;
+  aspectRatio?: string;
+  /** In-article outstream slots only: relocates this slot after
+   *  cumulative word-count in the article body crosses this
+   *  threshold - satisfies the "ad after ~300-400 words" requirement. */
+  insertAfterWords?: number;
+  /** Selector for the article body wrapper to search inside. */
+  contentSelector?: string;
 }
-
 const {
   zoneId,
+  adClass,
   label = "Advertisement",
-  class: className = "",
-  minHeight = "100px",
+  minHeight = 250,
+  aspectRatio = "16/9",
+  insertAfterWords,
+  contentSelector = ".content",
 } = Astro.props;
+
+// Unique id per render so repeated SPA navigations (ClientRouter)
+// never collide with a leftover slot id from a previous page.
+const slotId = `exo-slot-${zoneId}-${Math.random().toString(36).slice(2, 8)}`;
 ---
 
 <div
-  class:list={["exo-ad-slot", className]}
+  id={slotId}
+  class="exo-ad-slot"
   data-zoneid={zoneId}
-  style={`min-height:${minHeight}`}
-  role="complementary"
+  data-adclass={adClass}
+  style={`min-height:${minHeight}px; aspect-ratio:${aspectRatio}; width:100%; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.04); border-radius:12px; margin:1.75rem 0; overflow:hidden;`}
   aria-label={label}
+  role="complementary"
 >
+  <span style="font-size:0.7rem; opacity:0.35; letter-spacing:0.05em;">Advertisement</span>
 </div>
 
-<style>
-  .exo-ad-slot {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    margin: 1.5rem 0;
-  }
-  .exo-ad-slot:empty {
-    min-height: 0;
-    margin: 0;
-  }
-</style>
+{insertAfterWords && (
+  <script is:inline define:vars={{ slotId, insertAfterWords, contentSelector }}>
+    (function () {
+      // Runs synchronously at this exact point in the HTML parse -
+      // i.e. before the browser paints anything below it. Moving the
+      // already-sized slot node here (rather than waiting for
+      // DOMContentLoaded/astro:page-load) is what keeps this CLS-safe:
+      // the layout is correct on the very first paint, so nothing
+      // shifts later.
+      function wordsIn(el) {
+        return (el.textContent || "").trim().split(/\s+/).filter(Boolean).length;
+      }
+      function relocate(doc, targetSlotId, threshold, selector) {
+        var slot = doc.getElementById(targetSlotId);
+        if (!slot) return;
+        var container = doc.querySelector(selector);
+        if (!container) return;
+        var blocks = container.querySelectorAll(":scope > p, :scope > h2, :scope > h3, :scope > blockquote");
+        var cumulative = 0;
+        var target = null;
+        for (var i = 0; i < blocks.length; i++) {
+          cumulative += wordsIn(blocks[i]);
+          if (cumulative >= threshold && i >= 1) {
+            target = blocks[i];
+            break;
+          }
+        }
+        if (!target) return; // article shorter than threshold - leave slot where it already sits
+        slot.parentNode.removeChild(slot);
+        if (target.nextSibling) {
+          target.parentNode.insertBefore(slot, target.nextSibling);
+        } else {
+          target.parentNode.appendChild(slot);
+        }
+      }
+      relocate(document, slotId, insertAfterWords, contentSelector);
+      document.addEventListener("astro:before-swap", function (e) {
+        try { relocate(e.newDocument, slotId, insertAfterWords, contentSelector); } catch (err) {}
+      });
+    })();
+  </script>
+)}
