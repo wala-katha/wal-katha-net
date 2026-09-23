@@ -95,6 +95,12 @@ const { skip = false } = Astro.props;
       try {
         localStorage.setItem(STORAGE_KEY, "true");
       } catch (e) {}
+      // Notifies same-page listeners (e.g. exo-ads.js) that gating just
+      // ended, so ad slots skipped on initial render can fill immediately
+      // without waiting for the next full astro:page-load navigation.
+      try {
+        document.dispatchEvent(new CustomEvent("wk:age-verified"));
+      } catch (e) {}
     }
     // Hard state sync: gate state always follows verification state.
     // Runs on first load AND every astro:page-load, so client-side
