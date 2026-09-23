@@ -1,0 +1,44 @@
+---
+// Reusable ExoClick ad slot. Renders an empty container only; the
+// actual <ins> element and ad-provider.js call are injected by
+// public/scripts/exo-ads.js on astro:page-load, so it survives
+// ClientRouter navigations exactly like every other dynamic widget
+// in this repo (Header.astro, PostSingle.astro like/comment system).
+export interface Props {
+  zoneId: string;
+  label?: string;
+  class?: string;
+  minHeight?: string;
+}
+
+const {
+  zoneId,
+  label = "Advertisement",
+  class: className = "",
+  minHeight = "100px",
+} = Astro.props;
+---
+
+<div
+  class:list={["exo-ad-slot", className]}
+  data-zoneid={zoneId}
+  style={`min-height:${minHeight}`}
+  role="complementary"
+  aria-label={label}
+>
+</div>
+
+<style>
+  .exo-ad-slot {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin: 1.5rem 0;
+  }
+  .exo-ad-slot:empty {
+    min-height: 0;
+    margin: 0;
+  }
+</style>
