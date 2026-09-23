@@ -6,7 +6,7 @@ import theme from "@/config/theme.json";
 import { plainify } from "@/lib/utils/textConverter";
 import Footer from "@/partials/Footer.astro";
 import Header from "@/partials/Header.astro";
-// + Reader Tools — reading panel (TOC, typography, TTS, focus mode, translate)
+// Reader Tools - reading panel (TOC, typography, TTS, focus mode, translate)
 import ReaderToolsHead from "@/components/ReaderToolsHead.astro";
 import ReaderTools from "@/components/ReaderTools.astro";
 import "@/styles/main.css";
@@ -537,13 +537,6 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
         margin: 0;
         padding: 0;
         overflow-x: hidden;
-        width: 100%;
-        max-width: 100vw;
-        touch-action: pan-y;
-        overscroll-behavior-x: none;
-      }
-      .row {
-        overflow-x: hidden;
         max-width: 100%;
       }
       #main-content { min-height: 60vh; }
@@ -670,9 +663,6 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#050505" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#050505" />
     <meta name="msapplication-TileColor" content="#050505" />
-    {/* REMOVED: meta name="theme-name" content="bookworm-light-astro" -
-        leftover starter-template metadata. It carries no SEO or rendering
-        value and publicly discloses the theme this site was built from. */}
     <meta name="generator" content={Astro.generator} />
 
     <link rel="alternate" hreflang="si" href={currentCanonical} />
@@ -682,15 +672,6 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     <link rel="canonical" href={currentCanonical} />
     <meta name="description" content={calculatedDescription} />
 
-    {/* robots must apply to EVERY page including articles. Previously it
-        sat inside the !isArticle block, so blog posts shipped no robots
-        tag at all - losing max-image-preview:large (small thumbnails in
-        SERPs) and silently ignoring the noindex prop. PostSingle.astro
-        deliberately does not emit robots, so there is no duplicate.
-        noindex now pairs with "follow" rather than "nofollow": the pages
-        that need noindex here are utility pages (internal search), and
-        nofollow would strand the link equity already pointing through
-        them instead of letting it flow on to the real articles. */}
     {noindex
       ? <meta name="robots" content="noindex,follow" />
       : <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
@@ -709,10 +690,6 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={calculatedTitle} />
         <meta name="twitter:description" content={calculatedDescription} />
-        {/* REMOVED: twitter:image:width / twitter:image:height - neither
-            exists in the Twitter Cards specification, so every crawler
-            discarded them. Real image dimensions travel in the og:image:*
-            tags below, which X reads as a fallback. */}
       </>
     )}
 
@@ -741,9 +718,16 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     </script>
     <script src="/scripts/deferred-perf.js" defer></script>
 
+    {/* 2026-09 ExoClick ad network integration: same script-ordering
+        convention as deferred-perf.js above (defer, loaded once, then
+        re-runs its own render logic on astro:page-load). Domains this
+        script talks to are whitelisted in public/_headers' CSP
+        script-src/connect-src/frame-src/media-src directives. */}
+    <script src="/scripts/exo-ads.js" defer></script>
+
     <ClientRouter fallback="swap" />
 
-    {/* + Reader Tools — blocking inline script that restores the saved
+    {/* Reader Tools - blocking inline script that restores the saved
         reading preferences (surface colour, font, size, line-height)
         before first paint. Placed last in <head>, mirroring the age-gate
         guard pattern above: without it the first frame renders with the
@@ -762,7 +746,7 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     </main>
     <Footer />
 
-    {/* + Reader Tools — floating reading panel (edge FAB + slide-in
+    {/* Reader Tools - floating reading panel (edge FAB + slide-in
         drawer). Mounted last so it paints above Footer without needing a
         stacking-context hack, and stays below #age-gate-overlay
         (z-index 999999) so an unverified visitor cannot reach it. */}
