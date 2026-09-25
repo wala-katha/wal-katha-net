@@ -1,0 +1,37 @@
+---
+// Standalone A-ADS verification page. Deliberately bypasses Base.astro
+// entirely - no age-gate overlay, no header/footer, no popups, no
+// ClientRouter - so third-party ad-network verification bots can load
+// this exact URL and see the ad unit with zero interference. Per
+// A-ADS support guidance: register this page's URL
+// (https://www.walakatha.net/ads) as the ad unit's target URL.
+---
+<!doctype html>
+<html lang="si">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Advertisement - Wal Katha</title>
+    <meta name="robots" content="noindex, nofollow" />
+  </head>
+  <body style="margin:0;padding:32px 16px;background:#050505;color:#f8f8ff;font-family:system-ui,-apple-system,sans-serif;text-align:center;min-height:100vh;">
+    <p style="margin:0 0 20px;font-size:13px;color:#888;letter-spacing:0.05em;text-transform:uppercase;">
+      Wal Katha - Advertisement
+    </p>
+
+    <!-- BEGIN AADS AD UNIT 2456378 -->
+    <div id="frame" style="width:100%;max-width:728px;margin:0 auto;position:relative;">
+      <iframe
+        data-aa="2456378"
+        src="//acceptable.a-ads.com/2456378/?size=Adaptive"
+        style="border:0;padding:0;width:100%;height:auto;overflow:hidden;display:block;margin:auto;"
+        title="Advertisement"
+      ></iframe>
+    </div>
+    <!-- END AADS AD UNIT 2456378 -->
+
+    <a href="/" style="display:inline-block;margin-top:32px;color:#01AD9F;font-size:13px;text-decoration:underline;">
+      walakatha.net වෙත ආපහු යන්න
+    </a>
+  </body>
+</html>
