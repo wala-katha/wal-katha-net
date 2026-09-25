@@ -1,21 +1,28 @@
 ---
 // src/layouts/components/AdcashAds.astro
 //
-// MyAdCash banner ad slot (replaces the old ExoClick outstream-video
-// ExoAds.astro component). Renders ONLY a reserved-space placeholder
-// - all ad-injection logic (relocating this slot into the article
-// body after a word-count threshold, then injecting Adcash's own
-// required <div><script>aclib.runBanner(...)</script></div> markup
-// unchanged) lives in the single global controller script
-// /public/scripts/adcash-ads.js, loaded once site-wide from
-// Base.astro (defer, after https://acscdn.com/script/aclib.js).
+// MyAdCash banner ad slot. Renders ONLY a reserved-space placeholder -
+// the actual aclib.runBanner() call is triggered by the global
+// controller script /public/scripts/adcash-ads.js, loaded once
+// site-wide from Base.astro (aclib.js synchronously first, then
+// adcash-ads.js deferred after it).
+//
+// BUG FIX (2026-09): the outer slot now carries a unique "id" AND the
+// data attribute is "data-zoneid" (no hyphen) - both are required to
+// exactly match what adcash-ads.js's SLOT_SELECTOR
+// (".adcash-ad-slot[data-zoneid]") and its renderIn: "#" + id target
+// expect. The previous version emitted "data-zone-id" (with a hyphen,
+// which the controller's selector never matched) and no "id" at all
+// (so renderIn resolved to the empty/invalid "#") - the ad silently
+// never rendered on any page. The renderIn target now points at the
+// inner ".adcash-ad-container" div specifically (not the outer slot),
+// so the "Advertisement" label text never ends up inside Adcash's own
+// rendered ad markup.
 interface Props {
   zoneId: string;
   width?: number;
   height?: number;
   label?: string;
-  insertAfterWords?: number;
-  contentSelector?: string;
 }
 
 const {
@@ -23,18 +30,20 @@ const {
   width = 300,
   height = 250,
   label = "Advertisement",
-  insertAfterWords,
-  contentSelector,
 } = Astro.props;
+
+// Unique per-instance id (stable per generated page - crypto.randomUUID()
+// runs at build time in Astro frontmatter, not per client render), so
+// multiple AdcashAds placements on the same page never collide on the
+// same "#id" renderIn target.
+const slotId = `adcash-slot-${zoneId}-${crypto.randomUUID().slice(0, 8)}`;
+const containerId = `${slotId}-container`;
 ---
 
 <div
+  id={slotId}
   class="adcash-ad-slot"
-  data-zone-id={zoneId}
-  data-ad-width={width}
-  data-ad-height={height}
-  data-insert-after-words={insertAfterWords ?? ""}
-  data-content-selector={contentSelector ?? ""}
+  data-zoneid={zoneId}
   style={`min-height:${height}px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;margin:1.75rem auto;max-width:100%;`}
 >
   {label && (
@@ -46,6 +55,7 @@ const {
     </p>
   )}
   <div
+    id={containerId}
     class="adcash-ad-container"
     style={`width:${width}px;max-width:100%;height:${height}px;margin:0 auto;`}
   ></div>
