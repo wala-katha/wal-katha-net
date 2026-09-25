@@ -530,99 +530,6 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
       }
     </style>
 
-    <style>
-      html, body {
-        background-color: #050505;
-        color: #f8fafc;
-        margin: 0;
-        padding: 0;
-        overflow-x: hidden;
-        max-width: 100%;
-      }
-      #main-content { min-height: 60vh; }
-    </style>
-
-    <style>
-      body {
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
-      }
-      input,
-      textarea,
-      select,
-      option,
-      [contenteditable="true"],
-      [contenteditable=""] {
-        -webkit-user-select: text !important;
-        -moz-user-select: text !important;
-        -ms-user-select: text !important;
-        user-select: text !important;
-      }
-      img {
-        -webkit-user-drag: none;
-        user-drag: none;
-      }
-    </style>
-    <style is:global>
-      #content-protection-toast {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        z-index: 99999;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 10px;
-        width: min(78vw, 240px);
-        background: #0c0d10;
-        border: 1px solid rgba(1, 173, 159, 0.35);
-        color: #F8F8FF;
-        padding: 18px 16px 16px;
-        border-radius: 1.25rem;
-        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.03);
-        text-align: center;
-        user-select: none;
-        opacity: 0;
-        pointer-events: none;
-        transform: translate(-50%, -50%) scale(0.9);
-        transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-      }
-      #content-protection-toast.show {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1);
-      }
-      #content-protection-toast .cp-icon-wrap {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 36px;
-        height: 36px;
-        border-radius: 999px;
-        background: rgba(1, 173, 159, 0.12);
-        border: 1px solid rgba(1, 173, 159, 0.35);
-        color: #01AD9F;
-        flex-shrink: 0;
-        box-shadow: 0 0 14px rgba(1, 173, 159, 0.25);
-      }
-      #content-protection-toast .cp-icon-wrap svg {
-        display: block;
-        width: 17px;
-        height: 17px;
-      }
-      #content-protection-toast .cp-text {
-        font-size: 12.5px;
-        font-weight: 700;
-        line-height: 1.5;
-      }
-      @media (prefers-reduced-motion: reduce) {
-        #content-protection-toast {
-          transition: opacity 0.15s ease;
-        }
-      }
-    </style>
-
     {/* rel="shortcut icon" is a legacy alias no spec has required since
         HTML5; rel="icon" is the current form and every browser honours it.
         apple-touch-icon was missing entirely, so iOS "Add to Home Screen"
@@ -718,22 +625,24 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     </script>
     <script src="/scripts/deferred-perf.js" defer></script>
 
-    {/* ExoClick Delegate-CH meta tag - required once per page for the
-        relevant ad-serving domain (s.magsrv.com) so the ad network
-        receives essential Client Hints (UA/mobile/arch/model/platform/
-        bitness/full-version) for ad targeting, while limiting the
-        browser's default unrestricted Client Hints exposure. This must
-        live in <head>, delegating hint access ONLY to s.magsrv.com - no
-        change to public/_headers' Permissions-Policy is needed for this,
-        and it does not affect the site's own Client Hints usage. */}
-    <meta http-equiv="Delegate-CH" content="Sec-CH-UA https://s.magsrv.com; Sec-CH-UA-Mobile https://s.magsrv.com; Sec-CH-UA-Arch https://s.magsrv.com; Sec-CH-UA-Model https://s.magsrv.com; Sec-CH-UA-Platform https://s.magsrv.com; Sec-CH-UA-Platform-Version https://s.magsrv.com; Sec-CH-UA-Bitness https://s.magsrv.com; Sec-CH-UA-Full-Version-List https://s.magsrv.com; Sec-CH-UA-Full-Version https://s.magsrv.com;" />
+    {/* 2026-09 MyAdCash integration - CRITICAL BUG FIX: the required
+        aclib.js library script tag was MISSING from this file entirely
+        (the previous ExoClick Delegate-CH meta tag pointing at
+        s.magsrv.com, and the exo-ads.js script tag, have both been
+        removed since ExoClick is no longer used on this site - keeping
+        that meta tag around served no purpose). aclib.js is loaded
+        synchronously (no defer/async), high in <head>, exactly per
+        MyAdCash's own integration instructions, so window.aclib exists
+        as early as possible for any ad slot on the page. acscdn.com is
+        already whitelisted in public/_headers' CSP script-src/
+        connect-src directives. */}
+    <script id="aclib" type="text/javascript" src="https://acscdn.com/script/aclib.js"></script>
 
-    {/* 2026-09 ExoClick ad network integration: same script-ordering
-        convention as deferred-perf.js above (defer, loaded once, then
-        re-runs its own render logic on astro:page-load). Domains this
-        script talks to are whitelisted in public/_headers' CSP
-        script-src/connect-src/frame-src/media-src directives. */}
-    <script src="/scripts/exo-ads.js" defer></script>
+    {/* MyAdCash ad slot controller - deferred, loaded once, then
+        re-renders any .adcash-ad-slot elements on every astro:page-load
+        (same script-ordering convention deferred-perf.js above already
+        uses). This replaces the old, deleted exo-ads.js controller. */}
+    <script src="/scripts/adcash-ads.js" defer></script>
 
     <ClientRouter fallback="swap" />
 
@@ -746,7 +655,6 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
         navigation. Reads localStorage only - no network, no blocking I/O. */}
     <ReaderToolsHead />
   </head>
-
   <body class="bg-[#050505] text-[#f8fafc] min-h-screen flex flex-col antialiased selection:bg-emerald-500/30 selection:text-[#34d399] overflow-x-hidden" style="touch-action: pan-y; overscroll-behavior-x: none;">
     <AgeVerificationGate skip={isAgeGateExcludedPage} />
     <TwSizeIndicator />
