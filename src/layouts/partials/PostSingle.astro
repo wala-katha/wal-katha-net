@@ -1,7 +1,7 @@
 ---
 import Share from "@/components/Share.astro";
 import SimilarPosts from "@/layouts/components/SimilarPosts.astro";
-import ExoAds from "@/components/ExoAds.astro";
+import AdcashAds from "@/components/AdcashAds.astro";
 import config from "@/config/config.json";
 import { getSinglePage } from "@/lib/contentParser.astro";
 import dateFormat from "@/lib/utils/dateFormat";
@@ -528,27 +528,33 @@ const imageObjectSchema = schemaImageUrl
           <Content />
         </div>
 
-        {/* 2026-09 ExoClick outstream video ad: rendered here as a
-            separate sibling AFTER the ".content" article body closes, so
-            it never gets swallowed into the same reading column the
-            content-selector logic below targets. ExoAds.astro reserves
-            layout space up-front (minHeight/aspectRatio - no CLS), then
-            its own inline script relocates this exact placeholder INTO
-            the ".content" wrapper right after the cumulative word-count
-            threshold (~350 words, roughly paragraph 2-3) is crossed - so
-            the reader always sees ~300-400 words of real story before any
-            ad. Sound is muted by default at the ExoClick zone level (set
-            in the ExoClick dashboard, "Muted" autoplay option) and only
-            un-mutes on a genuine user click on the player itself - no
-            code here forces autoplay-with-sound. zoneId/adClass below
-            match the ExoClick Zone HTML Tag exactly (zone 6037626,
-            "Outstream Video" type). */}
-        <ExoAds
-          zoneId="6037626"
-          adClass="eas6a97888e37"
+        {/* 2026-09 MyAdCash 300x250 banner ad (replaces the old
+            ExoClick outstream-video ad + the previous single
+            "eas6a97888e37" ExoClick zone 6037626). AdcashAds.astro
+            reserves a fixed 300x250 slot up-front (no CLS), then the
+            global /scripts/adcash-ads.js controller relocates this
+            exact placeholder INTO the ".content" wrapper right after
+            the same ~350-word threshold used before (so the reader
+            still sees ~300-400 words of real story before any ad),
+            and injects MyAdCash's own required tag UNCHANGED -
+              <div>
+                  <script type="text/javascript">
+                      aclib.runBanner({ zoneId: '12216870' });
+                  </script>
+              </div>
+            - into it (built via createElement/appendChild, never
+            innerHTML, because aclib.runBanner() relies on
+            document.currentScript's immediate parent <div> to find
+            its own mount point). zoneId "12216870" is the MyAdCash
+            zone configured for this placement; if a different
+            300x250 zone is created later in the MyAdCash dashboard,
+            update zoneId here (width/height must stay in sync with
+            whatever the dashboard zone size actually is). */}
+        <AdcashAds
+          zoneId="12216870"
+          width={300}
+          height={250}
           label="Advertisement"
-          minHeight={250}
-          aspectRatio="16/9"
           insertAfterWords={350}
           contentSelector=".content"
         />
