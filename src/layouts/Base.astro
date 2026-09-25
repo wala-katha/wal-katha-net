@@ -243,7 +243,18 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
         width: 100%;
         touch-action: none;
       }
-      html.age-gate-pending body > *:not(#age-gate-overlay) {
+      /* 🎯 A-ADS FIX: "#aads-sticky-ad" මෙතනින් exclude කර ඇත. A-ADS
+         crawler bot එකට localStorage cookie/verification state එකක්
+         නොමැති නිසා, "age-gate-pending" class එක සෑම විටම apply වේ
+         (fresh visit). "#aads-sticky-ad" මෙතන exclude නොකළොත්, දැන්වීම
+         age-gate overlay එකෙන් blur + pointer-events:none වී, A-ADS
+         validator එකට "Partly or fully hidden" error එකක් පෙන්වයි.
+         age-gate-overlay එකම ලෙසම, දැන්වීමත් මෙම blur rule එකෙන් ස්ථිරව
+         නිදහස් කර ඇත - site එකේ අනිත් සියලුම content blur/lock වන අතරේත්,
+         දැන්වීම (AadsAds.astro තුළ z-index: 1000000 ලෙස age-gate එකටත්
+         (999999) වඩා ඉහළින් තබා ඇති නිසා) සෑම විට�ම පැහැදිලිව, click කළ
+         හැකි ලෙසම දිස්වේ. */
+      html.age-gate-pending body > *:not(#age-gate-overlay):not(#aads-sticky-ad) {
         filter: blur(6px);
         pointer-events: none;
         user-select: none;
@@ -659,7 +670,11 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
         adcash-ads.js controller + the per-post AdcashAds.astro 300x250
         slot), all of which have been fully removed. This ad is a pure
         iframe embed (acceptable.a-ads.com) with a built-in close toggle,
-        rendered once for the whole site rather than per-post. */}
+        rendered once for the whole site rather than per-post. Its root
+        (#aads-sticky-ad) is explicitly excluded from the age-gate blur
+        rule above, and carries a z-index higher than the age-gate
+        overlay itself, so ad-network verification crawlers (which never
+        click "Enter" on the age gate) can always see it. */}
     <AadsAds />
   </body>
 </html>
