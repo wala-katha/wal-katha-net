@@ -10,36 +10,14 @@ import theme from "./src/config/theme.json";
 import remarkAutoInternalLinks from "./src/lib/remarkAutoInternalLinks.mjs";
 import redirectFixer from "./src/integrations/redirect-fixer.mjs";
 import earlyHintsPreload from "./src/integrations/early-hints-preload.mjs";
-// critical-css-inline Astro integration REMOVED. Beasties now runs as
-// a standalone post-build script (scripts/inline-critical-css.mjs,
-// invoked via package.json's "build" script), NOT as an
-// astro:build:done hook - that hook context hit "Vite module runner
-// has been closed" when performing a dynamic import() of beasties.
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { slug as githubSlug } from "github-slugger";
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONTENT_DIR = path.join(__dirname, "src/content");
-
-// SITEMAP LASTMOD STRATEGY (2026 rewrite)
-// Previously lastmod came from `git log`, which is non-deterministic:
-// Cloudflare Pages builds have no usable git history, so every lookup
-// failed and fell back to new Date() - stamping every URL with the
-// build time. Google then sees the whole site change on every deploy,
-// treats lastmod as untrustworthy, and ignores it (crawl budget loss).
-//
-// Order of truth is now:
-//   1. frontmatter `updated` (only when it differs from `date`)
-//   2. frontmatter `date`
-//   3. git commit time (local dev convenience only)
-//   4. omit lastmod entirely - never a build timestamp
-// An absent lastmod is strictly better for SEO than a wrong one.
-
 const frontmatterCache = new Map();
-
 function readFrontmatter(absFilePath) {
   if (frontmatterCache.has(absFilePath)) return frontmatterCache.get(absFilePath);
   let result = null;
@@ -55,7 +33,6 @@ function readFrontmatter(absFilePath) {
   frontmatterCache.set(absFilePath, result);
   return result;
 }
-
 function normalizeDateValue(value) {
   if (!value) return null;
   const cleaned = String(value)
@@ -66,23 +43,17 @@ function normalizeDateValue(value) {
   if (!cleaned) return null;
   const parsed = new Date(cleaned);
   if (Number.isNaN(parsed.getTime())) return null;
-  // Guard against absurd dates from malformed frontmatter.
   const year = parsed.getUTCFullYear();
   if (year < 1990 || year > 2100) return null;
   return parsed.toISOString();
 }
-
 function extractScalarField(frontmatter, fieldName) {
   if (!frontmatter) return null;
   const re = new RegExp(`^[ \\t]*${fieldName}[ \\t]*:[ \\t]*(.+)$`, "m");
   const m = frontmatter.match(re);
   return m ? m[1] : null;
 }
-
-// Declared before getGitLastMod so the cache is never referenced from an
-// uninitialised binding if the call order ever changes.
 const gitLastModCache = new Map();
-
 function getGitLastMod(absFilePath) {
   if (gitLastModCache.has(absFilePath)) return gitLastModCache.get(absFilePath);
   let result = null;
@@ -101,30 +72,23 @@ function getGitLastMod(absFilePath) {
   gitLastModCache.set(absFilePath, result);
   return result;
 }
-
-// Content date first, git only as a local-dev fallback. Never now().
 const contentLastModCache = new Map();
 function getContentLastMod(absFilePath) {
   if (!absFilePath) return null;
   if (contentLastModCache.has(absFilePath)) return contentLastModCache.get(absFilePath);
-
   const fm = readFrontmatter(absFilePath);
   const published = normalizeDateValue(extractScalarField(fm, "date"));
   const updated = normalizeDateValue(extractScalarField(fm, "updated"));
-
   let result = null;
   if (published && updated) {
     result = new Date(updated) > new Date(published) ? updated : published;
   } else {
     result = updated || published || null;
   }
-
   if (!result) result = getGitLastMod(absFilePath);
-
   contentLastModCache.set(absFilePath, result);
   return result;
 }
-
 function findContentFile(dir, slugValue) {
   for (const ext of [".md", ".mdx"]) {
     const p = path.join(dir, `${slugValue}${ext}`);
@@ -132,7 +96,6 @@ function findContentFile(dir, slugValue) {
   }
   return null;
 }
-
 let postsFileListCache = null;
 function getAllPostFiles() {
   if (postsFileListCache) return postsFileListCache;
@@ -149,9 +112,6 @@ function getAllPostFiles() {
   }
   return postsFileListCache;
 }
-
-// Newest real content date across all posts. Deterministic: identical
-// output for identical content, regardless of build machine or time.
 let siteWideLastModCache;
 function getSiteWideLastMod() {
   if (siteWideLastModCache !== undefined) return siteWideLastModCache;
@@ -163,7 +123,6 @@ function getSiteWideLastMod() {
   siteWideLastModCache = latest;
   return siteWideLastModCache;
 }
-
 function extractArrayField(content, fieldName) {
   const inlineMatch = content.match(new RegExp(fieldName + "\\s*:\\s*\\[([^\\]]*)\\]"));
   if (inlineMatch) {
@@ -184,7 +143,6 @@ function extractArrayField(content, fieldName) {
   }
   return [];
 }
-
 const taxonomyLastModCache = new Map();
 function getTaxonomyLastMod(fieldName, slugValue) {
   const cacheKey = `${fieldName}:${slugValue}`;
@@ -209,12 +167,10 @@ function getTaxonomyLastMod(fieldName, slugValue) {
   taxonomyLastModCache.set(cacheKey, result);
   return result;
 }
-
 function resolveLastModForUrl(pathname) {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) return getSiteWideLastMod();
   const EXCLUDED_FIRST_SEGMENTS = ["categories", "tags", "page", "search", "blog", "authors", "about", "contact"];
-
   if (segments[0] === "blog" && segments[1]) {
     const f = findContentFile(path.join(CONTENT_DIR, "posts"), segments[1]);
     if (f) {
@@ -254,9 +210,6 @@ function resolveLastModForUrl(pathname) {
   }
   return getSiteWideLastMod();
 }
-
-// Differentiated crawl signals. A uniform 0.7 / weekly across every
-// URL tells Google nothing; relative weighting does.
 const LEGAL_PATHS = new Set([
   "privacy-policy",
   "terms-and-conditions",
@@ -265,7 +218,6 @@ const LEGAL_PATHS = new Set([
   "contact",
   "about",
 ]);
-
 function resolveSitemapSignals(pathname) {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) return { priority: 1.0, changefreq: "daily" };
@@ -279,7 +231,6 @@ function resolveSitemapSignals(pathname) {
   }
   return { priority: 0.6, changefreq: "monthly" };
 }
-
 function parseFontString(fontStr) {
   const [name, weightPart] = fontStr.split(":");
   let weights = [400];
@@ -292,7 +243,6 @@ function parseFontString(fontStr) {
   const cleanName = name.replace(/\+/g, " ");
   return { name: cleanName, weights };
 }
-
 const fontsConfig = Object.entries(theme.fonts.font_family)
   .filter(([key]) => !key.includes("_type"))
   .map(([key, fontStr]) => {
@@ -308,64 +258,43 @@ const fontsConfig = Object.entries(theme.fonts.font_family)
       fallbacks: [fallback],
     };
   });
-
-// Trailing-slash normaliser for emitted sitemap URLs.
-//
-// 2026-09 FIX: the old implementation tested `url.split("/").pop()` for a
-// dot to decide "is this a file?". For the bare origin
-// "https://www.walakatha.net" that pop() returns "www.walakatha.net",
-// which contains dots, so the homepage was classified as a file and left
-// without its trailing slash - producing a sitemap URL that 308-redirects
-// and disagrees with the canonical tag. Resolve the real pathname instead.
 function ensureSitemapTrailingSlash(url) {
   if (url.endsWith("/")) return url;
   try {
     const urlObj = new URL(url);
-    // Bare origin (no path at all) must always become "/".
     if (urlObj.pathname === "" || urlObj.pathname === "/") {
       urlObj.pathname = "/";
       return urlObj.toString();
     }
     const lastSegment = urlObj.pathname.split("/").filter(Boolean).pop() || "";
-    // Only a real file extension should suppress the trailing slash.
     if (/\.[a-z0-9]{2,5}$/i.test(lastSegment)) return url;
     urlObj.pathname = `${urlObj.pathname}/`;
     return urlObj.toString();
   } catch {
-    // Not a parsable absolute URL - fall back to the conservative check.
     const lastSegment = url.split("/").pop() || "";
     if (/\.[a-z0-9]{2,5}$/i.test(lastSegment)) return url;
     return `${url}/`;
   }
 }
-
-// Paths that must never appear in sitemap-0.xml.
-//
-// /page/1            - duplicates the homepage (canonical points home)
-// /search            - served with <meta name="robots" content="noindex,follow">.
-//                      Listing a noindex URL in a submitted sitemap raises
-//                      "Submitted URL marked noindex" as an ERROR in Search
-//                      Console. Google also explicitly advises keeping
-//                      internal search result pages out of the index.
-// /news-sitemap.xml  - standalone endpoints declared in robots.txt; they are
-// /image-sitemap.xml   sitemaps, not crawlable pages.
+// 🎯 UPDATED: "/ads" added - the standalone A-ADS verification page
+// (src/pages/ads.astro) is a utility page, not real content, so it is
+// excluded from the sitemap the same way /search and /page/1 are.
+// It is NOT blocked in robots.txt, since the A-ADS verification bot
+// still needs to fetch it directly.
 const EXCLUDED_SITEMAP_PATHS = [
   "/elements",
   "/page/1",
   "/search",
+  "/ads",
   "/news-sitemap.xml",
   "/image-sitemap.xml",
 ];
-
 function isExcludedFromSitemap(url) {
-  // NOTE: do not name this local variable `path` - that shadows the
-  // "node:path" module import used elsewhere in this file.
   const pathname = url.replace(/^https?:\/\/[^/]+/, "").replace(/\/$/, "");
   return EXCLUDED_SITEMAP_PATHS.some(
     (excluded) => pathname === excluded || pathname.startsWith(`${excluded}/`)
   );
 }
-
 export default defineConfig({
   site: config.site.base_url ? config.site.base_url : "https://www.walakatha.net",
   base: config.site.base_path ? config.site.base_path : "/",
@@ -407,12 +336,10 @@ export default defineConfig({
           const signals = resolveSitemapSignals(urlObj.pathname);
           item.priority = signals.priority;
           item.changefreq = signals.changefreq;
-
           const lastmod = resolveLastModForUrl(urlObj.pathname);
           if (lastmod) {
             item.lastmod = lastmod;
           } else {
-            // Better to omit than to emit a build timestamp.
             delete item.lastmod;
           }
         } catch {
