@@ -1,7 +1,6 @@
 ---
 import Share from "@/components/Share.astro";
 import SimilarPosts from "@/layouts/components/SimilarPosts.astro";
-import AdcashAds from "@/components/AdcashAds.astro";
 import config from "@/config/config.json";
 import { getSinglePage } from "@/lib/contentParser.astro";
 import dateFormat from "@/lib/utils/dateFormat";
@@ -527,37 +526,6 @@ const imageObjectSchema = schemaImageUrl
         <div class="content mb-16 text-left text-[#F8F8FF] custom-post-content">
           <Content />
         </div>
-
-        {/* 2026-09 MyAdCash 300x250 banner ad (replaces the old
-            ExoClick outstream-video ad + the previous single
-            "eas6a97888e37" ExoClick zone 6037626). AdcashAds.astro
-            reserves a fixed 300x250 slot up-front (no CLS), then the
-            global /scripts/adcash-ads.js controller relocates this
-            exact placeholder INTO the ".content" wrapper right after
-            the same ~350-word threshold used before (so the reader
-            still sees ~300-400 words of real story before any ad),
-            and injects MyAdCash's own required tag UNCHANGED -
-              <div>
-                  <script type="text/javascript">
-                      aclib.runBanner({ zoneId: '12216870' });
-                  </script>
-              </div>
-            - into it (built via createElement/appendChild, never
-            innerHTML, because aclib.runBanner() relies on
-            document.currentScript's immediate parent <div> to find
-            its own mount point). zoneId "12216870" is the MyAdCash
-            zone configured for this placement; if a different
-            300x250 zone is created later in the MyAdCash dashboard,
-            update zoneId here (width/height must stay in sync with
-            whatever the dashboard zone size actually is). */}
-        <AdcashAds
-          zoneId="12216870"
-          width={300}
-          height={250}
-          label="Advertisement"
-          insertAfterWords={350}
-          contentSelector=".content"
-        />
 
         {/* 2026 TAGS + SHARE FOOTER REDESIGN:
             WHY: the previous layout put tags in a plain <ul class="mr-4
