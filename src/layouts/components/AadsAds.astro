@@ -1,0 +1,139 @@
+---
+// AadsAds.astro
+// A-ADS (Anonymous Ads) - site-wide sticky footer banner.
+//
+// IMPORTANT: replace the placeholder below with your real Ad Unit ID
+// from your A-ADS dashboard (aads.com/users/... -> Ad Units tab ->
+// click "walakatha.net" -> the numeric ID shown there, e.g. 2199991).
+// Until replaced, this shows an empty/placeholder ad slot.
+const AADS_AD_UNIT_ID = "REPLACE_WITH_YOUR_AADS_UNIT_ID";
+---
+
+<div id="aads-sticky-ad" class="aads-sticky-ad" data-aads-root>
+  <button
+    id="aads-close-btn"
+    type="button"
+    class="aads-close-btn"
+    aria-label="දැන්වීම වසන්න"
+  >
+    <svg
+      viewBox="0 0 24 24"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.6"
+      stroke-linecap="round"
+      aria-hidden="true"
+    >
+      <path d="M5 5l14 14M19 5L5 19"></path>
+    </svg>
+  </button>
+  <div class="aads-frame-wrap">
+    <iframe
+      data-aa={AADS_AD_UNIT_ID}
+      src={`//acceptable.a-ads.com/${AADS_AD_UNIT_ID}`}
+      title="Advertisement"
+      loading="eager"
+      scrolling="no"
+      style="width:100%;height:100%;border:0;padding:0;overflow:hidden;display:block;"
+    ></iframe>
+  </div>
+</div>
+
+<style is:global>
+  /* 🎯 z-index: 1000000 — Base.astro's age-gate-overlay is 999999.
+     This ad must always render ABOVE the age-verification overlay,
+     because ad-network verification crawlers never click "Enter" on
+     the gate. Without this, the ad sits blurred/pointer-events:none
+     behind the overlay on every fresh (no-localStorage) visit, which
+     is exactly what triggers A-ADS's "Partly or fully hidden" error. */
+  #aads-sticky-ad {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0a0b0d;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 4px 30px 4px 6px;
+    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.5);
+  }
+
+  #aads-sticky-ad.aads-closed {
+    display: none;
+  }
+
+  .aads-frame-wrap {
+    width: 100%;
+    max-width: 728px;
+    height: 90px;
+    margin: 0 auto;
+  }
+
+  .aads-close-btn {
+    position: absolute;
+    top: 3px;
+    right: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(248, 248, 255, 0.6);
+    cursor: pointer;
+    z-index: 1;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  }
+  .aads-close-btn:hover,
+  .aads-close-btn:focus-visible {
+    background: rgba(239, 68, 68, 0.16);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
+    outline: none;
+  }
+
+  @media (max-width: 480px) {
+    .aads-frame-wrap {
+      height: 50px;
+      max-width: 320px;
+    }
+    #aads-sticky-ad {
+      padding: 3px 28px 3px 4px;
+    }
+  }
+</style>
+
+<script>
+  function initAadsClose() {
+    const bar = document.getElementById("aads-sticky-ad");
+    const btn = document.getElementById("aads-close-btn");
+    if (!bar || !btn) return;
+
+    const freshBtn = btn.cloneNode(true) as HTMLButtonElement;
+    btn.parentNode?.replaceChild(freshBtn, btn);
+
+    freshBtn.addEventListener("click", () => {
+      bar.classList.add("aads-closed");
+      try {
+        sessionStorage.setItem("wk_aads_closed", "1");
+      } catch (e) {}
+    });
+
+    try {
+      if (sessionStorage.getItem("wk_aads_closed") === "1") {
+        bar.classList.add("aads-closed");
+      } else {
+        bar.classList.remove("aads-closed");
+      }
+    } catch (e) {}
+  }
+
+  document.addEventListener("astro:page-load", initAadsClose);
+</script>
