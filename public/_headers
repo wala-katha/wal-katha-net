@@ -7,28 +7,22 @@
 # chunk when a non-Sinhala reading language is selected. Remove this entry
 # if that fallback is ever dropped from reader-tools.js.
 #
-# 2026-09: ExoClick ad network REMOVED and replaced with MyAdCash (Adcash).
-# script-src and connect-src now allow MyAdCash's core, fixed ad-serving
-# infrastructure domains so aclib.js, its runBanner() ad-delivery XHR/fetch
-# calls, and its tracking pixels are not silently blocked:
-#   - acscdn.com            aclib.js script CDN host
-#   - adexchangeclear.com   ad exchange / serving domain
-#   - usrpubtrk.com         publisher-side tracking/serving domain
+# MyAdCash (Adcash) ad network REMOVED and replaced with A-ADS. The
+# previous acscdn.com / adexchangeclear.com / usrpubtrk.com script-src and
+# connect-src entries (required by MyAdCash's aclib.js library and its
+# runBanner() XHR calls) have all been removed - A-ADS's ad unit is a
+# pure <iframe src="//acceptable.a-ads.com/..."> embed with no external
+# JS library and no XHR/fetch calls of its own, so no script-src or
+# connect-src addition is required for it.
 #
-# All previous ExoClick domains (a.magsrv.com, a.pemsrv.com, s.magsrv.com,
-# s.pemsrv.com, s.zlinkt.com, ads.exoclick.com, syndication.exoclick.com)
-# have been fully removed - ExoClick is no longer used anywhere on this site.
-#
-# frame-src and media-src remain "https:" wildcard (not a fixed domain list).
-# Ad creatives are served from advertiser/CDN domains that are not fixed and
-# cannot be enumerated in a static allowlist, so both directives allow any
-# https: origin rather than a maintained domain list - the accepted,
-# standard trade-off for ad-monetized sites. script-src already carried
-# 'unsafe-inline'/'unsafe-eval', so this does not materially change the
-# page's XSS risk profile.
+# frame-src remains "https:" wildcard (not a fixed domain list), which
+# already covers acceptable.a-ads.com (and any future ad-creative/embed
+# domain) without needing a maintained allowlist - the accepted, standard
+# trade-off for ad-monetized sites. media-src stays "https:" for the same
+# reason.
 /*
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://static.cloudflareinsights.com https://acscdn.com https://adexchangeclear.com https://usrpubtrk.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://comments.wala-katha.workers.dev https://api.web3forms.com https://cloudflareinsights.com https://translate.googleapis.com https://acscdn.com https://adexchangeclear.com https://usrpubtrk.com; media-src 'self' https: blob:; frame-src 'self' https:; frame-ancestors 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://comments.wala-katha.workers.dev https://api.web3forms.com https://cloudflareinsights.com https://translate.googleapis.com; media-src 'self' https: blob:; frame-src 'self' https:; frame-ancestors 'self'
 
 # Cache lifetimes for assets served from our own origin. Astro hashes JS/CSS
 # bundle filenames and site images never change in place (optimize-images.yml
