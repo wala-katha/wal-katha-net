@@ -9,6 +9,9 @@ import Header from "@/partials/Header.astro";
 // Reader Tools - reading panel (TOC, typography, TTS, focus mode, translate)
 import ReaderToolsHead from "@/components/ReaderToolsHead.astro";
 import ReaderTools from "@/components/ReaderTools.astro";
+// A-ADS network - site-wide sticky footer ad unit. Replaces the
+// previous MyAdCash (Adcash) integration entirely.
+import AadsAds from "@/components/AadsAds.astro";
 import "@/styles/main.css";
 import { Font } from "astro:assets";
 import { ClientRouter } from "astro:transitions";
@@ -625,25 +628,6 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
     </script>
     <script src="/scripts/deferred-perf.js" defer></script>
 
-    {/* 2026-09 MyAdCash integration - CRITICAL BUG FIX: the required
-        aclib.js library script tag was MISSING from this file entirely
-        (the previous ExoClick Delegate-CH meta tag pointing at
-        s.magsrv.com, and the exo-ads.js script tag, have both been
-        removed since ExoClick is no longer used on this site - keeping
-        that meta tag around served no purpose). aclib.js is loaded
-        synchronously (no defer/async), high in <head>, exactly per
-        MyAdCash's own integration instructions, so window.aclib exists
-        as early as possible for any ad slot on the page. acscdn.com is
-        already whitelisted in public/_headers' CSP script-src/
-        connect-src directives. */}
-    <script id="aclib" type="text/javascript" src="https://acscdn.com/script/aclib.js"></script>
-
-    {/* MyAdCash ad slot controller - deferred, loaded once, then
-        re-renders any .adcash-ad-slot elements on every astro:page-load
-        (same script-ordering convention deferred-perf.js above already
-        uses). This replaces the old, deleted exo-ads.js controller. */}
-    <script src="/scripts/adcash-ads.js" defer></script>
-
     <ClientRouter fallback="swap" />
 
     {/* Reader Tools - blocking inline script that restores the saved
@@ -669,5 +653,13 @@ const isAgeGateExcludedPage = AGE_GATE_EXCLUDED_PATHS.includes(normalizedPathnam
         stacking-context hack, and stays below #age-gate-overlay
         (z-index 999999) so an unverified visitor cannot reach it. */}
     <ReaderTools />
+
+    {/* A-ADS network - site-wide sticky footer ad unit. Replaces the
+        previous MyAdCash (Adcash) integration (aclib.js + the deferred
+        adcash-ads.js controller + the per-post AdcashAds.astro 300x250
+        slot), all of which have been fully removed. This ad is a pure
+        iframe embed (acceptable.a-ads.com) with a built-in close toggle,
+        rendered once for the whole site rather than per-post. */}
+    <AadsAds />
   </body>
 </html>
