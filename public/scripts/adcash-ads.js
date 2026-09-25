@@ -1,8 +1,8 @@
 // MyAdCash (Adcash) ad controller. ClientRouter-safe: aclib.js loads
-// once in <head> (Base.astro), then this deferred script re-renders
-// ad slots on every astro:page-load - same pattern this repo already
-// uses for reader-tools.js and Header.astro's initHeaderLogic. This
-// file replaces the removed ExoClick controller (exo-ads.js).
+// once, synchronously, in <head> (Base.astro), then this deferred
+// script renders/re-renders ad slots on every astro:page-load - same
+// pattern this repo already uses for reader-tools.js and
+// Header.astro's initHeaderLogic.
 (function () {
   var AGE_STORAGE_KEY = "wk_age_verified";
   var SLOT_SELECTOR = ".adcash-ad-slot[data-zoneid]";
@@ -39,15 +39,23 @@
     }, ACLIB_POLL_MS);
   }
 
+  // BUG FIX (2026-09): renderIn now targets the slot's INNER
+  // ".adcash-ad-container" element (by its own dedicated id,
+  // "<slotId>-container") instead of the outer ".adcash-ad-slot"
+  // wrapper. Rendering into the outer wrapper would nest Adcash's own
+  // ad markup alongside the "Advertisement" label <p> tag; targeting
+  // the inner container keeps the ad strictly inside its intended box.
   function fillSlot(slot) {
     var zoneId = slot.getAttribute("data-zoneid");
     if (!zoneId || slot.dataset.adcashFilled === "1") return false;
+    var container = slot.querySelector(".adcash-ad-container");
+    if (!container || !container.id) return false;
     slot.dataset.adcashFilled = "1";
     aclibReady(function () {
       try {
         window.aclib.runBanner({
           zoneId: zoneId,
-          renderIn: "#" + slot.id,
+          renderIn: "#" + container.id,
         });
       } catch (e) {}
     });
