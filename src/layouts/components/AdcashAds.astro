@@ -1,0 +1,52 @@
+---
+// src/layouts/components/AdcashAds.astro
+//
+// MyAdCash banner ad slot (replaces the old ExoClick outstream-video
+// ExoAds.astro component). Renders ONLY a reserved-space placeholder
+// - all ad-injection logic (relocating this slot into the article
+// body after a word-count threshold, then injecting Adcash's own
+// required <div><script>aclib.runBanner(...)</script></div> markup
+// unchanged) lives in the single global controller script
+// /public/scripts/adcash-ads.js, loaded once site-wide from
+// Base.astro (defer, after https://acscdn.com/script/aclib.js).
+interface Props {
+  zoneId: string;
+  width?: number;
+  height?: number;
+  label?: string;
+  insertAfterWords?: number;
+  contentSelector?: string;
+}
+
+const {
+  zoneId,
+  width = 300,
+  height = 250,
+  label = "Advertisement",
+  insertAfterWords,
+  contentSelector,
+} = Astro.props;
+---
+
+<div
+  class="adcash-ad-slot"
+  data-zone-id={zoneId}
+  data-ad-width={width}
+  data-ad-height={height}
+  data-insert-after-words={insertAfterWords ?? ""}
+  data-content-selector={contentSelector ?? ""}
+  style={`min-height:${height}px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;margin:1.75rem auto;max-width:100%;`}
+>
+  {label && (
+    <p
+      class="adcash-ad-label"
+      style="text-align:center;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(248,248,255,0.35);margin:0 0 6px 0;"
+    >
+      {label}
+    </p>
+  )}
+  <div
+    class="adcash-ad-container"
+    style={`width:${width}px;max-width:100%;height:${height}px;margin:0 auto;`}
+  ></div>
+</div>
