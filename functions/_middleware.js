@@ -7,7 +7,6 @@
 // and trailing slash (matches src/lib/utils/urlHelper.ts convention).
 const CANONICAL_HOST = "www.walakatha.net";
 const APEX_HOST = "walakatha.net";
-
 // Ad-network / third-party site-verification files (ExoClick, Ezoic,
 // Google Search Console alternate methods, etc.) are commonly issued
 // WITHOUT a file extension and MUST be served at the exact literal
@@ -19,10 +18,20 @@ const APEX_HOST = "walakatha.net";
 // flow. Add any new extension-less verification filename here as
 // needed - this list is intentionally exact-match only, so it can
 // never accidentally exempt a real content route.
+//
+// 2026-09 ADDITION: "/ads" - the standalone A-ADS ad-verification page
+// (src/pages/ads.astro). A-ADS's own bot documentation explicitly
+// states that redirects can prevent their crawler from detecting the
+// embedded ad unit. Since this site's trailing-slash normalization
+// below would otherwise 301-redirect a bare "/ads" request to "/ads/"
+// before the crawler ever sees the ad markup, "/ads" is exempted here
+// so BOTH "/ads" and "/ads/" resolve directly to the same page with
+// zero redirect hops, regardless of which exact URL form is registered
+// in the A-ADS ad-unit dashboard settings.
 const VERIFICATION_FILE_EXEMPTIONS = new Set([
   "/113433b046592ff2d58ad8fd7c7c31db",
+  "/ads",
 ]);
-
 function isFileLikePath(pathname) {
   const lastSegment = pathname.split("/").pop() || "";
   return lastSegment.includes(".");
